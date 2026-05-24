@@ -51,4 +51,12 @@ export const billingApi = {
     )
     return resp.data
   },
+
+  /**
+   * Cancel a pending checkout the user no longer wants to complete.
+   * Backend: 404 if not the tenant's payment, 409 if status != pending.
+   */
+  async cancelPayment(paymentId: string): Promise<void> {
+    await apiClient.post(`/billing/payments/${paymentId}/cancel`)
+  },
 }

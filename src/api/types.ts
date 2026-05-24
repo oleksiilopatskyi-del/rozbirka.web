@@ -72,7 +72,7 @@ export type BillingState =
   | 'blocked'
 
 export type PaymentType = 'checkout' | 'recurring' | 'verification'
-export type PaymentStatus = 'pending' | 'success' | 'failed' | 'reversed'
+export type PaymentStatus = 'pending' | 'success' | 'failed' | 'reversed' | 'cancelled'
 
 export interface LimitUsageDto {
   used: number

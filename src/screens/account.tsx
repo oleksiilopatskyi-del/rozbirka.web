@@ -80,6 +80,11 @@ export function AccountScreen() {
     setSubscription(sub)
   }
 
+  const refreshPayments = async () => {
+    const pay = await billingApi.getPayments(1, 10).catch(() => null)
+    setPayments(pay)
+  }
+
   if (loading) {
     return (
       <div className="bg-background grid min-h-screen place-items-center text-neutral-500">
@@ -118,7 +123,9 @@ export function AccountScreen() {
           {section === 'payment' && (
             <PaymentPanel subscription={subscription} />
           )}
-          {section === 'billing' && <BillingPanel payments={payments} />}
+          {section === 'billing' && (
+            <BillingPanel payments={payments} onRefresh={refreshPayments} />
+          )}
         </div>
       </main>
     </div>
@@ -569,9 +576,25 @@ function PaymentPanel({
 
 function BillingPanel({
   payments,
+  onRefresh,
 }: {
   payments: PagedResult<PaymentDto> | null
+  onRefresh: () => Promise<void>
 }) {
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
+
+  const cancel = async (paymentId: string) => {
+    setCancellingId(paymentId)
+    try {
+      await billingApi.cancelPayment(paymentId)
+      await onRefresh()
+    } catch {
+      // Backend already validated; surface nothing for now — toast can come later.
+    } finally {
+      setCancellingId(null)
+    }
+  }
+
   if (!payments || payments.items.length === 0) {
     return (
       <div className="flex flex-col gap-8">
@@ -611,6 +634,16 @@ function BillingPanel({
                     Продовжити оплату
                   </a>
                 )}
+                {item.status === 'pending' && (
+                  <button
+                    type="button"
+                    onClick={() => cancel(item.id)}
+                    disabled={cancellingId === item.id}
+                    className="rounded-full px-3 py-1 text-[12px] font-medium text-red-300 ring-1 ring-red-500/30 hover:bg-red-500/10 transition disabled:opacity-50"
+                  >
+                    {cancellingId === item.id ? 'Скасування…' : 'Скасувати'}
+                  </button>
+                )}
                 <PaymentStatusBadge status={item.status} />
               </div>
             </li>
@@ -636,6 +669,10 @@ function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
       cls: 'bg-red-500/10 text-red-400 ring-red-500/30',
     },
     reversed: {
+      label: 'Повернено',
+      cls: 'bg-neutral-500/10 text-neutral-400 ring-neutral-500/30',
+    },
+    cancelled: {
       label: 'Скасовано',
       cls: 'bg-neutral-500/10 text-neutral-400 ring-neutral-500/30',
     },
