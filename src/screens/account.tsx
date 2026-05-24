@@ -291,18 +291,18 @@ function SubscriptionPanel({
           <p className="text-[48px] leading-[1] font-light tracking-[-0.03em] lg:text-[64px]">
             {planLabel}
           </p>
-          {typeof subscription.amount === 'number' && (
-            <p className="text-[15px] opacity-75">
-              {subscription.state === 'trial'
-                ? `Після пробного — ${formatAmount(
-                    subscription.amount,
-                    subscription.currency ?? 'USD',
-                  )} / місяць`
-                : `${formatAmount(
-                    subscription.amount,
-                    subscription.currency ?? 'USD',
-                  )} / місяць`}
-            </p>
+          {subscription.state === 'trial' ? (
+            <p className="text-[15px] opacity-75">7 днів безкоштовно</p>
+          ) : (
+            typeof subscription.amount === 'number' && (
+              <p className="text-[15px] opacity-75">
+                {formatAmount(
+                  subscription.amount,
+                  subscription.currency ?? 'USD',
+                )}{' '}
+                / місяць
+              </p>
+            )
           )}
         </div>
 
@@ -312,35 +312,45 @@ function SubscriptionPanel({
         </div>
 
         <div className="flex flex-wrap gap-3">
-          {(subscription.canSubscribe || subscription.canReactivate) && (
+          {subscription.state === 'trial' ? (
             <button
               type="button"
-              onClick={handleSubscribe}
-              disabled={busy}
-              className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80 disabled:opacity-50"
+              onClick={onSeePlans}
+              className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80"
             >
-              {subscription.canReactivate
-                ? 'Поновити підписку'
-                : 'Активувати підписку'}
+              Дивитись тарифи
             </button>
+          ) : (
+            <>
+              {subscription.canReactivate && (
+                <button
+                  type="button"
+                  onClick={handleSubscribe}
+                  disabled={busy}
+                  className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80 disabled:opacity-50"
+                >
+                  Поновити підписку
+                </button>
+              )}
+              {subscription.canCancel && (
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={busy}
+                  className="inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] text-black ring-1 ring-black/30 transition-colors hover:bg-black/10 disabled:opacity-50"
+                >
+                  Скасувати
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onSeePlans}
+                className="inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] text-black/80 transition-colors hover:text-black"
+              >
+                Дивитись тарифи
+              </button>
+            </>
           )}
-          {subscription.canCancel && (
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={busy}
-              className="inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] text-black ring-1 ring-black/30 transition-colors hover:bg-black/10 disabled:opacity-50"
-            >
-              Скасувати
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onSeePlans}
-            className="inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] text-black/80 transition-colors hover:text-black"
-          >
-            Дивитись тарифи
-          </button>
         </div>
       </div>
 
