@@ -231,9 +231,9 @@ function SubscriptionPanel({
 
   const planLabel =
     subscription.state === 'trial'
-      ? `${subscription.planName ?? 'Pro'} Trial`
-      : subscription.planName ??
-        (subscription.state === 'blocked' ? 'Доступ закрито' : 'Без тарифу')
+      ? (subscription.planName ?? 'Пробний доступ')
+      : (subscription.planName ??
+        (subscription.state === 'blocked' ? 'Доступ закрито' : 'Без тарифу'))
 
   const primaryLabel =
     subscription.state === 'trial'
@@ -293,8 +293,15 @@ function SubscriptionPanel({
           </p>
           {typeof subscription.amount === 'number' && (
             <p className="text-[15px] opacity-75">
-              {formatAmount(subscription.amount, subscription.currency ?? 'USD')}{' '}
-              / місяць
+              {subscription.state === 'trial'
+                ? `Після пробного — ${formatAmount(
+                    subscription.amount,
+                    subscription.currency ?? 'USD',
+                  )} / місяць`
+                : `${formatAmount(
+                    subscription.amount,
+                    subscription.currency ?? 'USD',
+                  )} / місяць`}
             </p>
           )}
         </div>
