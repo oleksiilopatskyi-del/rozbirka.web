@@ -426,10 +426,10 @@ function PlansPanel({
   const currentCode = subscription?.planCode
   const recommendedCode = 'pro_monthly'
 
-  const handleSubscribe = async () => {
+  const handleSubscribe = async (planCode: string) => {
     setBusy(true)
     try {
-      const { checkoutUrl } = await billingApi.subscribe()
+      const { checkoutUrl } = await billingApi.subscribe({ planCode })
       window.location.href = checkoutUrl
     } catch {
       setBusy(false)
@@ -488,7 +488,7 @@ function PlansPanel({
               <button
                 type="button"
                 disabled={isCurrent || busy}
-                onClick={handleSubscribe}
+                onClick={() => handleSubscribe(plan.code)}
                 className={cn(
                   'mt-auto inline-flex h-12 items-center justify-center rounded-full text-[14px] transition-colors disabled:opacity-50',
                   isCurrent

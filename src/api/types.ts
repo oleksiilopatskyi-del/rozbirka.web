@@ -106,6 +106,11 @@ export interface SubscriptionDto {
   features: string[]
 }
 
+export interface SubscribeRequest {
+  /** Plan code from /billing/plans. Omit to use backend default (Pro). */
+  planCode?: string
+}
+
 export interface CheckoutResponse {
   checkoutUrl: string
 }

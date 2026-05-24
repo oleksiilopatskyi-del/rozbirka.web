@@ -5,6 +5,7 @@ import type {
   PagedResult,
   PaymentDto,
   PublicPlanDto,
+  SubscribeRequest,
   SubscriptionDto,
 } from './types'
 
@@ -28,9 +29,14 @@ export const billingApi = {
 
   /**
    * Start Mono checkout. Returns hosted URL — caller must redirect user there.
+   * Pass `planCode` (from /billing/plans) to choose a specific tier; omit to
+   * use backend default (Pro).
    */
-  async subscribe(): Promise<CheckoutResponse> {
-    const resp = await apiClient.post<CheckoutResponse>('/billing/subscribe')
+  async subscribe(req?: SubscribeRequest): Promise<CheckoutResponse> {
+    const resp = await apiClient.post<CheckoutResponse>(
+      '/billing/subscribe',
+      req ?? {},
+    )
     return resp.data
   },
 
