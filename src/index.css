@@ -1,0 +1,250 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:is(.dark *));
+
+@font-face {
+  font-family: 'Visuelt Pro';
+  src: url('/fonts/VisueltPro-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Visuelt Pro';
+  src: url('/fonts/VisueltPro-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Visuelt Pro';
+  src: url('/fonts/VisueltPro-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Visuelt Pro';
+  src: url('/fonts/VisueltPro-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  /* Type */
+  --font-sans: 'Visuelt Pro', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, Consolas, monospace;
+
+  /* Brand */
+  --color-brand: #f77425;
+  --color-brand-hover: #ff8430;
+  --color-brand-foreground: #000000;
+
+  /* Surfaces (dark theme) */
+  --color-surface-1: #0b0b0b;
+  --color-surface-2: #161616;
+  --color-surface-3: #1a1a1a;
+
+  /* Containers */
+  --page-width-xl: 1800px;
+  --page-width-lg: 1400px;
+  --page-width-md: 1200px;
+
+  /* Radius (used by shadcn + sections) */
+  --radius: 0.625rem;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-section: 48px;
+  --radius-card: 32px;
+  --radius-pill: 9999px;
+}
+
+/* shadcn semantic tokens (kept minimal — only what we use) */
+:root {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: var(--color-brand);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+  *:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* Typography scale from UI kit (Mobile → Desktop @ ≥1024px). */
+.text-h1 {
+  font-size: 59px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.text-h2 {
+  font-size: 42px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+.text-h3 {
+  font-size: 30px;
+  line-height: 1.1;
+}
+.text-h4 {
+  font-size: 24px;
+  line-height: 1.15;
+}
+.text-h4-hero {
+  font-size: 34px;
+  line-height: 1.1;
+}
+.text-p1 {
+  font-size: 15px;
+  line-height: 1.45;
+}
+.text-p2 {
+  font-size: 16px;
+  line-height: 1.5;
+}
+.text-p3 {
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+@media (min-width: 1024px) {
+  .text-h1 {
+    font-size: 97px;
+  }
+  .text-h2 {
+    font-size: 64px;
+  }
+  .text-h3 {
+    font-size: 40px;
+  }
+  .text-h4 {
+    font-size: 32px;
+  }
+  .text-p1 {
+    font-size: 20px;
+  }
+  .text-p2 {
+    font-size: 18px;
+  }
+  .text-p3 {
+    font-size: 16px;
+  }
+}
+
+/* Reusable motion keyframes */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.anim-fade-up {
+  opacity: 0;
+  animation: fade-up 700ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.anim-float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade-up {
+    opacity: 1;
+    animation: none;
+  }
+  .anim-float-slow {
+    animation: none;
+  }
+}
