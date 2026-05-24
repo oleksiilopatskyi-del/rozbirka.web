@@ -600,7 +600,19 @@ function BillingPanel({
                   {formatDate(item.createdAt)} · {paymentTypeLabel(item.type)}
                 </p>
               </div>
-              <PaymentStatusBadge status={item.status} />
+              <div className="flex items-center gap-3">
+                {item.status === 'pending' && item.checkoutUrl && (
+                  <a
+                    href={item.checkoutUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-full bg-white/[0.06] px-3 py-1 text-[12px] font-medium text-white ring-1 ring-white/[0.08] hover:bg-white/[0.10] transition"
+                  >
+                    Продовжити оплату
+                  </a>
+                )}
+                <PaymentStatusBadge status={item.status} />
+              </div>
             </li>
           ))}
         </ul>

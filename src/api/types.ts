@@ -123,6 +123,7 @@ export interface PaymentDto {
   status: PaymentStatus
   createdAt: string
   providerInvoiceId: string | null
+  checkoutUrl: string | null
 }
 
 export interface PagedResult<T> {
