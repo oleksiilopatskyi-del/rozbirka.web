@@ -108,5 +108,67 @@ const on401 = async (error: AxiosError) => {
   return axios.request(original)
 }
 
-identityClient.interceptors.response.use(undefined, on401)
-apiClient.interceptors.response.use(undefined, on401)
+/**
+ * Normalize the backend's three error envelope shapes into a single
+ * `{ code, message }` pair stamped onto the error object as `error.normalized`.
+ * See rozbirka.core/docs/billing-integration.md → "Error Handling".
+ *
+ *   • Nested  (ErrorHandlingMiddleware): { data: null, error: { code, message } }
+ *   • Flat    (TenantMiddleware):        { error: "tenant_blocked", message }
+ *   • Flat+ok (AuthorizePermissionAttr): { success: false, error: "FORBIDDEN", message }
+ */
+export interface NormalizedApiError {
+  code?: string
+  message?: string
+  status?: number
+}
+
+export const normalizeApiError = (
+  error: AxiosError,
+): NormalizedApiError => {
+  const body = error.response?.data as
+    | { error?: string | { code?: string; message?: string }; message?: string }
+    | undefined
+  const status = error.response?.status
+
+  const out: NormalizedApiError = {}
+  if (status !== undefined) out.status = status
+
+  if (typeof body?.error === 'string') {
+    if (body.error) out.code = body.error
+    if (body.message) out.message = body.message
+  } else if (body?.error && typeof body.error === 'object') {
+    if (body.error.code) out.code = body.error.code
+    if (body.error.message) out.message = body.error.message
+  }
+
+  return out
+}
+
+const stampError = (error: AxiosError) => {
+  ;(error as AxiosError & { normalized?: NormalizedApiError }).normalized =
+    normalizeApiError(error)
+  throw error
+}
+
+identityClient.interceptors.response.use(undefined, async (e: AxiosError) => {
+  try {
+    return await on401(e)
+  } catch (err) {
+    stampError(err as AxiosError)
+  }
+})
+
+apiClient.interceptors.response.use(undefined, async (e: AxiosError) => {
+  try {
+    return await on401(e)
+  } catch (err) {
+    stampError(err as AxiosError)
+  }
+})
+
+declare module 'axios' {
+  interface AxiosError {
+    normalized?: NormalizedApiError
+  }
+}

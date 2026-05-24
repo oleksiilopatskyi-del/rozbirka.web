@@ -16,15 +16,17 @@ import { tenantsApi } from '@/api/tenants'
 import { tokens } from '@/api/tokens'
 import type {
   BillingState,
+  LimitUsageDto,
   PagedResult,
   PaymentDto,
   PaymentStatus,
+  PublicPlanDto,
   SubscriptionDto,
   Tenant,
   User,
 } from '@/api/types'
 
-type Section = 'subscription' | 'payment' | 'billing'
+type Section = 'subscription' | 'plans' | 'payment' | 'billing'
 
 interface NavEntry {
   id: Section
@@ -34,6 +36,7 @@ interface NavEntry {
 
 const navEntries: NavEntry[] = [
   { id: 'subscription', label: 'Підписка', Icon: Crown },
+  { id: 'plans', label: 'Тарифи', Icon: Receipt },
   { id: 'payment', label: 'Оплата', Icon: CreditCard },
   { id: 'billing', label: 'Білінг', Icon: Receipt },
 ]
@@ -44,6 +47,7 @@ export function AccountScreen() {
   const [user, setUser] = useState<User | null>(null)
   const [tenant, setTenant] = useState<Tenant | null>(null)
   const [subscription, setSubscription] = useState<SubscriptionDto | null>(null)
+  const [plans, setPlans] = useState<PublicPlanDto[]>([])
   const [payments, setPayments] = useState<PagedResult<PaymentDto> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -60,18 +64,19 @@ export function AccountScreen() {
         if (cancelled) return
         setUser(u)
 
-        // Ensure tenant header is set (use first tenant of user)
         const selected = await tenantsApi.ensureSelected().catch(() => null)
         if (cancelled) return
         if (selected) setTenant(selected)
 
-        const [sub, pay] = await Promise.all([
+        const [sub, pay, planList] = await Promise.all([
           billingApi.getSubscription().catch(() => null),
           billingApi.getPayments(1, 10).catch(() => null),
+          billingApi.getPlans().catch(() => []),
         ])
         if (cancelled) return
         setSubscription(sub)
         setPayments(pay)
+        setPlans(planList)
       } catch (err) {
         if (cancelled) return
         if (isAxiosError(err) && err.response?.status === 401) {
@@ -127,7 +132,11 @@ export function AccountScreen() {
             <SubscriptionPanel
               subscription={subscription}
               onRefresh={refreshSubscription}
+              onSeePlans={() => setSection('plans')}
             />
+          )}
+          {section === 'plans' && (
+            <PlansPanel plans={plans} subscription={subscription} />
           )}
           {section === 'payment' && (
             <PaymentPanel subscription={subscription} />
@@ -224,28 +233,30 @@ function Header({ title, subtitle }: { title: string; subtitle?: string }) {
 function SubscriptionPanel({
   subscription,
   onRefresh,
+  onSeePlans,
 }: {
   subscription: SubscriptionDto | null
   onRefresh: () => Promise<void>
+  onSeePlans: () => void
 }) {
   const [busy, setBusy] = useState(false)
 
   if (!subscription) return <EmptyPanel />
 
-  const stateMeta: Record<BillingState, { label: string; planLabel: string }> =
-    {
-      none: { label: 'Немає', planLabel: 'Без тарифу' },
-      trial: { label: 'Пробний період', planLabel: 'Пробний доступ' },
-      active: { label: 'Активна', planLabel: 'Profesional' },
-      pastDue: {
-        label: 'Прострочена',
-        planLabel: 'Profesional',
-      },
-      cancelled: { label: 'Скасована', planLabel: 'Profesional' },
-      blocked: { label: 'Заблокована', planLabel: 'Доступ закрито' },
-    }
+  const stateMeta: Record<BillingState, { label: string }> = {
+    none: { label: 'Немає' },
+    trial: { label: 'Пробний період' },
+    active: { label: 'Активна' },
+    pastDue: { label: 'Прострочена' },
+    cancelled: { label: 'Скасована' },
+    blocked: { label: 'Заблокована' },
+  }
 
-  const meta = stateMeta[subscription.state]
+  const planLabel =
+    subscription.state === 'trial'
+      ? `${subscription.planName ?? 'Pro'} Trial`
+      : subscription.planName ??
+        (subscription.state === 'blocked' ? 'Доступ закрито' : 'Без тарифу')
 
   const primaryLabel =
     subscription.state === 'trial'
@@ -298,10 +309,10 @@ function SubscriptionPanel({
       <div className="bg-brand text-brand-foreground rounded-(--radius-card) flex flex-col gap-8 p-8 lg:p-10">
         <div className="flex flex-col gap-3">
           <span className="inline-flex w-fit items-center rounded-full bg-black/15 px-3 py-1.5 text-[11px] font-medium tracking-[0.05em] uppercase">
-            {meta.label}
+            {stateMeta[subscription.state].label}
           </span>
           <p className="text-[48px] leading-[1] font-light tracking-[-0.03em] lg:text-[64px]">
-            {meta.planLabel}
+            {planLabel}
           </p>
           {typeof subscription.amount === 'number' && (
             <p className="text-[15px] opacity-75">
@@ -339,9 +350,190 @@ function SubscriptionPanel({
               Скасувати
             </button>
           )}
+          <button
+            type="button"
+            onClick={onSeePlans}
+            className="inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] text-black/80 transition-colors hover:text-black"
+          >
+            Дивитись тарифи
+          </button>
         </div>
       </div>
+
+      <UsageBlock usage={subscription.usage} />
     </div>
+  )
+}
+
+function UsageBlock({ usage }: { usage: SubscriptionDto['usage'] }) {
+  const items: { label: string; data: LimitUsageDto }[] = [
+    { label: 'Авто', data: usage.cars },
+    { label: 'Партії', data: usage.intakes },
+    { label: 'Запчастини', data: usage.parts },
+    { label: 'Команда', data: usage.users },
+    { label: 'Каси', data: usage.cashRegisters },
+  ]
+
+  return (
+    <section className="flex flex-col gap-4">
+      <h2 className="text-[18px] font-medium">Використання</h2>
+      <ul role="list" className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {items.map((item) => (
+          <li
+            key={item.label}
+            className="bg-surface-1 flex flex-col gap-3 rounded-2xl p-5 ring-1 ring-white/[0.04]"
+          >
+            <div className="flex items-baseline justify-between">
+              <span className="text-[13px] text-neutral-400">{item.label}</span>
+              <span className="text-[13px] tabular-nums text-neutral-300">
+                {item.data.used}
+                {item.data.max !== null && (
+                  <span className="text-neutral-600"> / {item.data.max}</span>
+                )}
+                {item.data.max === null && (
+                  <span className="text-neutral-600"> / ∞</span>
+                )}
+              </span>
+            </div>
+            <UsageBar used={item.data.used} max={item.data.max} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function UsageBar({ used, max }: { used: number; max: number | null }) {
+  if (max === null) {
+    return (
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+        <div className="bg-brand/40 h-full w-full" />
+      </div>
+    )
+  }
+  const ratio = max === 0 ? 0 : Math.min(used / max, 1)
+  const color =
+    ratio >= 1
+      ? 'bg-red-500'
+      : ratio >= 0.8
+        ? 'bg-amber-400'
+        : 'bg-brand'
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+      <div
+        className={cn('h-full transition-all duration-500', color)}
+        style={{ width: `${ratio * 100}%` }}
+      />
+    </div>
+  )
+}
+
+function PlansPanel({
+  plans,
+  subscription,
+}: {
+  plans: PublicPlanDto[]
+  subscription: SubscriptionDto | null
+}) {
+  const [busy, setBusy] = useState(false)
+
+  if (plans.length === 0) return <EmptyPanel />
+
+  const currentCode = subscription?.planCode
+  const recommendedCode = 'pro_monthly'
+
+  const handleSubscribe = async () => {
+    setBusy(true)
+    try {
+      const { checkoutUrl } = await billingApi.subscribe()
+      window.location.href = checkoutUrl
+    } catch {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      <Header title="Тарифи" subtitle="Обери план, що підходить твоєму бізнесу" />
+
+      <ul role="list" className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {plans.map((plan) => {
+          const isCurrent = plan.code === currentCode
+          const isRecommended = plan.code === recommendedCode
+          return (
+            <li
+              key={plan.code}
+              className={cn(
+                'rounded-(--radius-card) flex flex-col gap-6 p-6 lg:p-8',
+                isRecommended
+                  ? 'bg-brand text-brand-foreground'
+                  : 'bg-surface-1 text-white ring-1 ring-white/[0.05]',
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={cn(
+                    'inline-flex w-fit items-center rounded-full px-3 py-1.5 text-[11px] font-medium tracking-[0.05em] uppercase',
+                    isRecommended ? 'bg-black/15' : 'bg-white/[0.06]',
+                  )}
+                >
+                  {plan.name}
+                </span>
+                {isCurrent && (
+                  <span className="text-[11px] uppercase tracking-[0.05em] opacity-70">
+                    Поточний
+                  </span>
+                )}
+              </div>
+
+              <p className="flex items-baseline gap-1 text-[44px] leading-[0.9] font-light tracking-[-0.03em]">
+                <span>{formatAmount(plan.amount, plan.currency)}</span>
+                <span className="text-[13px] font-normal opacity-70">
+                  /міс
+                </span>
+              </p>
+
+              <ul role="list" className="flex flex-col gap-2 text-[13px]">
+                <PlanLimit label="Авто" value={plan.limits.cars} />
+                <PlanLimit label="Партії" value={plan.limits.intakes} />
+                <PlanLimit label="Запчастини" value={plan.limits.parts} />
+                <PlanLimit label="Команда" value={plan.limits.users} />
+                <PlanLimit label="Каси" value={plan.limits.cashRegisters} />
+              </ul>
+
+              <button
+                type="button"
+                disabled={isCurrent || busy}
+                onClick={handleSubscribe}
+                className={cn(
+                  'mt-auto inline-flex h-12 items-center justify-center rounded-full text-[14px] transition-colors disabled:opacity-50',
+                  isCurrent
+                    ? 'cursor-default bg-white/[0.06] text-neutral-400'
+                    : isRecommended
+                      ? 'bg-black text-white hover:bg-black/80'
+                      : 'bg-white text-black hover:bg-white/90',
+                )}
+              >
+                {isCurrent
+                  ? 'Поточний тариф'
+                  : plan.trialDays > 0
+                    ? `Спробувати ${plan.trialDays} днів`
+                    : 'Обрати'}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+function PlanLimit({ label, value }: { label: string; value: number | null }) {
+  return (
+    <li className="flex justify-between gap-2 opacity-80">
+      <span>{label}</span>
+      <span className="tabular-nums">{value ?? '∞'}</span>
+    </li>
   )
 }
 

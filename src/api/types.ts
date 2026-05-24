@@ -61,6 +61,7 @@ export interface Tenant {
 }
 
 // === Billing (rozbirka.core, feature/subscriptions) ===
+// Source of truth: rozbirka.core/docs/billing-integration.md
 
 export type BillingState =
   | 'none'
@@ -73,8 +74,23 @@ export type BillingState =
 export type PaymentType = 'checkout' | 'recurring' | 'verification'
 export type PaymentStatus = 'pending' | 'success' | 'failed' | 'reversed'
 
+export interface LimitUsageDto {
+  used: number
+  max: number | null
+}
+
+export interface PlanUsageDto {
+  cars: LimitUsageDto
+  intakes: LimitUsageDto
+  parts: LimitUsageDto
+  users: LimitUsageDto
+  cashRegisters: LimitUsageDto
+}
+
 export interface SubscriptionDto {
   state: BillingState
+  planCode: string | null
+  planName: string | null
   trialEndsAt: string | null
   trialDaysRemaining: number | null
   currentPeriodEnd: string | null
@@ -86,6 +102,8 @@ export interface SubscriptionDto {
   canSubscribe: boolean
   canCancel: boolean
   canReactivate: boolean
+  usage: PlanUsageDto
+  features: string[]
 }
 
 export interface CheckoutResponse {
@@ -113,6 +131,44 @@ export interface PagedResult<T> {
 export interface CancelRequest {
   reason?: string
 }
+
+export interface PublicPlanLimits {
+  cars: number | null
+  intakes: number | null
+  parts: number | null
+  users: number | null
+  cashRegisters: number | null
+  photosPerPart: number | null
+}
+
+export interface PublicPlanDto {
+  code: string
+  name: string
+  amount: number
+  currency: string
+  interval: string
+  trialDays: number
+  limits: PublicPlanLimits
+  features: string[]
+}
+
+// Canonical feature codes
+export const FEATURES = {
+  IntakeManagement: 'intake_management',
+  AdvancedReports: 'reports.advanced',
+  BulkExport: 'bulk_export',
+  TeamCollaboration: 'team_collaboration',
+  AdvancedAnalytics: 'advanced_analytics',
+  CompatSuggest: 'compat_suggest',
+  MultiCashRegisters: 'multi_cash_registers',
+  ExtendedPhotos: 'extended_photos',
+  ApiAccess: 'api_access',
+  MultiLocation: 'multi_location',
+  PrioritySupport: 'priority_support',
+  WhiteLabel: 'white_label',
+} as const
+
+export type FeatureCode = (typeof FEATURES)[keyof typeof FEATURES]
 
 export interface ApiError {
   code?: string
