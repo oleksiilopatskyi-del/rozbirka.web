@@ -498,11 +498,7 @@ function PlansPanel({
                       : 'bg-white text-black hover:bg-white/90',
                 )}
               >
-                {isCurrent
-                  ? 'Поточний тариф'
-                  : plan.trialDays > 0
-                    ? `Спробувати ${plan.trialDays} днів`
-                    : 'Обрати'}
+                {isCurrent ? 'Поточний тариф' : 'Обрати'}
               </button>
             </li>
           )
