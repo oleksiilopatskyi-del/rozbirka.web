@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router'
 import App from '@/App'
+import { RedirectIfAuth, RequireAuth } from '@/auth/guards'
 
 export const router = createBrowserRouter([
   {
@@ -10,14 +11,26 @@ export const router = createBrowserRouter([
     path: '/login',
     lazy: async () => {
       const { LoginScreen } = await import('@/screens/login')
-      return { element: <LoginScreen /> }
+      return {
+        element: (
+          <RedirectIfAuth>
+            <LoginScreen />
+          </RedirectIfAuth>
+        ),
+      }
     },
   },
   {
     path: '/account',
     lazy: async () => {
       const { AccountScreen } = await import('@/screens/account')
-      return { element: <AccountScreen /> }
+      return {
+        element: (
+          <RequireAuth>
+            <AccountScreen />
+          </RequireAuth>
+        ),
+      }
     },
   },
   {

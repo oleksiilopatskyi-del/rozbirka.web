@@ -7,11 +7,12 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import { isAxiosError } from 'axios'
 import { BrandLogo } from '@/components/site/brand-logo'
 import { authApi } from '@/api/auth'
+import { useAuth } from '@/auth/AuthContext'
 
 type Step = 'phone' | 'otp' | 'success'
 
@@ -55,6 +56,10 @@ function formatUkrainianPhone(raw: string): string {
 
 export function LoginScreen() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const auth = useAuth()
+  const returnTo =
+    (location.state as { from?: string } | null)?.from ?? '/account'
   const [step, setStep] = useState<Step>('phone')
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
@@ -101,8 +106,9 @@ export function LoginScreen() {
     setLoading(true)
     try {
       await authApi.otpVerify({ phone: toE164(phone), code: otp })
+      await auth.hydrate()
       setStep('success')
-      window.setTimeout(() => navigate('/account'), 800)
+      window.setTimeout(() => navigate(returnTo, { replace: true }), 800)
     } catch (err) {
       setError(extractError(err, 'Невірний код'))
     } finally {

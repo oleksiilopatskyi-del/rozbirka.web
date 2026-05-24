@@ -7,13 +7,10 @@ import {
   Receipt,
   User as UserIcon,
 } from 'lucide-react'
-import { isAxiosError } from 'axios'
 import { cn } from '@/lib/utils'
 import { BrandLogo } from '@/components/site/brand-logo'
-import { authApi } from '@/api/auth'
 import { billingApi } from '@/api/billing'
-import { tenantsApi } from '@/api/tenants'
-import { tokens } from '@/api/tokens'
+import { useAuth } from '@/auth/AuthContext'
 import type {
   BillingState,
   LimitUsageDto,
@@ -43,9 +40,8 @@ const navEntries: NavEntry[] = [
 
 export function AccountScreen() {
   const navigate = useNavigate()
+  const auth = useAuth()
   const [section, setSection] = useState<Section>('subscription')
-  const [user, setUser] = useState<User | null>(null)
-  const [tenant, setTenant] = useState<Tenant | null>(null)
   const [subscription, setSubscription] = useState<SubscriptionDto | null>(null)
   const [plans, setPlans] = useState<PublicPlanDto[]>([])
   const [payments, setPayments] = useState<PagedResult<PaymentDto> | null>(null)
@@ -53,48 +49,29 @@ export function AccountScreen() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!tokens.getAccess()) {
-      navigate('/login', { replace: true })
-      return
-    }
     let cancelled = false
     ;(async () => {
-      try {
-        const u = await authApi.me()
-        if (cancelled) return
-        setUser(u)
-
-        const selected = await tenantsApi.ensureSelected().catch(() => null)
-        if (cancelled) return
-        if (selected) setTenant(selected)
-
-        const [sub, pay, planList] = await Promise.all([
-          billingApi.getSubscription().catch(() => null),
-          billingApi.getPayments(1, 10).catch(() => null),
-          billingApi.getPlans().catch(() => []),
-        ])
-        if (cancelled) return
-        setSubscription(sub)
-        setPayments(pay)
-        setPlans(planList)
-      } catch (err) {
-        if (cancelled) return
-        if (isAxiosError(err) && err.response?.status === 401) {
-          navigate('/login', { replace: true })
-          return
-        }
+      const [sub, pay, planList] = await Promise.all([
+        billingApi.getSubscription().catch(() => null),
+        billingApi.getPayments(1, 10).catch(() => null),
+        billingApi.getPlans().catch(() => []),
+      ])
+      if (cancelled) return
+      setSubscription(sub)
+      setPayments(pay)
+      setPlans(planList)
+      if (sub === null && pay === null) {
         setError('Не вдалось завантажити дані. Спробуйте оновити сторінку.')
-      } finally {
-        if (!cancelled) setLoading(false)
       }
+      setLoading(false)
     })()
     return () => {
       cancelled = true
     }
-  }, [navigate])
+  }, [])
 
   const handleLogout = async () => {
-    await authApi.logout()
+    await auth.signOut()
     navigate('/', { replace: true })
   }
 
@@ -116,8 +93,8 @@ export function AccountScreen() {
       <Sidebar
         active={section}
         onChange={setSection}
-        user={user}
-        tenant={tenant}
+        user={auth.user}
+        tenant={auth.tenant}
         onLogout={handleLogout}
       />
 
