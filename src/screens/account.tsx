@@ -655,12 +655,22 @@ function SubscriptionPanel({
         </div>
       </div>
 
-      <UsageBlock usage={subscription.usage} />
+      <UsageBlock usage={subscription.usage} onUpgrade={onSeePlans} />
     </div>
   )
 }
 
-function UsageBlock({ usage }: { usage: SubscriptionDto['usage'] }) {
+function isOver(u: LimitUsageDto): boolean {
+  return u.max !== null && u.used > u.max
+}
+
+function UsageBlock({
+  usage,
+  onUpgrade,
+}: {
+  usage: SubscriptionDto['usage']
+  onUpgrade: () => void
+}) {
   const items: { label: string; data: LimitUsageDto }[] = [
     { label: 'Авто', data: usage.cars },
     { label: 'Партії', data: usage.intakes },
@@ -669,30 +679,65 @@ function UsageBlock({ usage }: { usage: SubscriptionDto['usage'] }) {
     { label: 'Каси', data: usage.cashRegisters },
   ]
 
+  const overItems = items.filter((i) => isOver(i.data))
+
   return (
     <section className="flex flex-col gap-4">
       <h2 className="text-[18px] font-medium">Використання</h2>
-      <ul role="list" className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {items.map((item) => (
-          <li
-            key={item.label}
-            className="bg-surface-1 flex flex-col gap-3 rounded-2xl p-5 ring-1 ring-white/[0.04]"
+
+      {overItems.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[13px] leading-[1.5] text-amber-200/90">
+            Перевищено ліміт тарифу:{' '}
+            {overItems
+              .map((i) => `${i.label} ${i.data.used}/${i.data.max ?? '∞'}`)
+              .join(', ')}
+            . Наявні дані лишаються доступними, але додавати нові не вийде, поки
+            не повернетесь у межі.
+          </p>
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="bg-brand hover:bg-brand-hover text-brand-foreground inline-flex h-10 shrink-0 items-center justify-center rounded-full px-5 text-[13px] transition-colors"
           >
-            <div className="flex items-baseline justify-between">
-              <span className="text-[13px] text-neutral-400">{item.label}</span>
-              <span className="text-[13px] tabular-nums text-neutral-300">
-                {item.data.used}
-                {item.data.max !== null && (
-                  <span className="text-neutral-600"> / {item.data.max}</span>
-                )}
-                {item.data.max === null && (
-                  <span className="text-neutral-600"> / ∞</span>
-                )}
-              </span>
-            </div>
-            <UsageBar used={item.data.used} max={item.data.max} />
-          </li>
-        ))}
+            Підвищити тариф
+          </button>
+        </div>
+      )}
+
+      <ul role="list" className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {items.map((item) => {
+          const over = isOver(item.data)
+          return (
+            <li
+              key={item.label}
+              className="bg-surface-1 flex flex-col gap-3 rounded-2xl p-5 ring-1 ring-white/[0.04]"
+            >
+              <div className="flex items-baseline justify-between">
+                <span className="text-[13px] text-neutral-400">
+                  {item.label}
+                </span>
+                <span
+                  className={cn(
+                    'text-[13px] tabular-nums',
+                    over ? 'text-amber-300' : 'text-neutral-300',
+                  )}
+                >
+                  {item.data.used}
+                  {item.data.max !== null ? (
+                    <span className={over ? 'text-amber-300/60' : 'text-neutral-600'}>
+                      {' '}
+                      / {item.data.max}
+                    </span>
+                  ) : (
+                    <span className="text-neutral-600"> / ∞</span>
+                  )}
+                </span>
+              </div>
+              <UsageBar used={item.data.used} max={item.data.max} />
+            </li>
+          )
+        })}
       </ul>
     </section>
   )
