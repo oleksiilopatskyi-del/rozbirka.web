@@ -400,6 +400,16 @@ function SubscriptionPanel({
     }
   }
 
+  const handleActivateTrial = async () => {
+    setBusy(true)
+    try {
+      await billingApi.activateTrial()
+      await onRefresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <Header
@@ -436,45 +446,48 @@ function SubscriptionPanel({
         </div>
 
         <div className="flex flex-wrap gap-3">
-          {subscription.state === 'trial' ? (
+          {subscription.canActivateTrial && (
             <button
               type="button"
-              onClick={onSeePlans}
-              className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80"
+              onClick={handleActivateTrial}
+              disabled={busy}
+              className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80 disabled:opacity-50"
             >
-              Дивитись тарифи
+              Активувати 7 днів безкоштовно
             </button>
-          ) : (
-            <>
-              {subscription.canReactivate && (
-                <button
-                  type="button"
-                  onClick={handleSubscribe}
-                  disabled={busy}
-                  className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80 disabled:opacity-50"
-                >
-                  Поновити підписку
-                </button>
-              )}
-              {subscription.canCancel && (
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  disabled={busy}
-                  className="inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] text-black ring-1 ring-black/30 transition-colors hover:bg-black/10 disabled:opacity-50"
-                >
-                  Скасувати
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onSeePlans}
-                className="inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] text-black/80 transition-colors hover:text-black"
-              >
-                Дивитись тарифи
-              </button>
-            </>
           )}
+          {subscription.canReactivate && (
+            <button
+              type="button"
+              onClick={handleSubscribe}
+              disabled={busy}
+              className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80 disabled:opacity-50"
+            >
+              Поновити підписку
+            </button>
+          )}
+          {subscription.canCancel && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={busy}
+              className="inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] text-black ring-1 ring-black/30 transition-colors hover:bg-black/10 disabled:opacity-50"
+            >
+              Скасувати
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onSeePlans}
+            className={cn(
+              'inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] transition-colors',
+              subscription.canActivateTrial || subscription.canReactivate
+                ? 'text-black/80 hover:text-black'
+                : 'bg-black text-white hover:bg-black/80',
+            )}
+          >
+            Дивитись тарифи
+          </button>
         </div>
       </div>
 

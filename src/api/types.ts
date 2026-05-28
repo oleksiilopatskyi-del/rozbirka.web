@@ -107,6 +107,8 @@ export interface SubscriptionDto {
   canSubscribe: boolean
   canCancel: boolean
   canReactivate: boolean
+  /** Show "Activate free trial" CTA — true only if trial never used + no live sub. */
+  canActivateTrial: boolean
   usage: PlanUsageDto
   features: string[]
 }
@@ -128,7 +130,10 @@ export interface PaymentDto {
   status: PaymentStatus
   createdAt: string
   providerInvoiceId: string | null
+  /** Set only on Pending Checkout rows — resume an interrupted checkout. */
   checkoutUrl: string | null
+  /** ISO date when the Mono pay page stops accepting payments. */
+  checkoutExpiresAt: string | null
 }
 
 export interface PagedResult<T> {

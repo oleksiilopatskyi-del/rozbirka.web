@@ -40,6 +40,14 @@ export const billingApi = {
     return resp.data
   },
 
+  /**
+   * Activate the one-time free 7-day trial. Lifts the block on a fresh tenant.
+   * Backend: 409 billing.trial_already_used / billing.already_subscribed.
+   */
+  async activateTrial(): Promise<void> {
+    await apiClient.post('/billing/trial')
+  },
+
   async cancel(req?: CancelRequest): Promise<void> {
     await apiClient.post('/billing/cancel', req ?? {})
   },
