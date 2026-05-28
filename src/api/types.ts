@@ -60,6 +60,21 @@ export interface Tenant {
   roleName: string | null
 }
 
+export interface CreateTenantRequest {
+  tenantName: string
+  city?: string
+  logoUrl?: string
+}
+
+export interface CreateTenantResponse {
+  tenantId: string
+  name: string
+  slug: string
+  plan: TenantPlan
+  planTier: string
+  isActive: boolean
+}
+
 // === Billing (rozbirka.core, feature/subscriptions) ===
 // Source of truth: rozbirka.core/docs/billing-integration.md
 

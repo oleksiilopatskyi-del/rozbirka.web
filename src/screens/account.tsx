@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import {
+  ArrowRight,
   Check,
   ChevronsUpDown,
   CreditCard,
@@ -13,6 +14,8 @@ import {
 import { cn } from '@/lib/utils'
 import { BrandLogo } from '@/components/site/brand-logo'
 import { billingApi } from '@/api/billing'
+import { tenantsApi } from '@/api/tenants'
+import { tokens } from '@/api/tokens'
 import { useAuth } from '@/auth/AuthContext'
 import type {
   BillingState,
@@ -98,6 +101,11 @@ export function AccountScreen() {
         <p className="text-[14px]">Завантаження…</p>
       </div>
     )
+  }
+
+  // Fresh user with no розбірка yet → onboarding.
+  if (auth.tenants.length === 0) {
+    return <OnboardingScreen onLogout={handleLogout} onCreated={auth.hydrate} />
   }
 
   return (
@@ -187,7 +195,7 @@ function Sidebar({
         </ul>
       </nav>
 
-      <div className="mt-auto hidden flex-col gap-3 lg:flex">
+      <div className="mt-auto flex flex-col gap-3">
         <TenantSwitcher
           tenant={tenant}
           tenants={tenants}
@@ -204,6 +212,128 @@ function Sidebar({
         </button>
       </div>
     </aside>
+  )
+}
+
+function OnboardingScreen({
+  onCreated,
+  onLogout,
+}: {
+  onCreated: () => Promise<void>
+  onLogout: () => void
+}) {
+  const [name, setName] = useState('')
+  const [city, setCity] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    if (name.trim().length < 2) {
+      setError('Введіть назву розбірки')
+      return
+    }
+    setBusy(true)
+    try {
+      const res = await tenantsApi.create({
+        tenantName: name.trim(),
+        ...(city.trim() ? { city: city.trim() } : {}),
+      })
+      tokens.setTenant(res.tenantId)
+      await onCreated()
+    } catch {
+      setError('Не вдалося створити розбірку. Спробуйте ще раз.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="bg-background relative flex min-h-screen flex-col text-white">
+      <header className="flex items-center justify-between px-6 py-6 lg:px-10">
+        <BrandLogo />
+        <button
+          type="button"
+          onClick={onLogout}
+          className="inline-flex items-center gap-2 text-[13px] text-neutral-400 transition-colors hover:text-white"
+        >
+          <LogOut className="size-4" aria-hidden />
+          Вийти
+        </button>
+      </header>
+
+      <main className="flex flex-1 items-center justify-center px-6 pb-24">
+        <div className="anim-fade-up w-full max-w-[460px]">
+          <div className="flex flex-col gap-3">
+            <span className="text-brand text-[11px] font-medium tracking-[0.28em] uppercase">
+              Перший крок
+            </span>
+            <h1 className="text-[40px] leading-[0.95] font-light tracking-[-0.025em] lg:text-[52px]">
+              Створіть<br />
+              <span className="text-brand">свою розбірку</span>
+            </h1>
+            <p className="max-w-[360px] text-[14px] leading-[1.5] text-neutral-500">
+              Це ваш робочий простір — авто, склад, продажі й команда. Далі
+              активуєте 7 днів безкоштовно.
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <label
+                htmlFor="tenant-name"
+                className="text-[12px] text-neutral-500"
+              >
+                Назва розбірки
+              </label>
+              <input
+                id="tenant-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+                placeholder="Напр. CarDubliany"
+                className="bg-surface-1 placeholder:text-neutral-600 focus:ring-brand h-14 rounded-2xl px-5 text-[16px] text-white ring-1 ring-white/10 transition-all outline-none focus:ring-2"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label htmlFor="tenant-city" className="text-[12px] text-neutral-500">
+                Місто <span className="text-neutral-600">(необовʼязково)</span>
+              </label>
+              <input
+                id="tenant-city"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="Львів"
+                className="bg-surface-1 placeholder:text-neutral-600 focus:ring-brand h-14 rounded-2xl px-5 text-[16px] text-white ring-1 ring-white/10 transition-all outline-none focus:ring-2"
+              />
+            </div>
+
+            {error && (
+              <p role="alert" className="text-[13px] text-red-400">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={busy}
+              className="bg-brand hover:bg-brand-hover text-brand-foreground group mt-2 inline-flex h-14 items-center justify-center gap-3 rounded-full text-[15px] transition-all duration-300 hover:scale-[1.01] disabled:opacity-60"
+            >
+              <span>{busy ? 'Створюємо…' : 'Створити розбірку'}</span>
+              {!busy && (
+                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+              )}
+            </button>
+          </form>
+        </div>
+      </main>
+
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 -z-10 [background:radial-gradient(80%_60%_at_50%_0%,rgba(247,116,37,0.12),transparent_60%)]"
+      />
+    </div>
   )
 }
 
@@ -344,20 +474,33 @@ function SubscriptionPanel({
 
   if (!subscription) return <EmptyPanel />
 
+  // Fresh tenant that hasn't activated its trial yet → present the card as a
+  // trial invitation rather than an empty "no plan" state.
+  const offerTrial = subscription.canActivateTrial
+  // Trial spent / subscription lapsed → access closed, must pick a paid plan.
+  // We do NOT auto-send to Mono checkout; the user chooses a tier on /tarifs.
+  const accessEnded = subscription.state === 'blocked' && !offerTrial
+
   const stateMeta: Record<BillingState, { label: string }> = {
-    none: { label: 'Немає' },
+    none: { label: 'Початок' },
     trial: { label: 'Пробний період' },
     active: { label: 'Активна' },
     pastDue: { label: 'Прострочена' },
     cancelled: { label: 'Скасована' },
-    blocked: { label: 'Заблокована' },
+    blocked: { label: 'Доступ закрито' },
   }
 
-  const planLabel =
-    subscription.state === 'trial'
-      ? (subscription.planName ?? 'Пробний доступ')
-      : (subscription.planName ??
-        (subscription.state === 'blocked' ? 'Доступ закрито' : 'Без тарифу'))
+  const badgeLabel = offerTrial
+    ? 'Пробний доступ'
+    : stateMeta[subscription.state].label
+
+  const planLabel = offerTrial
+    ? '7 днів безкоштовно'
+    : accessEnded
+      ? 'Доступ закрито'
+      : subscription.state === 'trial'
+        ? (subscription.planName ?? 'Пробний доступ')
+        : (subscription.planName ?? 'Без тарифу')
 
   const primaryLabel =
     subscription.state === 'trial'
@@ -420,14 +563,19 @@ function SubscriptionPanel({
       <div className="bg-brand text-brand-foreground rounded-(--radius-card) flex flex-col gap-8 p-8 lg:p-10">
         <div className="flex flex-col gap-3">
           <span className="inline-flex w-fit items-center rounded-full bg-black/15 px-3 py-1.5 text-[11px] font-medium tracking-[0.05em] uppercase">
-            {stateMeta[subscription.state].label}
+            {badgeLabel}
           </span>
           <p className="text-[48px] leading-[1] font-light tracking-[-0.03em] lg:text-[64px]">
             {planLabel}
           </p>
-          {subscription.state === 'trial' ? (
+          {offerTrial ? (
+            <p className="text-[15px] opacity-75">
+              Повний доступ до Pro. Без картки.
+            </p>
+          ) : subscription.state === 'trial' ? (
             <p className="text-[15px] opacity-75">7 днів безкоштовно</p>
           ) : (
+            !accessEnded &&
             typeof subscription.amount === 'number' && (
               <p className="text-[15px] opacity-75">
                 {formatAmount(
@@ -440,10 +588,23 @@ function SubscriptionPanel({
           )}
         </div>
 
-        <div className="flex flex-col gap-1">
-          <p className="text-[14px] opacity-70">{primaryLabel}</p>
-          <p className="text-[32px] font-light tabular-nums">{primaryValue}</p>
-        </div>
+        {accessEnded ? (
+          <div className="rounded-2xl bg-black/15 px-5 py-4">
+            <p className="text-[14px] leading-[1.5]">
+              Пробний період завершився. Щоб продовжити користуватись —
+              оформіть підписку: оберіть тариф нижче.
+            </p>
+          </div>
+        ) : (
+          !offerTrial && (
+            <div className="flex flex-col gap-1">
+              <p className="text-[14px] opacity-70">{primaryLabel}</p>
+              <p className="text-[32px] font-light tabular-nums">
+                {primaryValue}
+              </p>
+            </div>
+          )
+        )}
 
         <div className="flex flex-wrap gap-3">
           {subscription.canActivateTrial && (
@@ -456,7 +617,8 @@ function SubscriptionPanel({
               Активувати 7 днів безкоштовно
             </button>
           )}
-          {subscription.canReactivate && (
+          {/* "Поновити" only for a still-active cancelled sub — never blocked. */}
+          {subscription.canReactivate && subscription.state !== 'blocked' && (
             <button
               type="button"
               onClick={handleSubscribe}
@@ -481,12 +643,14 @@ function SubscriptionPanel({
             onClick={onSeePlans}
             className={cn(
               'inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] transition-colors',
-              subscription.canActivateTrial || subscription.canReactivate
+              subscription.canActivateTrial ||
+                (subscription.canReactivate &&
+                  subscription.state !== 'blocked')
                 ? 'text-black/80 hover:text-black'
                 : 'bg-black text-white hover:bg-black/80',
             )}
           >
-            Дивитись тарифи
+            {accessEnded ? 'Оформити підписку' : 'Дивитись тарифи'}
           </button>
         </div>
       </div>
