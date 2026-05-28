@@ -206,16 +206,13 @@ export function Features() {
                   <span className="text-brand block">rozbirka</span>
                 </h2>
                 <p className="max-w-[340px] text-[14px] leading-[1.5] text-neutral-500">
-                  Десять модулів — один інтерфейс. Від обліку авто до фінансів
-                  і команди.
+                  Десять модулів — один інтерфейс. Від обліку авто до фінансів і
+                  команди.
                 </p>
               </div>
 
               <div className="hidden gap-2 lg:flex">
-                <NavCircle
-                  direction="prev"
-                  onClick={() => scrollByCard(-1)}
-                />
+                <NavCircle direction="prev" onClick={() => scrollByCard(-1)} />
                 <NavCircle direction="next" onClick={() => scrollByCard(1)} />
               </div>
             </div>

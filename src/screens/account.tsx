@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import {
+  Check,
+  ChevronsUpDown,
   CreditCard,
   Crown,
   LogOut,
   Receipt,
+  Store,
   User as UserIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -48,8 +51,12 @@ export function AccountScreen() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const activeTenantId = auth.tenant?.id
+
   useEffect(() => {
     let cancelled = false
+    setLoading(true)
+    setError(null)
     ;(async () => {
       const [sub, pay, planList] = await Promise.all([
         billingApi.getSubscription().catch(() => null),
@@ -68,7 +75,7 @@ export function AccountScreen() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [activeTenantId])
 
   const handleLogout = async () => {
     await auth.signOut()
@@ -100,6 +107,8 @@ export function AccountScreen() {
         onChange={setSection}
         user={auth.user}
         tenant={auth.tenant}
+        tenants={auth.tenants}
+        onSwitchTenant={auth.switchTenant}
         onLogout={handleLogout}
       />
 
@@ -137,12 +146,16 @@ function Sidebar({
   onChange,
   user,
   tenant,
+  tenants,
+  onSwitchTenant,
   onLogout,
 }: {
   active: Section
   onChange: (s: Section) => void
   user: User | null
   tenant: Tenant | null
+  tenants: Tenant[]
+  onSwitchTenant: (id: string) => void
   onLogout: () => void
 }) {
   return (
@@ -175,19 +188,12 @@ function Sidebar({
       </nav>
 
       <div className="mt-auto hidden flex-col gap-3 lg:flex">
-        <div className="flex items-center gap-3 rounded-2xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06]">
-          <div className="bg-brand grid size-9 place-items-center rounded-full">
-            <UserIcon className="text-brand-foreground size-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] text-white">
-              {user?.displayName || user?.phone || '—'}
-            </p>
-            <p className="truncate text-[11px] text-neutral-500">
-              {tenant?.name ?? '—'}
-            </p>
-          </div>
-        </div>
+        <TenantSwitcher
+          tenant={tenant}
+          tenants={tenants}
+          user={user}
+          onSwitch={onSwitchTenant}
+        />
         <button
           type="button"
           onClick={onLogout}
@@ -201,15 +207,126 @@ function Sidebar({
   )
 }
 
+function TenantSwitcher({
+  tenant,
+  tenants,
+  user,
+  onSwitch,
+}: {
+  tenant: Tenant | null
+  tenants: Tenant[]
+  user: User | null
+  onSwitch: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const subtitle = tenant?.name ?? user?.phone ?? '—'
+
+  // Single розбірка → static card, no switcher.
+  if (tenants.length <= 1) {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl bg-white/[0.03] px-4 py-3 ring-1 ring-white/[0.06]">
+        <div className="bg-brand grid size-9 place-items-center rounded-full">
+          <UserIcon className="text-brand-foreground size-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] text-white">
+            {user?.displayName || user?.phone || '—'}
+          </p>
+          <p className="truncate text-[11px] text-neutral-500">{subtitle}</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="flex w-full items-center gap-3 rounded-2xl bg-white/[0.03] px-4 py-3 text-left ring-1 ring-white/[0.06] transition-colors hover:bg-white/[0.06]"
+      >
+        <div className="bg-brand grid size-9 shrink-0 place-items-center rounded-full">
+          <Store className="text-brand-foreground size-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] text-white">
+            {tenant?.name ?? 'Оберіть розбірку'}
+          </p>
+          <p className="truncate text-[11px] text-neutral-500">
+            {user?.displayName || user?.phone || '—'}
+          </p>
+        </div>
+        <ChevronsUpDown
+          className="size-4 shrink-0 text-neutral-500"
+          aria-hidden
+        />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className="bg-surface-2 absolute bottom-[calc(100%+8px)] left-0 z-20 flex w-full flex-col gap-1 rounded-2xl p-2 shadow-2xl ring-1 ring-white/10"
+        >
+          <p className="px-3 pt-1 pb-2 text-[11px] tracking-[0.05em] text-neutral-500 uppercase">
+            Розбірки
+          </p>
+          {tenants.map((t) => {
+            const isCurrent = t.id === tenant?.id
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="option"
+                aria-selected={isCurrent}
+                onClick={() => {
+                  onSwitch(t.id)
+                  setOpen(false)
+                }}
+                className={cn(
+                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] transition-colors',
+                  isCurrent
+                    ? 'bg-white/[0.06] text-white'
+                    : 'text-neutral-300 hover:bg-white/[0.04] hover:text-white',
+                )}
+              >
+                <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/[0.06]">
+                  <Store className="size-3.5" aria-hidden />
+                </div>
+                <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                {isCurrent && (
+                  <Check className="text-brand size-4 shrink-0" aria-hidden />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Header({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <header className="mb-10 flex flex-col gap-2">
       <h1 className="text-[36px] leading-[1] font-light tracking-[-0.02em] lg:text-[48px]">
         {title}
       </h1>
-      {subtitle && (
-        <p className="text-[14px] text-neutral-500">{subtitle}</p>
-      )}
+      {subtitle && <p className="text-[14px] text-neutral-500">{subtitle}</p>}
     </header>
   )
 }
@@ -266,7 +383,7 @@ function SubscriptionPanel({
     setBusy(true)
     try {
       const { checkoutUrl } = await billingApi.subscribe()
-      window.location.href = checkoutUrl
+      window.location.assign(checkoutUrl)
     } catch {
       setBusy(false)
     }
@@ -414,11 +531,7 @@ function UsageBar({ used, max }: { used: number; max: number | null }) {
   }
   const ratio = max === 0 ? 0 : Math.min(used / max, 1)
   const color =
-    ratio >= 1
-      ? 'bg-red-500'
-      : ratio >= 0.8
-        ? 'bg-amber-400'
-        : 'bg-brand'
+    ratio >= 1 ? 'bg-red-500' : ratio >= 0.8 ? 'bg-amber-400' : 'bg-brand'
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
       <div
@@ -447,7 +560,7 @@ function PlansPanel({
     setBusy(true)
     try {
       const { checkoutUrl } = await billingApi.subscribe({ planCode })
-      window.location.href = checkoutUrl
+      window.location.assign(checkoutUrl)
     } catch {
       setBusy(false)
     }
@@ -455,7 +568,10 @@ function PlansPanel({
 
   return (
     <div className="flex flex-col gap-8">
-      <Header title="Тарифи" subtitle="Обери план, що підходить твоєму бізнесу" />
+      <Header
+        title="Тарифи"
+        subtitle="Обери план, що підходить твоєму бізнесу"
+      />
 
       <ul role="list" className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {plans.map((plan) => {
@@ -489,9 +605,7 @@ function PlansPanel({
 
               <p className="flex items-baseline gap-1 text-[44px] leading-[0.9] font-light tracking-[-0.03em]">
                 <span>{formatAmount(plan.amount, plan.currency)}</span>
-                <span className="text-[13px] font-normal opacity-70">
-                  /міс
-                </span>
+                <span className="text-[13px] font-normal opacity-70">/міс</span>
               </p>
 
               <ul role="list" className="flex flex-col gap-2 text-[13px]">
@@ -679,7 +793,9 @@ function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
   }
   const entry = map[status]
   return (
-    <span className={cn('rounded-full px-3 py-1 text-[12px] ring-1', entry.cls)}>
+    <span
+      className={cn('rounded-full px-3 py-1 text-[12px] ring-1', entry.cls)}
+    >
       {entry.label}
     </span>
   )
@@ -738,5 +854,7 @@ function formatAmount(
   })
   const upper = (currency ?? '').toUpperCase()
   const symbol = upper === 'UAH' ? '₴' : upper === 'USD' ? '$' : upper
-  return upper === 'USD' ? `${symbol}${formatted}` : `${formatted} ${symbol}`.trim()
+  return upper === 'USD'
+    ? `${symbol}${formatted}`
+    : `${formatted} ${symbol}`.trim()
 }

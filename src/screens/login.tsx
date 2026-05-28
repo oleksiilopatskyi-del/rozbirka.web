@@ -73,8 +73,7 @@ export function LoginScreen() {
     return () => window.clearTimeout(id)
   }, [resendIn])
 
-  const toE164 = (formatted: string) =>
-    '+' + formatted.replace(/\D/g, '')
+  const toE164 = (formatted: string) => '+' + formatted.replace(/\D/g, '')
 
   const handlePhoneSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -204,7 +203,8 @@ function PhoneStep({
           Вхід
         </span>
         <h1 className="text-[44px] leading-[0.95] font-light tracking-[-0.025em] lg:text-[52px]">
-          Введіть<br />
+          Введіть
+          <br />
           <span className="text-brand">номер телефону</span>
         </h1>
         <p className="max-w-[340px] text-[14px] leading-[1.5] text-neutral-500">
@@ -288,12 +288,12 @@ function OtpStep({
           Код підтвердження
         </span>
         <h1 className="text-[44px] leading-[0.95] font-light tracking-[-0.025em] lg:text-[52px]">
-          Введіть код<br />
+          Введіть код
+          <br />
           <span className="text-brand">з SMS</span>
         </h1>
         <p className="text-[14px] leading-[1.5] text-neutral-500">
-          Надіслали на{' '}
-          <span className="text-white">{phone}</span>{' '}
+          Надіслали на <span className="text-white">{phone}</span>{' '}
           <button
             type="button"
             onClick={onBack}
@@ -305,7 +305,12 @@ function OtpStep({
       </div>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <OtpInput value={otp} onChange={onChange} length={OTP_LENGTH} autoFocus />
+        <OtpInput
+          value={otp}
+          onChange={onChange}
+          length={OTP_LENGTH}
+          autoFocus
+        />
 
         {error && (
           <p role="alert" className="text-center text-[13px] text-red-400">

@@ -34,7 +34,10 @@ export function SiteHeader() {
                   {user?.displayName || user?.phone || 'Кабінет'}
                 </span>
                 <span className="bg-brand grid size-9 place-items-center rounded-full transition-transform duration-300 group-hover:translate-x-0.5">
-                  <UserIcon className="text-brand-foreground size-4" aria-hidden />
+                  <UserIcon
+                    className="text-brand-foreground size-4"
+                    aria-hidden
+                  />
                 </span>
               </Link>
             ) : (

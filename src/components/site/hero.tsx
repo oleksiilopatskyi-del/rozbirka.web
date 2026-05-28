@@ -17,9 +17,7 @@ const heroLines: TypewriterLine[] = [
 ]
 
 function TypewriterHeading({ lines }: { lines: TypewriterLine[] }) {
-  const [revealed, setRevealed] = useState<string[]>(() =>
-    lines.map(() => ''),
-  )
+  const [revealed, setRevealed] = useState<string[]>(() => lines.map(() => ''))
   const [activeLine, setActiveLine] = useState(0)
   const speed = 35
   const lineGap = 180
@@ -77,10 +75,7 @@ function TypewriterHeading({ lines }: { lines: TypewriterLine[] }) {
         const isLast = i === lines.length - 1
         const showCaret = isActive || (done && isLast)
         return (
-          <span
-            key={i}
-            className={`block min-h-[1em] ${line.className ?? ''}`}
-          >
+          <span key={i} className={`block min-h-[1em] ${line.className ?? ''}`}>
             {revealed[i] || ' '}
             {showCaret && (
               <span

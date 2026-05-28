@@ -92,9 +92,7 @@ function PlanCard({ plan }: { plan: Plan }) {
         <p className="flex items-baseline gap-2 text-[80px] leading-[0.9] font-light tracking-[-0.04em] lg:text-[112px]">
           <span>{plan.price}</span>
         </p>
-        <p className="text-[14px] opacity-70 lg:text-[15px]">
-          /{plan.period}
-        </p>
+        <p className="text-[14px] opacity-70 lg:text-[15px]">/{plan.period}</p>
       </div>
 
       <p className={cn('text-[13px] lg:text-[14px]', styles.description)}>
@@ -109,7 +107,10 @@ function PlanCard({ plan }: { plan: Plan }) {
         )}
       >
         <span>{plan.ctaLabel}</span>
-        <ArrowUpRight className="size-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden />
+        <ArrowUpRight
+          className="size-4 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+          aria-hidden
+        />
       </a>
     </li>
   )

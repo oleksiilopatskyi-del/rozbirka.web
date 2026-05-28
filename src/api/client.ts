@@ -123,9 +123,7 @@ export interface NormalizedApiError {
   status?: number
 }
 
-export const normalizeApiError = (
-  error: AxiosError,
-): NormalizedApiError => {
+export const normalizeApiError = (error: AxiosError): NormalizedApiError => {
   const body = error.response?.data as
     | { error?: string | { code?: string; message?: string }; message?: string }
     | undefined
