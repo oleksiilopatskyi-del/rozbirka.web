@@ -7,9 +7,10 @@ import axios, {
 import { tokens } from './tokens'
 import type { RefreshResponse } from './types'
 
-const API_URL =
-  (import.meta.env['VITE_API_URL'] as string | undefined) ??
-  'https://qa.rozbirka.com'
+// Same-origin by default: backend and SPA share the apex (qa.rozbirka.com,
+// rozbirka.com). VITE_API_URL is only for local dev pointing at a different
+// host (e.g. http://localhost:5000 when running the API directly).
+const API_URL = (import.meta.env['VITE_API_URL'] as string | undefined) ?? ''
 
 const TIMEOUT = 15000
 
