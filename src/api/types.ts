@@ -27,6 +27,10 @@ export interface OtpVerifyResponse {
   isNewUser: boolean
 }
 
+export interface UpdateNameRequest {
+  name: string
+}
+
 export interface RefreshResponse {
   accessToken: string
   refreshToken: string

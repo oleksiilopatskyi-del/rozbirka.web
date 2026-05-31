@@ -40,4 +40,8 @@ export const authApi = {
     const resp = await identityClient.get<User>('/auth/me')
     return resp.data
   },
+
+  async updateName(name: string): Promise<void> {
+    await identityClient.patch('/auth/me/name', { name })
+  },
 }

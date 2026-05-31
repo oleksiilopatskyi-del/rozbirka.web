@@ -14,7 +14,7 @@ import { BrandLogo } from '@/components/site/brand-logo'
 import { authApi } from '@/api/auth'
 import { useAuth } from '@/auth/AuthContext'
 
-type Step = 'phone' | 'otp' | 'success'
+type Step = 'phone' | 'otp' | 'name' | 'success'
 
 const OTP_LENGTH = 6
 
@@ -63,6 +63,7 @@ export function LoginScreen() {
   const [step, setStep] = useState<Step>('phone')
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
+  const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [resendIn, setResendIn] = useState(0)
@@ -104,12 +105,38 @@ export function LoginScreen() {
     }
     setLoading(true)
     try {
-      await authApi.otpVerify({ phone: toE164(phone), code: otp })
+      const resp = await authApi.otpVerify({ phone: toE164(phone), code: otp })
+      // Existing user — straight to success. Brand-new user — ask their name first.
+      if (resp.isNewUser) {
+        setStep('name')
+      } else {
+        await auth.hydrate()
+        setStep('success')
+        window.setTimeout(() => navigate(returnTo, { replace: true }), 800)
+      }
+    } catch (err) {
+      setError(extractError(err, 'Невірний код'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleNameSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    const trimmed = name.trim()
+    if (trimmed.length < 2) {
+      setError('Введіть ім’я')
+      return
+    }
+    setLoading(true)
+    try {
+      await authApi.updateName(trimmed)
       await auth.hydrate()
       setStep('success')
       window.setTimeout(() => navigate(returnTo, { replace: true }), 800)
     } catch (err) {
-      setError(extractError(err, 'Невірний код'))
+      setError(extractError(err, 'Не вдалося зберегти ім’я'))
     } finally {
       setLoading(false)
     }
@@ -167,6 +194,15 @@ export function LoginScreen() {
               }}
               onResend={handleResend}
               resendIn={resendIn}
+              loading={loading}
+              error={error}
+            />
+          )}
+          {step === 'name' && (
+            <NameStep
+              name={name}
+              onChange={setName}
+              onSubmit={handleNameSubmit}
               loading={loading}
               error={error}
             />
@@ -338,6 +374,73 @@ function OtpStep({
           {resendIn > 0
             ? `Надіслати код ще раз — через ${resendIn} с`
             : 'Надіслати код ще раз'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+function NameStep({
+  name,
+  onChange,
+  onSubmit,
+  loading,
+  error,
+}: {
+  name: string
+  onChange: (v: string) => void
+  onSubmit: (e: FormEvent) => void
+  loading: boolean
+  error: string | null
+}) {
+  return (
+    <div className="anim-fade-up flex flex-col gap-8">
+      <div className="flex flex-col gap-3">
+        <span className="text-brand text-[11px] font-medium tracking-[0.28em] uppercase">
+          Майже все
+        </span>
+        <h1 className="text-[44px] leading-[0.95] font-light tracking-[-0.025em] lg:text-[52px]">
+          Як вас
+          <br />
+          <span className="text-brand">називати?</span>
+        </h1>
+        <p className="text-[14px] leading-[1.5] text-neutral-500">
+          Це ім’я побачать ваші колеги в команді
+        </p>
+      </div>
+
+      <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <label className="sr-only" htmlFor="name">
+          Ім’я
+        </label>
+        <input
+          id="name"
+          type="text"
+          inputMode="text"
+          autoComplete="name"
+          autoFocus
+          value={name}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Іван Петренко"
+          maxLength={64}
+          className="bg-surface-1 placeholder:text-neutral-600 focus:ring-brand h-16 rounded-2xl px-5 text-[18px] tracking-[0.02em] text-white ring-1 ring-white/10 transition-all outline-none focus:ring-2"
+        />
+
+        {error && (
+          <p role="alert" className="text-[13px] text-red-400">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading || name.trim().length < 2}
+          className="bg-brand hover:bg-brand-hover text-brand-foreground group mt-2 inline-flex h-16 items-center justify-center gap-3 rounded-full text-[16px] font-normal transition-all duration-300 hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span>{loading ? 'Зберігаємо…' : 'Продовжити'}</span>
+          {!loading && (
+            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+          )}
         </button>
       </form>
     </div>
