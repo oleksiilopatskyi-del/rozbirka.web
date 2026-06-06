@@ -5,8 +5,7 @@ import { BrandLogo } from '@/components/site/brand-logo'
 import { NavLinks } from '@/components/site/nav-links'
 
 const secondaryLinks = [
-  { label: 'Політики конфіденційності', href: '#privacy' },
-  { label: 'Договір оферти', href: '#offer' },
+  { label: 'Політика конфіденційності', href: '/privacy' },
 ]
 
 export function SiteFooter() {
