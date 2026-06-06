@@ -1,0 +1,5 @@
+# SPA fallback: serve index.html for any non-existent path so React Router
+# handles client-side routing. Static assets in /assets/* are matched first
+# (they exist as files), and /api/*, /auth/*, /.well-known/* are intercepted
+# by functions/_middleware.js before reaching this layer.
+/*    /index.html   200
