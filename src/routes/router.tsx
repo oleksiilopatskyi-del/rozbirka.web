@@ -8,6 +8,13 @@ export const router = createBrowserRouter([
     element: <App />,
   },
   {
+    path: '/privacy',
+    lazy: async () => {
+      const { PrivacyScreen } = await import('@/screens/privacy')
+      return { element: <PrivacyScreen /> }
+    },
+  },
+  {
     path: '/login',
     lazy: async () => {
       const { LoginScreen } = await import('@/screens/login')
