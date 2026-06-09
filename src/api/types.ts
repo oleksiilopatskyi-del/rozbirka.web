@@ -12,6 +12,8 @@ export interface SendOtpResponse {
 export interface VerifyOtpRequest {
   phone: string
   code: string
+  /** Web allows creating a new account on first verify. Mobile omits this (sign-in only). */
+  allowRegistration?: boolean
 }
 
 export interface VerifyUser {
