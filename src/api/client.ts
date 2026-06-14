@@ -28,6 +28,13 @@ export const apiClient: AxiosInstance = axios.create({
   timeout: TIMEOUT,
 })
 
+// Public client — /api/v1, no auth or tenant headers (marketplace public routes)
+export const publicApiClient: AxiosInstance = axios.create({
+  baseURL: `${API_URL}/api/v1`,
+  headers: { 'Content-Type': 'application/json' },
+  timeout: TIMEOUT,
+})
+
 // Attach auth + tenant headers on every request
 const attachAuth = (config: InternalAxiosRequestConfig) => {
   const access = tokens.getAccess()
@@ -63,6 +70,7 @@ const unwrap = (resp: AxiosResponse): AxiosResponse => {
 
 identityClient.interceptors.response.use(unwrap)
 apiClient.interceptors.response.use(unwrap)
+publicApiClient.interceptors.response.use(unwrap)
 
 // 401 refresh handling — deduped
 let refreshPromise: Promise<string | null> | null = null
@@ -164,6 +172,10 @@ apiClient.interceptors.response.use(undefined, async (e: AxiosError) => {
   } catch (err) {
     stampError(err as AxiosError)
   }
+})
+
+publicApiClient.interceptors.response.use(undefined, (e: AxiosError) => {
+  stampError(e)
 })
 
 declare module 'axios' {
