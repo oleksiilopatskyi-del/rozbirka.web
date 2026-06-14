@@ -41,6 +41,49 @@ export const router = createBrowserRouter([
     },
   },
   {
+    path: '/marketplace',
+    lazy: async () => {
+      const { MarketplaceApp } = await import('@/apps/marketplace/marketplace-app')
+      return { element: <MarketplaceApp /> }
+    },
+  },
+  {
+    path: '/marketplace/listings/:slugOrId',
+    lazy: async () => {
+      const { MarketplaceLayout } = await import(
+        '@/apps/marketplace/marketplace-layout'
+      )
+      const { ListingDetailScreen } = await import(
+        '@/features/marketplace/listing-detail-screen'
+      )
+      return {
+        element: (
+          <MarketplaceLayout>
+            <ListingDetailScreen />
+          </MarketplaceLayout>
+        ),
+      }
+    },
+  },
+  {
+    path: '/marketplace/shops/:slug',
+    lazy: async () => {
+      const { MarketplaceLayout } = await import(
+        '@/apps/marketplace/marketplace-layout'
+      )
+      const { ShopProfileScreen } = await import(
+        '@/features/marketplace/shop-profile-screen'
+      )
+      return {
+        element: (
+          <MarketplaceLayout>
+            <ShopProfileScreen />
+          </MarketplaceLayout>
+        ),
+      }
+    },
+  },
+  {
     path: '/screens',
     lazy: async () => {
       const { ScreensIndex } = await import('@/screens')
