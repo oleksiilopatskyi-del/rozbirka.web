@@ -12,9 +12,15 @@ vi.mock('@/api/marketplace', () => ({
   },
 }))
 
+/* eslint-disable @typescript-eslint/unbound-method */
+const getSellerSummary = vi.mocked(marketplaceApi.getSellerSummary)
+const getSellerListings = vi.mocked(marketplaceApi.getSellerListings)
+const searchSellerParts = vi.mocked(marketplaceApi.searchSellerParts)
+/* eslint-enable @typescript-eslint/unbound-method */
+
 describe('SellerMarketplacePanel', () => {
   beforeEach(() => {
-    vi.mocked(marketplaceApi.getSellerSummary).mockResolvedValue({
+    getSellerSummary.mockResolvedValue({
       shop: {
         id: 's1',
         slug: 'shop',
@@ -32,14 +38,14 @@ describe('SellerMarketplacePanel', () => {
       hiddenListings: 0,
       availableWarehouseParts: 4,
     })
-    vi.mocked(marketplaceApi.getSellerListings).mockResolvedValue({
+    getSellerListings.mockResolvedValue({
       items: [],
       page: 1,
       pageSize: 30,
       total: 0,
       totalPages: 0,
     })
-    vi.mocked(marketplaceApi.searchSellerParts).mockResolvedValue({
+    searchSellerParts.mockResolvedValue({
       items: [],
       page: 1,
       pageSize: 30,

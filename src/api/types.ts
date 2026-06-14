@@ -38,7 +38,7 @@ export interface RefreshResponse {
   refreshToken: string
 }
 
-export type UserRole = 'owner' | 'manager' | 'master' | string
+export type UserRole = 'owner' | 'manager' | 'master' | (string & {})
 
 export interface User {
   id: string
@@ -51,7 +51,7 @@ export interface User {
 
 // === Tenants (rozbirka.core) ===
 
-export type TenantPlan = 'trial' | 'active' | 'blocked' | string
+export type TenantPlan = 'trial' | 'active' | 'blocked' | (string & {})
 
 export interface Tenant {
   id: string

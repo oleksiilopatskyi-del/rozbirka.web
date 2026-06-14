@@ -94,10 +94,7 @@ export function Pricing() {
           <h2 className="mb-12 text-[40px] leading-[1] font-light tracking-[-0.02em] lg:mb-16 lg:text-[56px]">
             Тарифні плани
           </h2>
-          <ul
-            role="list"
-            className="grid grid-cols-1 gap-4 md:grid-cols-3"
-          >
+          <ul role="list" className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {plans.map((plan) => (
               <PlanCard key={plan.name} plan={plan} />
             ))}

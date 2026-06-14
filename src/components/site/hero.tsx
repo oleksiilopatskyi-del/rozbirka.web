@@ -27,15 +27,20 @@ function TypewriterHeading({ lines }: { lines: TypewriterLine[] }) {
       typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
+    let timer: number | undefined
+
     if (prefersReduced) {
-      setRevealed(lines.map((l) => l.text))
-      setActiveLine(lines.length)
-      return
+      timer = window.setTimeout(() => {
+        setRevealed(lines.map((l) => l.text))
+        setActiveLine(lines.length)
+      }, 0)
+      return () => {
+        if (timer) window.clearTimeout(timer)
+      }
     }
 
     let lineIdx = 0
     let charIdx = 0
-    let timer: number | undefined
 
     const tick = () => {
       if (lineIdx >= lines.length) {
@@ -76,6 +81,7 @@ function TypewriterHeading({ lines }: { lines: TypewriterLine[] }) {
         const showCaret = isActive || (done && isLast)
         return (
           <span key={i} className={`block min-h-[1em] ${line.className ?? ''}`}>
+            {/* eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string must render a space */}
             {revealed[i] || ' '}
             {showCaret && (
               <span

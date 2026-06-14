@@ -1,5 +1,5 @@
+import type { AxiosError } from 'axios'
 import axios, {
-  AxiosError,
   type AxiosInstance,
   type AxiosResponse,
   type InternalAxiosRequestConfig,
@@ -84,10 +84,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
       { refreshToken: refresh },
       { headers: { 'Content-Type': 'application/json' }, timeout: TIMEOUT },
     )
-    const payload =
-      'data' in resp.data
-        ? (resp.data as { data: RefreshResponse }).data
-        : (resp.data as RefreshResponse)
+    const payload = 'data' in resp.data ? resp.data.data : resp.data
     tokens.set(payload.accessToken, payload.refreshToken)
     return payload.accessToken
   } catch {

@@ -30,12 +30,7 @@ import type {
   User,
 } from '@/api/types'
 
-type Section =
-  | 'subscription'
-  | 'plans'
-  | 'payment'
-  | 'billing'
-  | 'marketplace'
+type Section = 'subscription' | 'plans' | 'payment' | 'billing' | 'marketplace'
 
 interface NavEntry {
   id: Section
@@ -65,23 +60,23 @@ export function AccountScreen() {
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setError(null)
-    ;(async () => {
-      const [sub, pay, planList] = await Promise.all([
-        billingApi.getSubscription().catch(() => null),
-        billingApi.getPayments(1, 10).catch(() => null),
-        billingApi.getPlans().catch(() => []),
-      ])
-      if (cancelled) return
-      setSubscription(sub)
-      setPayments(pay)
-      setPlans(planList)
-      if (sub === null && pay === null) {
-        setError('Не вдалось завантажити дані. Спробуйте оновити сторінку.')
-      }
-      setLoading(false)
-    })()
+    void Promise.all([
+      billingApi.getSubscription().catch(() => null),
+      billingApi.getPayments(1, 10).catch(() => null),
+      billingApi.getPlans().catch(() => []),
+    ])
+      .then(([sub, pay, planList]) => {
+        if (cancelled) return
+        setSubscription(sub)
+        setPayments(pay)
+        setPlans(planList)
+        if (sub === null && pay === null) {
+          setError('Не вдалось завантажити дані. Спробуйте оновити сторінку.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
     return () => {
       cancelled = true
     }
@@ -89,7 +84,7 @@ export function AccountScreen() {
 
   const handleLogout = async () => {
     await auth.signOut()
-    navigate('/', { replace: true })
+    void navigate('/', { replace: true })
   }
 
   const refreshSubscription = async () => {
@@ -112,7 +107,12 @@ export function AccountScreen() {
 
   // Fresh user with no розбірка yet → onboarding.
   if (auth.tenants.length === 0) {
-    return <OnboardingScreen onLogout={handleLogout} onCreated={auth.hydrate} />
+    return (
+      <OnboardingScreen
+        onLogout={() => void handleLogout()}
+        onCreated={auth.hydrate}
+      />
+    )
   }
 
   return (
@@ -124,7 +124,7 @@ export function AccountScreen() {
         tenant={auth.tenant}
         tenants={auth.tenants}
         onSwitchTenant={auth.switchTenant}
-        onLogout={handleLogout}
+        onLogout={() => void handleLogout()}
       />
 
       <main className="flex-1 px-6 py-10 lg:px-12 lg:py-14">
@@ -285,7 +285,8 @@ function OnboardingScreen({
               Перший крок
             </span>
             <h1 className="text-[40px] leading-[0.95] font-light tracking-[-0.025em] lg:text-[52px]">
-              Створіть<br />
+              Створіть
+              <br />
               <span className="text-brand">свою розбірку</span>
             </h1>
             <p className="max-w-[360px] text-[14px] leading-[1.5] text-neutral-500">
@@ -294,7 +295,10 @@ function OnboardingScreen({
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
+          <form
+            onSubmit={(e) => void handleSubmit(e)}
+            className="mt-8 flex flex-col gap-4"
+          >
             <div className="flex flex-col gap-2">
               <label
                 htmlFor="tenant-name"
@@ -313,7 +317,10 @@ function OnboardingScreen({
             </div>
 
             <div className="flex flex-col gap-2">
-              <label htmlFor="tenant-city" className="text-[12px] text-neutral-500">
+              <label
+                htmlFor="tenant-city"
+                className="text-[12px] text-neutral-500"
+              >
                 Місто <span className="text-neutral-600">(необовʼязково)</span>
               </label>
               <input
@@ -389,6 +396,7 @@ function TenantSwitcher({
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] text-white">
+            {/* eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty strings should fall through */}
             {user?.displayName || user?.phone || '—'}
           </p>
           <p className="truncate text-[11px] text-neutral-500">{subtitle}</p>
@@ -414,6 +422,7 @@ function TenantSwitcher({
             {tenant?.name ?? 'Оберіть розбірку'}
           </p>
           <p className="truncate text-[11px] text-neutral-500">
+            {/* eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty strings should fall through */}
             {user?.displayName || user?.phone || '—'}
           </p>
         </div>
@@ -607,8 +616,8 @@ function SubscriptionPanel({
         {accessEnded ? (
           <div className="rounded-2xl bg-black/15 px-5 py-4">
             <p className="text-[14px] leading-[1.5]">
-              Пробний період завершився. Щоб продовжити користуватись —
-              оформіть підписку: оберіть тариф нижче.
+              Пробний період завершився. Щоб продовжити користуватись — оформіть
+              підписку: оберіть тариф нижче.
             </p>
           </div>
         ) : (
@@ -626,7 +635,7 @@ function SubscriptionPanel({
           {subscription.canActivateTrial && (
             <button
               type="button"
-              onClick={handleActivateTrial}
+              onClick={() => void handleActivateTrial()}
               disabled={busy}
               className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80 disabled:opacity-50"
             >
@@ -637,7 +646,7 @@ function SubscriptionPanel({
           {subscription.canReactivate && subscription.state !== 'blocked' && (
             <button
               type="button"
-              onClick={handleSubscribe}
+              onClick={() => void handleSubscribe()}
               disabled={busy}
               className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80 disabled:opacity-50"
             >
@@ -647,7 +656,7 @@ function SubscriptionPanel({
           {subscription.canCancel && (
             <button
               type="button"
-              onClick={handleCancel}
+              onClick={() => void handleCancel()}
               disabled={busy}
               className="inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] text-black ring-1 ring-black/30 transition-colors hover:bg-black/10 disabled:opacity-50"
             >
@@ -660,8 +669,7 @@ function SubscriptionPanel({
             className={cn(
               'inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] transition-colors',
               subscription.canActivateTrial ||
-                (subscription.canReactivate &&
-                  subscription.state !== 'blocked')
+                (subscription.canReactivate && subscription.state !== 'blocked')
                 ? 'text-black/80 hover:text-black'
                 : 'bg-black text-white hover:bg-black/80',
             )}
@@ -741,7 +749,11 @@ function UsageBlock({
                 >
                   {item.data.used}
                   {item.data.max !== null ? (
-                    <span className={over ? 'text-amber-300/60' : 'text-neutral-600'}>
+                    <span
+                      className={
+                        over ? 'text-amber-300/60' : 'text-neutral-600'
+                      }
+                    >
                       {' '}
                       / {item.data.max}
                     </span>
@@ -857,7 +869,7 @@ function PlansPanel({
               <button
                 type="button"
                 disabled={isCurrent || busy}
-                onClick={() => handleSubscribe(plan.code)}
+                onClick={() => void handleSubscribe(plan.code)}
                 className={cn(
                   'mt-auto inline-flex h-12 items-center justify-center rounded-full text-[14px] transition-colors disabled:opacity-50',
                   isCurrent
@@ -989,7 +1001,7 @@ function BillingPanel({
                 {item.status === 'pending' && (
                   <button
                     type="button"
-                    onClick={() => cancel(item.id)}
+                    onClick={() => void cancel(item.id)}
                     disabled={cancellingId === item.id}
                     className="rounded-full px-3 py-1 text-[12px] font-medium text-red-300 ring-1 ring-red-500/30 hover:bg-red-500/10 transition disabled:opacity-50"
                   >

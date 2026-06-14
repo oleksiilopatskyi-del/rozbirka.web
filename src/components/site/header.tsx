@@ -31,6 +31,7 @@ export function SiteHeader() {
                 className="group flex h-12 items-center gap-3 rounded-full pr-1.5 pl-5 text-[15px] text-white ring-1 ring-white/10 transition-all duration-300 hover:bg-white/[0.06] hover:ring-white/25"
               >
                 <span className="max-w-[160px] truncate">
+                  {/* eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty strings should fall through */}
                   {user?.displayName || user?.phone || 'Кабінет'}
                 </span>
                 <span className="bg-brand grid size-9 place-items-center rounded-full transition-transform duration-300 group-hover:translate-x-0.5">

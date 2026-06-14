@@ -64,21 +64,40 @@ export function SellerMarketplacePanel() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const applyData = useCallback(
+    (
+      s: MarketplaceSellerSummaryDto,
+      l: MarketplaceSellerListingDto[],
+      p: MarketplaceSellerPartDto[],
+    ) => {
+      setSummary(s)
+      setForm(shopToForm(s.shop))
+      setListings(l)
+      setParts(p)
+    },
+    [],
+  )
+
   const refresh = useCallback(async () => {
     const [s, l, p] = await Promise.all([
       marketplaceApi.getSellerSummary(),
       marketplaceApi.getSellerListings(),
       marketplaceApi.searchSellerParts(),
     ])
-    setSummary(s)
-    setForm(shopToForm(s.shop))
-    setListings(l.items)
-    setParts(p.items)
-  }, [])
+    applyData(s, l.items, p.items)
+  }, [applyData])
 
   useEffect(() => {
     let cancelled = false
-    void refresh()
+    void Promise.all([
+      marketplaceApi.getSellerSummary(),
+      marketplaceApi.getSellerListings(),
+      marketplaceApi.searchSellerParts(),
+    ])
+      .then(([s, l, p]) => {
+        if (cancelled) return
+        applyData(s, l.items, p.items)
+      })
       .catch(() => {
         if (!cancelled) setError('Не вдалось завантажити магазин.')
       })
@@ -88,7 +107,7 @@ export function SellerMarketplacePanel() {
     return () => {
       cancelled = true
     }
-  }, [refresh])
+  }, [applyData])
 
   const run = useCallback(
     async (key: string, fn: () => Promise<unknown>) => {
@@ -263,7 +282,9 @@ export function SellerMarketplacePanel() {
             >
               <span className="text-white">
                 {p.name}{' '}
-                <span className="text-white/40">· {p.quantityAvailable} шт</span>
+                <span className="text-white/40">
+                  · {p.quantityAvailable} шт
+                </span>
               </span>
               <button
                 type="button"

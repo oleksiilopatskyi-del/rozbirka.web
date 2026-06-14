@@ -176,7 +176,7 @@ export function LoginScreen() {
             <PhoneStep
               phone={phone}
               onChange={setPhone}
-              onSubmit={handlePhoneSubmit}
+              onSubmit={(e) => void handlePhoneSubmit(e)}
               loading={loading}
               error={error}
             />
@@ -186,13 +186,13 @@ export function LoginScreen() {
               phone={phone}
               otp={otp}
               onChange={setOtp}
-              onSubmit={handleOtpSubmit}
+              onSubmit={(e) => void handleOtpSubmit(e)}
               onBack={() => {
                 setStep('phone')
                 setOtp('')
                 setError(null)
               }}
-              onResend={handleResend}
+              onResend={() => void handleResend()}
               resendIn={resendIn}
               loading={loading}
               error={error}
@@ -202,7 +202,7 @@ export function LoginScreen() {
             <NameStep
               name={name}
               onChange={setName}
-              onSubmit={handleNameSubmit}
+              onSubmit={(e) => void handleNameSubmit(e)}
               loading={loading}
               error={error}
             />
@@ -372,7 +372,7 @@ function OtpStep({
           className="mt-2 text-center text-[13px] text-neutral-500 transition-colors hover:text-white disabled:cursor-not-allowed disabled:hover:text-neutral-500"
         >
           {resendIn > 0
-            ? `Надіслати код ще раз — через ${resendIn} с`
+            ? `Надіслати код ще раз — через ${resendIn}\u00A0с`
             : 'Надіслати код ще раз'}
         </button>
       </form>
