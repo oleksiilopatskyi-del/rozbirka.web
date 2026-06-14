@@ -17,6 +17,7 @@ import { billingApi } from '@/api/billing'
 import { tenantsApi } from '@/api/tenants'
 import { tokens } from '@/api/tokens'
 import { useAuth } from '@/auth/AuthContext'
+import { SellerMarketplacePanel } from '@/features/seller-marketplace/seller-marketplace-panel'
 import type {
   BillingState,
   LimitUsageDto,
@@ -29,7 +30,12 @@ import type {
   User,
 } from '@/api/types'
 
-type Section = 'subscription' | 'plans' | 'payment' | 'billing'
+type Section =
+  | 'subscription'
+  | 'plans'
+  | 'payment'
+  | 'billing'
+  | 'marketplace'
 
 interface NavEntry {
   id: Section
@@ -42,6 +48,7 @@ const navEntries: NavEntry[] = [
   { id: 'plans', label: 'Тарифи', Icon: Receipt },
   { id: 'payment', label: 'Оплата', Icon: CreditCard },
   { id: 'billing', label: 'Білінг', Icon: Receipt },
+  { id: 'marketplace', label: 'Магазин', Icon: Store },
 ]
 
 export function AccountScreen() {
@@ -142,6 +149,15 @@ export function AccountScreen() {
           )}
           {section === 'billing' && (
             <BillingPanel payments={payments} onRefresh={refreshPayments} />
+          )}
+          {section === 'marketplace' && (
+            <div className="flex flex-col gap-8">
+              <Header
+                title="Магазин"
+                subtitle="Публікуйте запчастини на маркетплейсі"
+              />
+              <SellerMarketplacePanel />
+            </div>
           )}
         </div>
       </main>
