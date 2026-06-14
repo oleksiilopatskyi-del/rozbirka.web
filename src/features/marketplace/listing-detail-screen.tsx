@@ -5,20 +5,34 @@ import type { MarketplaceListingDetailDto } from './marketplace-api-types'
 
 export function ListingDetailScreen() {
   const { slugOrId } = useParams<{ slugOrId: string }>()
-  const [listing, setListing] = useState<MarketplaceListingDetailDto | null>(null)
+  const [listing, setListing] = useState<MarketplaceListingDetailDto | null>(
+    null,
+  )
   const [state, setState] = useState<'loading' | 'ok' | 'notfound'>('loading')
 
   useEffect(() => {
     if (!slugOrId) return
-    setState('loading')
-    marketplaceApi
+    let cancelled = false
+    void marketplaceApi
       .getListing(slugOrId)
-      .then((l) => { setListing(l); setState('ok') })
-      .catch(() => { setState('notfound') })
+      .then((l) => {
+        if (cancelled) return
+        setListing(l)
+        setState('ok')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setState('notfound')
+      })
+    return () => {
+      cancelled = true
+    }
   }, [slugOrId])
 
   if (state === 'loading') {
-    return <p className="py-16 text-center text-sm text-white/40">Завантаження…</p>
+    return (
+      <p className="py-16 text-center text-sm text-white/40">Завантаження…</p>
+    )
   }
   if (state === 'notfound' || !listing) {
     return (
@@ -31,7 +45,11 @@ export function ListingDetailScreen() {
     )
   }
 
-  const vehicle = [listing.vehicleMake, listing.vehicleModel, listing.vehicleYear]
+  const vehicle = [
+    listing.vehicleMake,
+    listing.vehicleModel,
+    listing.vehicleYear,
+  ]
     .filter(Boolean)
     .join(' ')
 
@@ -40,7 +58,9 @@ export function ListingDetailScreen() {
       <Link to="/marketplace" className="text-xs text-white/50">
         ← До каталогу
       </Link>
-      <h1 className="mt-3 text-2xl font-semibold text-white">{listing.title}</h1>
+      <h1 className="mt-3 text-2xl font-semibold text-white">
+        {listing.title}
+      </h1>
       {vehicle && <p className="mt-1 text-sm text-white/60">{vehicle}</p>}
       {listing.photos.length > 0 && (
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -63,7 +83,9 @@ export function ListingDetailScreen() {
         <p className="mt-1 text-sm text-white/50">OEM: {listing.oemCode}</p>
       )}
       {listing.description && (
-        <p className="mt-4 whitespace-pre-line text-sm text-white/80">{listing.description}</p>
+        <p className="mt-4 whitespace-pre-line text-sm text-white/80">
+          {listing.description}
+        </p>
       )}
 
       <section className="mt-8 rounded-xl border border-white/10 bg-[#16181c] p-4">
