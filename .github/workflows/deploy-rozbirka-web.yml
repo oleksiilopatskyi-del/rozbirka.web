@@ -1,0 +1,58 @@
+name: Deploy Rozbirka Web
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "public/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.*"
+      - "tsconfig*.json"
+      - ".github/workflows/deploy-rozbirka-web.yml"
+      - ".github/workflows/deploy-node-static-template.yml"
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to build and optionally deploy
+        required: true
+        type: string
+        default: develop
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - qa
+          - prod
+      enable_deployment:
+        description: Deploy after building
+        required: true
+        type: boolean
+        default: true
+
+concurrency:
+  group: ${{ github.ref }}-rozbirka-web
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy Rozbirka Web
+    uses: ./.github/workflows/deploy-node-static-template.yml
+    permissions:
+      contents: read
+      id-token: write
+    secrets: inherit
+    with:
+      project_name: Rozbirka Web
+      branch: ${{ github.event_name == 'workflow_dispatch' && inputs.branch || github.ref_name }}
+      environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'qa' }}
+      enable_deployment: ${{ (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.enable_deployment) }}
+      auto_qa_deploy: ${{ github.event_name == 'push' && github.ref_name == 'develop' }}
+      run_build: true
