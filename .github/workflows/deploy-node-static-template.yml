@@ -1,42 +1,47 @@
-name: deploy
+name: Deploy Node Static Template
 
 on:
-  push:
-    branches:
-      - develop
-      - main
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      branch:
-        description: Branch to build and optionally deploy
+      project_name:
+        description: Display name for the app being deployed
         required: true
         type: string
-        default: develop
+      branch:
+        description: Branch to build
+        required: true
+        type: string
       environment:
         description: Target environment
         required: true
-        type: choice
-        options:
-          - qa
-          - prod
-      deploy:
+        type: string
+      enable_deployment:
         description: Deploy after building
         required: true
         type: boolean
-        default: true
+      auto_qa_deploy:
+        description: True when this was triggered by develop push
+        required: true
+        type: boolean
+      run_build:
+        description: Run npm build before deployment
+        required: true
+        type: boolean
 
 env:
   NODE_VERSION: "22"
 
 jobs:
   build:
+    name: Build ${{ inputs.project_name }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
+
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.branch || github.ref_name }}
+          ref: ${{ inputs.branch }}
 
       - uses: actions/setup-node@v4
         with:
@@ -45,7 +50,8 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run build
+      - if: inputs.run_build
+        run: npm run build
 
       - uses: actions/upload-artifact@v4
         with:
@@ -53,11 +59,12 @@ jobs:
           path: dist
           if-no-files-found: error
 
-  deploy-qa:
+  deploy:
     needs: build
-    if: github.event_name == 'push' && github.ref_name == 'develop'
+    if: inputs.enable_deployment
+    name: Deploy ${{ inputs.project_name }}
     runs-on: ubuntu-latest
-    environment: qa
+    environment: ${{ inputs.auto_qa_deploy && 'qa' || inputs.environment }}
     permissions:
       contents: read
       id-token: write
@@ -76,35 +83,7 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - run: |
-          gcloud storage rsync dist gs://rozbirka-web-qa \
-            --recursive \
-            --delete-unmatched-destination-objects \
-            --project=rozbirka-qa
-
-  deploy-manual:
-    needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.deploy
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: dist
-
-      - uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCP_CI_SERVICE_ACCOUNT }}
-
-      - uses: google-github-actions/setup-gcloud@v2
-
-      - run: |
-          env_name="${{ inputs.environment }}"
+          env_name="${{ inputs.auto_qa_deploy && 'qa' || inputs.environment }}"
           gcloud storage rsync dist "gs://rozbirka-web-$env_name" \
             --recursive \
             --delete-unmatched-destination-objects \
