@@ -19,11 +19,6 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      branch:
-        description: Branch to build and optionally deploy
-        required: true
-        type: string
-        default: develop
       environment:
         description: Target environment
         required: true
@@ -51,7 +46,7 @@ jobs:
     secrets: inherit
     with:
       project_name: Rozbirka Web
-      branch: ${{ github.event_name == 'workflow_dispatch' && inputs.branch || github.ref_name }}
+      branch: ${{ github.ref_name }}
       environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'qa' }}
       enable_deployment: ${{ (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.enable_deployment) }}
       auto_qa_deploy: ${{ github.event_name == 'push' && github.ref_name == 'develop' }}
