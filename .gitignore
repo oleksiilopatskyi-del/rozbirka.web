@@ -32,3 +32,8 @@ coverage
 # Claude / MCP runtime artifacts
 .claude/settings.local.json
 .playwright-mcp/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
