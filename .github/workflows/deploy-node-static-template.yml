@@ -51,7 +51,13 @@ jobs:
       - run: npm ci
 
       - if: inputs.run_build
-        run: npm run build
+        run: |
+          env_name="${{ inputs.auto_qa_deploy && 'qa' || inputs.environment }}"
+          if [ "$env_name" = "prod" ]; then
+            npm run build:prod
+          else
+            npm run build:qa
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -67,24 +73,31 @@ jobs:
     environment: ${{ inputs.auto_qa_deploy && 'qa' || inputs.environment }}
     permissions:
       contents: read
-      id-token: write
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
       - uses: actions/download-artifact@v4
         with:
           name: web-dist
           path: dist
 
-      - uses: google-github-actions/auth@v2
+      - uses: actions/setup-node@v4
         with:
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCP_CI_SERVICE_ACCOUNT }}
-
-      - uses: google-github-actions/setup-gcloud@v2
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
       - run: |
           env_name="${{ inputs.auto_qa_deploy && 'qa' || inputs.environment }}"
-          gcloud storage rsync dist "gs://rozbirka-web-$env_name" \
-            --recursive \
-            --delete-unmatched-destination-objects \
-            --project="rozbirka-$env_name"
+          if [ "$env_name" = "prod" ]; then
+            wrangler_env="production"
+          else
+            wrangler_env="qa"
+          fi
+
+          npm ci
+          npx wrangler deploy --env "$wrangler_env"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
