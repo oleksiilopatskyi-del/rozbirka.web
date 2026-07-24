@@ -192,7 +192,7 @@ function PlanCard({ plan, destination }: { plan: Plan; destination: string }) {
       <Link
         to={destination}
         className={cn(
-          'mt-auto inline-flex items-center gap-2 text-[13px] font-normal tracking-[0.02em] uppercase transition-opacity hover:opacity-70',
+          'mt-auto inline-flex min-h-11 items-center gap-2 py-2 text-[13px] font-normal tracking-[0.02em] uppercase transition-opacity hover:opacity-70',
           styles.cta,
         )}
       >

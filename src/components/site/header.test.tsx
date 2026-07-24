@@ -57,4 +57,29 @@ describe('SiteHeader mobile menu', () => {
       screen.getByRole('button', { name: 'Відкрити меню' }),
     ).toHaveAttribute('aria-expanded', 'false')
   })
+
+  it('closes after the mobile App Store badge is selected', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <SiteHeader />
+      </MemoryRouter>,
+    )
+    const trigger = screen.getByRole('button', { name: 'Відкрити меню' })
+    await user.click(trigger)
+    const mobileNav = screen.getByRole('navigation', {
+      name: 'Мобільна навігація',
+    })
+
+    await user.click(
+      within(mobileNav).getByRole('link', {
+        name: 'Завантажити в App Store',
+      }),
+    )
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      screen.queryByRole('navigation', { name: 'Мобільна навігація' }),
+    ).not.toBeInTheDocument()
+  })
 })

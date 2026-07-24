@@ -95,7 +95,7 @@ export function SiteHeader() {
               onNavigate={() => setOpen(false)}
             />
             <div className="flex flex-col gap-3 sm:flex-row">
-              <AppStoreBadge />
+              <AppStoreBadge onClick={() => setOpen(false)} />
               <GooglePlayBadge />
             </div>
             <Link

@@ -1,13 +1,18 @@
-import type { SVGProps } from 'react'
+import type { MouseEventHandler, SVGProps } from 'react'
 
 const APP_STORE_URL = 'https://apps.apple.com/ua/app/rozbirka/id6762130912'
 
-export function AppStoreBadge() {
+export function AppStoreBadge({
+  onClick,
+}: {
+  onClick?: MouseEventHandler<HTMLAnchorElement>
+}) {
   return (
     <a
       href={APP_STORE_URL}
       target="_blank"
       rel="noreferrer"
+      onClick={onClick}
       aria-label="Завантажити в App Store"
       className="flex min-h-12 items-center gap-2.5 rounded-full bg-black px-4 ring-1 ring-white/10 transition-colors hover:bg-white/[0.08]"
     >

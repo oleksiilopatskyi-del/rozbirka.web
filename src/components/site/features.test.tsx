@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Features } from './features'
@@ -16,6 +16,7 @@ describe('Features carousel', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -46,5 +47,54 @@ describe('Features carousel', () => {
     expect(
       screen.getByRole('button', { name: 'Увімкнути автопрокрутку' }),
     ).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('pauses autoplay while a carousel control is focused', () => {
+    vi.useFakeTimers()
+    const { container } = render(<Features />)
+    const scroller = container.querySelector<HTMLUListElement>(
+      '#features ul.overflow-x-auto',
+    )!
+    const scroll = vi.fn()
+    scroller.scrollBy = scroll
+    scroller.scrollTo = scroll
+
+    const next = screen.getByRole('button', { name: 'Наступна' })
+    fireEvent.focusIn(next)
+    act(() => {
+      vi.advanceTimersByTime(3500)
+    })
+
+    expect(scroll).not.toHaveBeenCalled()
+
+    fireEvent.focusOut(next, { relatedTarget: document.body })
+    act(() => {
+      vi.advanceTimersByTime(3500)
+    })
+    expect(scroll).toHaveBeenCalledOnce()
+  })
+
+  it('pauses autoplay while a control is hovered and resumes after leaving', () => {
+    vi.useFakeTimers()
+    const { container } = render(<Features />)
+    const scroller = container.querySelector<HTMLUListElement>(
+      '#features ul.overflow-x-auto',
+    )!
+    const scroll = vi.fn()
+    scroller.scrollBy = scroll
+    scroller.scrollTo = scroll
+    const next = screen.getByRole('button', { name: 'Наступна' })
+
+    fireEvent.mouseOver(next)
+    act(() => {
+      vi.advanceTimersByTime(3500)
+    })
+    expect(scroll).not.toHaveBeenCalled()
+
+    fireEvent.mouseOut(next, { relatedTarget: document.body })
+    act(() => {
+      vi.advanceTimersByTime(3500)
+    })
+    expect(scroll).toHaveBeenCalledOnce()
   })
 })

@@ -137,6 +137,7 @@ const features: Feature[] = [
 ]
 
 export function Features() {
+  const interactionSurfaceRef = useRef<HTMLDivElement>(null)
   const scrollerRef = useRef<HTMLUListElement>(null)
   const reducedMotion =
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
@@ -153,19 +154,27 @@ export function Features() {
 
   useEffect(() => {
     const el = scrollerRef.current
-    if (!el || userPaused || reducedMotion) return
+    const interactionSurface = interactionSurfaceRef.current
+    if (!el || !interactionSurface || userPaused || reducedMotion) return
 
     let paused = false
     const pause = () => {
       paused = true
     }
-    const resume = () => {
+    const resumeAfterLeaving = (event: MouseEvent | FocusEvent) => {
+      const nextTarget = event.relatedTarget
+      if (
+        nextTarget instanceof Node &&
+        interactionSurface.contains(nextTarget)
+      ) {
+        return
+      }
       paused = false
     }
-    el.addEventListener('mouseenter', pause)
-    el.addEventListener('mouseleave', resume)
-    el.addEventListener('focusin', pause)
-    el.addEventListener('focusout', resume)
+    interactionSurface.addEventListener('mouseover', pause)
+    interactionSurface.addEventListener('mouseout', resumeAfterLeaving)
+    interactionSurface.addEventListener('focusin', pause)
+    interactionSurface.addEventListener('focusout', resumeAfterLeaving)
 
     const id = window.setInterval(() => {
       if (paused) return
@@ -182,17 +191,20 @@ export function Features() {
 
     return () => {
       window.clearInterval(id)
-      el.removeEventListener('mouseenter', pause)
-      el.removeEventListener('mouseleave', resume)
-      el.removeEventListener('focusin', pause)
-      el.removeEventListener('focusout', resume)
+      interactionSurface.removeEventListener('mouseover', pause)
+      interactionSurface.removeEventListener('mouseout', resumeAfterLeaving)
+      interactionSurface.removeEventListener('focusin', pause)
+      interactionSurface.removeEventListener('focusout', resumeAfterLeaving)
     }
   }, [userPaused, reducedMotion])
 
   return (
     <Section id="features" className="py-16 lg:py-24">
       <PageContainer>
-        <div className="bg-surface-1 rounded-(--radius-section) ring-1 ring-white/[0.04]">
+        <div
+          ref={interactionSurfaceRef}
+          className="bg-surface-1 rounded-(--radius-section) ring-1 ring-white/[0.04]"
+        >
           <header className="flex flex-col items-start gap-8 px-8 pt-12 lg:px-14 lg:pt-16">
             <span className="text-brand text-[11px] font-medium tracking-[0.28em] uppercase">
               Модулі
