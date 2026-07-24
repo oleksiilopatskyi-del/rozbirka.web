@@ -2,27 +2,44 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react'
 import { Section } from '@/components/layout/section'
 import { PageContainer } from '@/components/layout/page-container'
-import avtoImg from '@/assets/features/avto.svg'
-import intakeImg from '@/assets/features/intake.svg'
-import partsImg from '@/assets/features/parts.svg'
-import stickersImg from '@/assets/features/stickers.svg'
-import ordersImg from '@/assets/features/orders.svg'
-import customersImg from '@/assets/features/customers.svg'
-import cashImg from '@/assets/features/cash.svg'
-import analyticsImg from '@/assets/features/analytics.svg'
-import reportsImg from '@/assets/features/reports.svg'
-import teamImg from '@/assets/features/team.svg'
+
+interface ResponsiveImage {
+  avif: string
+  avif2x: string
+  webp: string
+  webp2x: string
+}
 
 interface Feature {
   title: string
   bullets?: string[]
-  image?: string
+  image: ResponsiveImage
+}
+
+const featureImageUrls = import.meta.glob<string>(
+  '../../assets/optimized/features/*.{avif,webp}',
+  { eager: true, query: '?url', import: 'default' },
+)
+
+function responsiveImage(name: string): ResponsiveImage {
+  const get = (file: string) => {
+    const path = `../../assets/optimized/features/${file}`
+    const url = featureImageUrls[path]
+    if (!url) throw new Error(`Missing optimized feature image: ${path}`)
+    return url
+  }
+  return {
+    avif: get(`${name}-480.avif`),
+    avif2x: get(`${name}-720.avif`),
+    webp: get(`${name}-480.webp`),
+    webp2x: get(`${name}-720.webp`),
+  }
 }
 
 const features: Feature[] = [
   {
     title: 'Авто',
-    image: avtoImg,
+    image: responsiveImage('avto'),
     bullets: [
       'Розбирай авто — система рахує кожну деталь',
       'Прозорий прибуток по кожному кузову',
@@ -34,7 +51,7 @@ const features: Feature[] = [
   },
   {
     title: 'Партії',
-    image: intakeImg,
+    image: responsiveImage('intake'),
     bullets: [
       'Закупив партію — додав одним рухом, без переписування',
       'Бачиш звідки прийшла кожна деталь і скільки коштувала',
@@ -46,7 +63,7 @@ const features: Feature[] = [
   },
   {
     title: 'Склад',
-    image: partsImg,
+    image: responsiveImage('parts'),
     bullets: [
       'Кожна деталь на своєму місці — знаходиш за секунди',
       'Шукай по машині, партії або коду — миттєво',
@@ -58,7 +75,7 @@ const features: Feature[] = [
   },
   {
     title: 'Стікери',
-    image: stickersImg,
+    image: responsiveImage('stickers'),
     bullets: [
       'Друкуєш стікер на кожну деталь: QR + назва',
       'Сканування з телефону — миттєво відкриває картку',
@@ -69,7 +86,7 @@ const features: Feature[] = [
   },
   {
     title: 'Замовлення',
-    image: ordersImg,
+    image: responsiveImage('orders'),
     bullets: [
       'Збираєш замовлення в кілька кліків: клієнт, деталь, ціна',
       'Ціна фіксується в доларах — стабільно, без прив’язки до курсу',
@@ -81,7 +98,7 @@ const features: Feature[] = [
   },
   {
     title: 'Клієнти',
-    image: customersImg,
+    image: responsiveImage('customers'),
     bullets: [
       'База клієнтів завжди під рукою: контакти й історія',
       'Зателефонувати чи написати — в один тап з картки',
@@ -92,7 +109,7 @@ const features: Feature[] = [
   },
   {
     title: 'Каси',
-    image: cashImg,
+    image: responsiveImage('cash'),
     bullets: [
       'Кілька кас на різні валюти й рахунки — не плутаєш',
       'Бачиш баланс кожної каси в реальному часі',
@@ -103,7 +120,7 @@ const features: Feature[] = [
   },
   {
     title: 'Аналітика',
-    image: analyticsImg,
+    image: responsiveImage('analytics'),
     bullets: [
       'Дашборд за день, тиждень або місяць — у три кліки',
       'Топ запчастин: що продається, що залежалось',
@@ -114,7 +131,7 @@ const features: Feature[] = [
   },
   {
     title: 'Звіти',
-    image: reportsImg,
+    image: responsiveImage('reports'),
     bullets: [
       'Готові звіти по продажах, складу, фінансах',
       'За будь-який період: день, місяць, рік',
@@ -125,7 +142,7 @@ const features: Feature[] = [
   },
   {
     title: 'Команда',
-    image: teamImg,
+    image: responsiveImage('team'),
     bullets: [
       'Додаєш співробітників — кожному своя роль і доступ',
       'Бачиш хто і що зробив — повний журнал дій',
@@ -322,20 +339,25 @@ function FeatureCard({ feature }: { feature: Feature }) {
 
   return (
     <li className="group flex w-[85%] shrink-0 snap-start flex-col gap-8 border-l border-white/[0.06] p-8 first:border-l-0 md:w-[50%] lg:w-[calc(100%/3)] lg:p-10">
-      <div
-        className={`relative aspect-[4/5] overflow-hidden rounded-[28px] ${feature.image ? '' : 'bg-brand'}`}
-      >
-        {feature.image ? (
+      <div className="relative aspect-[4/5] overflow-hidden rounded-[28px]">
+        <picture>
+          <source
+            type="image/avif"
+            srcSet={`${feature.image.avif} 480w, ${feature.image.avif2x} 720w`}
+            sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 85vw"
+          />
           <img
-            src={feature.image}
+            src={feature.image.webp}
+            srcSet={`${feature.image.webp} 480w, ${feature.image.webp2x} 720w`}
+            sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 85vw"
+            width={363}
+            height={346}
             alt={`Скриншот фічі ${feature.title}`}
             loading="lazy"
             decoding="async"
             className="absolute inset-0 h-full w-full scale-[1.15] object-contain object-center transition-transform duration-700 ease-out group-hover:scale-[1.22]"
           />
-        ) : (
-          <PhoneSilhouette className="absolute top-1/2 left-1/2 h-[82%] -translate-x-1/2 -translate-y-1/2" />
-        )}
+        </picture>
       </div>
 
       <div className="flex flex-col gap-5">
@@ -358,37 +380,6 @@ function FeatureCard({ feature }: { feature: Feature }) {
         )}
       </div>
     </li>
-  )
-}
-
-function PhoneSilhouette({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 160 320"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden
-    >
-      <rect
-        x="2"
-        y="2"
-        width="156"
-        height="316"
-        rx="28"
-        fill="#0a0a0a"
-        stroke="rgba(255,255,255,0.08)"
-        strokeWidth="1.5"
-      />
-      <rect
-        x="60"
-        y="10"
-        width="40"
-        height="10"
-        rx="5"
-        fill="rgba(255,255,255,0.12)"
-      />
-    </svg>
   )
 }
 

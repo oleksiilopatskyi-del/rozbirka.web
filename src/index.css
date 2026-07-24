@@ -4,28 +4,28 @@
 
 @font-face {
   font-family: 'Visuelt Pro';
-  src: url('/fonts/VisueltPro-Light.ttf') format('truetype');
+  src: url('/fonts/VisueltPro-Light.woff2') format('woff2');
   font-weight: 300;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Visuelt Pro';
-  src: url('/fonts/VisueltPro-Regular.ttf') format('truetype');
+  src: url('/fonts/VisueltPro-Regular.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Visuelt Pro';
-  src: url('/fonts/VisueltPro-Medium.ttf') format('truetype');
+  src: url('/fonts/VisueltPro-Medium.woff2') format('woff2');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Visuelt Pro';
-  src: url('/fonts/VisueltPro-Bold.ttf') format('truetype');
+  src: url('/fonts/VisueltPro-Bold.woff2') format('woff2');
   font-weight: 700;
   font-style: normal;
   font-display: swap;

@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { Section } from '@/components/layout/section'
 import { PageContainer } from '@/components/layout/page-container'
-import phoneImg from '@/assets/phone pc.png'
+import hero720Avif from '@/assets/optimized/hero/hero-720.avif'
+import hero1080Avif from '@/assets/optimized/hero/hero-1080.avif'
+import hero720Webp from '@/assets/optimized/hero/hero-720.webp'
+import hero1080Webp from '@/assets/optimized/hero/hero-1080.webp'
 
 interface TypewriterLine {
   text: string
@@ -137,15 +140,29 @@ export function Hero() {
           </div>
 
           <div className="hidden lg:block">
-            <img
-              src={phoneImg}
-              alt="Застосунок rozbirka на телефоні"
-              width={2076}
-              height={2220}
-              loading="eager"
-              decoding="async"
-              className="anim-float-slow ml-auto block h-auto w-full max-w-[680px]"
-            />
+            <picture>
+              <source
+                media="(min-width: 1024px)"
+                type="image/avif"
+                srcSet={`${hero720Avif} 720w, ${hero1080Avif} 1080w`}
+                sizes="680px"
+              />
+              <source
+                media="(min-width: 1024px)"
+                type="image/webp"
+                srcSet={`${hero720Webp} 720w, ${hero1080Webp} 1080w`}
+                sizes="680px"
+              />
+              <img
+                src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
+                width={2076}
+                height={2220}
+                alt="Застосунок rozbirka на телефоні"
+                decoding="async"
+                fetchPriority="high"
+                className="anim-float-slow ml-auto block h-auto w-full max-w-[680px]"
+              />
+            </picture>
           </div>
         </div>
       </PageContainer>
