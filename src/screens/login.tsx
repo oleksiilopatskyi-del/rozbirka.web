@@ -114,7 +114,9 @@ export function LoginScreen() {
       } else {
         await auth.hydrate()
         setStep('success')
-        window.setTimeout(() => navigate(returnTo, { replace: true }), 800)
+        window.setTimeout(() => {
+          void navigate(returnTo, { replace: true })
+        }, 800)
       }
     } catch (err) {
       setError(extractError(err, 'Невірний код'))
@@ -136,7 +138,9 @@ export function LoginScreen() {
       await authApi.updateName(trimmed)
       await auth.hydrate()
       setStep('success')
-      window.setTimeout(() => navigate(returnTo, { replace: true }), 800)
+      window.setTimeout(() => {
+        void navigate(returnTo, { replace: true })
+      }, 800)
     } catch (err) {
       setError(extractError(err, 'Не вдалося зберегти ім’я'))
     } finally {
