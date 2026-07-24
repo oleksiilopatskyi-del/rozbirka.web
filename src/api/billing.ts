@@ -1,4 +1,4 @@
-import { apiClient } from './client'
+import { apiClient, publicApiClient } from './client'
 import type {
   CancelRequest,
   CheckoutResponse,
@@ -23,7 +23,7 @@ export const billingApi = {
    * Public plan catalog. Auth optional (pricing page).
    */
   async getPlans(): Promise<PublicPlanDto[]> {
-    const resp = await apiClient.get<PublicPlanDto[]>('/billing/plans')
+    const resp = await publicApiClient.get<PublicPlanDto[]>('/billing/plans')
     return resp.data
   },
 

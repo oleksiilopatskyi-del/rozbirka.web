@@ -300,8 +300,8 @@ function OnboardingScreen({
               <span className="text-brand">свою розбірку</span>
             </h1>
             <p className="max-w-[360px] text-[14px] leading-[1.5] text-neutral-500">
-              Це ваш робочий простір — авто, склад, продажі й команда. Далі
-              активуєте 7 днів безкоштовно.
+              Це ваш робочий простір — авто, склад, продажі й команда. Після
+              створення автоматично активуються 14 днів безкоштовно.
             </p>
           </div>
 
@@ -587,7 +587,7 @@ function SubscriptionPanel({
             {planLabel}
           </p>
           {subscription.state === 'trial' ? (
-            <p className="text-[15px] opacity-75">7 днів безкоштовно</p>
+            <p className="text-[15px] opacity-75">14 днів безкоштовно</p>
           ) : (
             !accessEnded &&
             typeof subscription.amount === 'number' && (

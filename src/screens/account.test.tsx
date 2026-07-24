@@ -122,6 +122,7 @@ describe('AccountScreen subscription state', () => {
 
     expect(await screen.findByText('Pro')).toBeInTheDocument()
     expect(screen.getByText('7 днів')).toBeInTheDocument()
+    expect(screen.getByText('14 днів безкоштовно')).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /активувати/i }),
     ).not.toBeInTheDocument()
@@ -158,7 +159,7 @@ describe('AccountScreen subscription state', () => {
         amount: 59,
         currency: 'USD',
         interval: '1m',
-        trialDays: 7,
+        trialDays: 14,
         limits: {
           cars: 20,
           intakes: 25,

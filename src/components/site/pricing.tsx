@@ -1,76 +1,20 @@
+import { useEffect, useState } from 'react'
 import { ArrowUpRight, Check } from 'lucide-react'
 import { Link } from 'react-router'
+import { billingApi } from '@/api/billing'
 import { useAuth } from '@/auth/AuthContext'
-import { cn } from '@/lib/utils'
 import {
-  accountPathForPlan,
-  loginPathForPlan,
-  type PlanCode,
-} from '@/lib/plan-selection'
+  FALLBACK_LANDING_PLANS,
+  resolveLandingPlans,
+  type LandingPlan,
+} from '@/lib/landing-plans'
+import { cn } from '@/lib/utils'
+import { accountPathForPlan, loginPathForPlan } from '@/lib/plan-selection'
 import { Section } from '@/components/layout/section'
 import { PageContainer } from '@/components/layout/page-container'
 
-type PlanVariant = 'lite' | 'pro' | 'enterprise'
-
-interface Plan {
-  code: PlanCode
-  name: string
-  price: string
-  period: string
-  /** Sub-line under the price (e.g. trial note). Optional. */
-  note?: string
-  description: string
-  perks: string[]
-  ctaLabel: string
-  variant: PlanVariant
-}
-
-// Mirrors rozbirka.core's BillingPlanCatalog. Could be wired to
-// GET /billing/plans later; pricing rarely changes so static is fine.
-const plans: Plan[] = [
-  {
-    code: 'lite_monthly',
-    name: 'Lite',
-    price: '$19',
-    period: 'місяць',
-    description: 'Старт для маленької розбірки',
-    perks: ['5 авто', '300 запчастин', '1 користувач, 1 каса'],
-    ctaLabel: 'Обрати',
-    variant: 'lite',
-  },
-  {
-    code: 'pro_monthly',
-    name: 'Pro',
-    price: '$59',
-    period: 'місяць',
-    note: '7 днів безкоштовно',
-    description: 'Все необхідне щоб масштабувати продажі',
-    perks: [
-      '50 авто, 5 000 запчастин',
-      '10 користувачів, 3 каси',
-      'Звіти, експорт, аналітика',
-    ],
-    ctaLabel: 'Почати 7 днів безкоштовно',
-    variant: 'pro',
-  },
-  {
-    code: 'enterprise_monthly',
-    name: 'Enterprise',
-    price: '$299',
-    period: 'місяць',
-    description: 'Для мережі розбірок без обмежень',
-    perks: [
-      'Без лімітів на авто та запчастини',
-      'API і мульти-локація',
-      'Пріоритетна підтримка',
-    ],
-    ctaLabel: 'Обрати',
-    variant: 'enterprise',
-  },
-]
-
 const variantStyles: Record<
-  PlanVariant,
+  LandingPlan['variant'],
   { card: string; pill: string; description: string; cta: string; perk: string }
 > = {
   lite: {
@@ -98,6 +42,22 @@ const variantStyles: Record<
 
 export function Pricing() {
   const { status } = useAuth()
+  const [plans, setPlans] = useState(FALLBACK_LANDING_PLANS)
+
+  useEffect(() => {
+    let cancelled = false
+    void billingApi
+      .getPlans()
+      .then((value) => {
+        if (!cancelled) setPlans(resolveLandingPlans(value))
+      })
+      .catch(() => {
+        if (!cancelled) setPlans(FALLBACK_LANDING_PLANS)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
     <Section id="pricing" className="py-16 lg:py-24">
@@ -131,7 +91,13 @@ export function Pricing() {
   )
 }
 
-function PlanCard({ plan, destination }: { plan: Plan; destination: string }) {
+function PlanCard({
+  plan,
+  destination,
+}: {
+  plan: LandingPlan
+  destination: string
+}) {
   const styles = variantStyles[plan.variant]
   const isPro = plan.variant === 'pro'
 
@@ -165,8 +131,10 @@ function PlanCard({ plan, destination }: { plan: Plan; destination: string }) {
             /{plan.period}
           </span>
         </p>
-        {plan.note && (
-          <p className="text-[13px] font-medium opacity-80">{plan.note}</p>
+        {isPro && (
+          <p className="text-[13px] font-medium opacity-80">
+            {plan.trialDays} днів безкоштовно
+          </p>
         )}
       </div>
 
