@@ -8,6 +8,25 @@
       name="description"
       content="rozbirka — ERP для дизмантлерів. Облік авто, склад запчастин і продажі в одному застосунку."
     />
+    <link rel="canonical" href="https://rozbirka.pro/" />
+    <meta name="theme-color" content="#0b0b0b" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="uk_UA" />
+    <meta property="og:site_name" content="rozbirka" />
+    <meta property="og:title" content="rozbirka — облік авторозбірки" />
+    <meta
+      property="og:description"
+      content="Авто, запчастини, продажі, каси та команда в одному застосунку."
+    />
+    <meta property="og:url" content="https://rozbirka.pro/" />
+    <meta property="og:image" content="https://rozbirka.pro/og-cover.webp" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="rozbirka — облік авторозбірки" />
+    <meta
+      name="twitter:description"
+      content="Авто, запчастини, продажі, каси та команда в одному застосунку."
+    />
+    <meta name="twitter:image" content="https://rozbirka.pro/og-cover.webp" />
     <link
       rel="preload"
       href="/fonts/VisueltPro-Regular.woff2"
@@ -22,6 +41,36 @@
       type="font/woff2"
       crossorigin
     />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://rozbirka.pro/#organization",
+            "name": "rozbirka",
+            "url": "https://rozbirka.pro/"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://rozbirka.pro/#software",
+            "name": "rozbirka",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "iOS, Web",
+            "url": "https://rozbirka.pro/",
+            "offers": {
+              "@type": "AggregateOffer",
+              "lowPrice": "19",
+              "highPrice": "299",
+              "priceCurrency": "USD"
+            },
+            "publisher": {
+              "@id": "https://rozbirka.pro/#organization"
+            }
+          }
+        ]
+      }
+    </script>
     <title>rozbirka — ERP для дизмантлерів</title>
   </head>
   <body>
