@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight } from 'lucide-react'
+import { Link } from 'react-router'
 import { Section } from '@/components/layout/section'
 import { PageContainer } from '@/components/layout/page-container'
 import phoneImg from '@/assets/phone pc.png'
@@ -107,7 +107,12 @@ export function Hero() {
         <div className="grid grid-cols-1 items-end gap-10 lg:grid-cols-[minmax(0,720px)_1fr] lg:gap-12">
           <div className="flex flex-col gap-6 lg:self-start lg:pl-16">
             <h1 className="text-[52px] leading-[1] font-light tracking-[-0.035em] sm:text-[76px] lg:text-[108px]">
-              <TypewriterHeading lines={heroLines} />
+              <span className="sr-only">
+                Знаєш де кожна деталь і де твої гроші
+              </span>
+              <span aria-hidden>
+                <TypewriterHeading lines={heroLines} />
+              </span>
             </h1>
 
             <p
@@ -122,21 +127,12 @@ export function Hero() {
               className="anim-fade-up mt-3 flex flex-wrap items-center gap-3"
               style={{ animationDelay: '1900ms' }}
             >
-              <a
-                href="#download"
-                className="bg-brand hover:bg-brand-hover text-brand-foreground inline-flex h-[72px] items-center rounded-full px-12 text-[16px] font-normal transition-all duration-300 hover:scale-[1.03]"
+              <Link
+                to="/login"
+                className="bg-brand hover:bg-brand-hover text-brand-foreground inline-flex min-h-[72px] items-center rounded-full px-12 text-[16px] font-normal transition-all duration-300 hover:scale-[1.03]"
               >
                 Спробувати безкоштовно
-              </a>
-              <a
-                href="#demo"
-                className="group inline-flex h-[72px] items-center gap-5 rounded-full pr-2.5 pl-8 text-[16px] font-normal text-white ring-1 ring-white/15 transition-colors hover:bg-white/[0.04]"
-              >
-                <span>Дивитись демо</span>
-                <span className="bg-brand grid size-14 place-items-center rounded-full transition-transform duration-300 group-hover:rotate-45">
-                  <ArrowUpRight className="size-5 text-black" aria-hidden />
-                </span>
-              </a>
+              </Link>
             </div>
           </div>
 

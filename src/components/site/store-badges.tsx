@@ -1,49 +1,44 @@
 import type { SVGProps } from 'react'
 
+const APP_STORE_URL = 'https://apps.apple.com/ua/app/rozbirka/id6762130912'
+
 export function AppStoreBadge() {
   return (
-    <StoreBadge
-      icon={<AppleLogo className="size-7 text-white" />}
-      line1="Available on the"
-      line2="App Store"
-    />
+    <a
+      href={APP_STORE_URL}
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Завантажити в App Store"
+      className="flex min-h-12 items-center gap-2.5 rounded-full bg-black px-4 ring-1 ring-white/10 transition-colors hover:bg-white/[0.08]"
+    >
+      <AppleLogo className="size-7 text-white" />
+      <StoreBadgeText line1="Available on the" line2="App Store" />
+    </a>
   )
 }
 
 export function GooglePlayBadge() {
   return (
-    <StoreBadge
-      icon={<GooglePlayLogo className="size-6" />}
-      line1="GET IT ON"
-      line2="Google Play"
-    />
+    <div
+      aria-label="Google Play — скоро"
+      className="flex min-h-12 items-center gap-2.5 rounded-full bg-black/70 px-4 text-white/70 ring-1 ring-white/10"
+    >
+      <GooglePlayLogo className="size-6 opacity-70" />
+      <StoreBadgeText line1="Google Play" line2="Скоро" />
+    </div>
   )
 }
 
-function StoreBadge({
-  icon,
-  line1,
-  line2,
-}: {
-  icon: React.ReactNode
-  line1: string
-  line2: string
-}) {
+function StoreBadgeText({ line1, line2 }: { line1: string; line2: string }) {
   return (
-    <a
-      href="#"
-      className="flex h-12 items-center gap-2.5 rounded-full bg-black px-4 ring-1 ring-white/10 transition-colors hover:bg-white/[0.04]"
-    >
-      {icon}
-      <div className="flex flex-col leading-none">
-        <span className="text-[10px] tracking-wide text-neutral-300">
-          {line1}
-        </span>
-        <span className="mt-0.5 text-[15px] font-semibold text-white">
-          {line2}
-        </span>
-      </div>
-    </a>
+    <div className="flex flex-col leading-none">
+      <span className="text-[10px] tracking-wide text-neutral-300">
+        {line1}
+      </span>
+      <span className="mt-0.5 text-[15px] font-semibold text-white">
+        {line2}
+      </span>
+    </div>
   )
 }
 

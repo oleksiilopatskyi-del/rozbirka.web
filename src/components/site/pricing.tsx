@@ -1,12 +1,19 @@
 import { ArrowUpRight, Check } from 'lucide-react'
 import { Link } from 'react-router'
+import { useAuth } from '@/auth/AuthContext'
 import { cn } from '@/lib/utils'
+import {
+  accountPathForPlan,
+  loginPathForPlan,
+  type PlanCode,
+} from '@/lib/plan-selection'
 import { Section } from '@/components/layout/section'
 import { PageContainer } from '@/components/layout/page-container'
 
 type PlanVariant = 'lite' | 'pro' | 'enterprise'
 
 interface Plan {
+  code: PlanCode
   name: string
   price: string
   period: string
@@ -22,6 +29,7 @@ interface Plan {
 // GET /billing/plans later; pricing rarely changes so static is fine.
 const plans: Plan[] = [
   {
+    code: 'lite_monthly',
     name: 'Lite',
     price: '$19',
     period: 'місяць',
@@ -31,6 +39,7 @@ const plans: Plan[] = [
     variant: 'lite',
   },
   {
+    code: 'pro_monthly',
     name: 'Pro',
     price: '$59',
     period: 'місяць',
@@ -45,6 +54,7 @@ const plans: Plan[] = [
     variant: 'pro',
   },
   {
+    code: 'enterprise_monthly',
     name: 'Enterprise',
     price: '$299',
     period: 'місяць',
@@ -87,6 +97,8 @@ const variantStyles: Record<
 }
 
 export function Pricing() {
+  const { status } = useAuth()
+
   return (
     <Section id="pricing" className="py-16 lg:py-24">
       <PageContainer width="md">
@@ -94,10 +106,24 @@ export function Pricing() {
           <h2 className="mb-12 text-[40px] leading-[1] font-light tracking-[-0.02em] lg:mb-16 lg:text-[56px]">
             Тарифні плани
           </h2>
-          <ul role="list" className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {plans.map((plan) => (
-              <PlanCard key={plan.name} plan={plan} />
-            ))}
+          <ul
+            role="list"
+            className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+          >
+            {plans.map((plan) => {
+              const destination =
+                status === 'authenticated'
+                  ? accountPathForPlan(plan.code)
+                  : loginPathForPlan(plan.code)
+
+              return (
+                <PlanCard
+                  key={plan.name}
+                  plan={plan}
+                  destination={destination}
+                />
+              )
+            })}
           </ul>
         </div>
       </PageContainer>
@@ -105,7 +131,7 @@ export function Pricing() {
   )
 }
 
-function PlanCard({ plan }: { plan: Plan }) {
+function PlanCard({ plan, destination }: { plan: Plan; destination: string }) {
   const styles = variantStyles[plan.variant]
   const isPro = plan.variant === 'pro'
 
@@ -164,7 +190,7 @@ function PlanCard({ plan }: { plan: Plan }) {
       </ul>
 
       <Link
-        to="/login"
+        to={destination}
         className={cn(
           'mt-auto inline-flex items-center gap-2 text-[13px] font-normal tracking-[0.02em] uppercase transition-opacity hover:opacity-70',
           styles.cta,
