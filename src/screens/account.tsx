@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import {
   ArrowRight,
   Check,
@@ -18,6 +18,7 @@ import { tenantsApi } from '@/api/tenants'
 import { tokens } from '@/api/tokens'
 import { useAuth } from '@/auth/AuthContext'
 import { SellerMarketplacePanel } from '@/features/seller-marketplace/seller-marketplace-panel'
+import { readPlanCode, type PlanCode } from '@/lib/plan-selection'
 import type {
   BillingState,
   LimitUsageDto,
@@ -48,8 +49,13 @@ const navEntries: NavEntry[] = [
 
 export function AccountScreen() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const auth = useAuth()
-  const [section, setSection] = useState<Section>('subscription')
+  const requestedSection = searchParams.get('section')
+  const selectedPlanCode = readPlanCode(`?${searchParams.toString()}`)
+  const [section, setSection] = useState<Section>(
+    requestedSection === 'plans' ? 'plans' : 'subscription',
+  )
   const [subscription, setSubscription] = useState<SubscriptionDto | null>(null)
   const [plans, setPlans] = useState<PublicPlanDto[]>([])
   const [payments, setPayments] = useState<PagedResult<PaymentDto> | null>(null)
@@ -142,7 +148,11 @@ export function AccountScreen() {
             />
           )}
           {section === 'plans' && (
-            <PlansPanel plans={plans} subscription={subscription} />
+            <PlansPanel
+              plans={plans}
+              subscription={subscription}
+              selectedPlanCode={selectedPlanCode}
+            />
           )}
           {section === 'payment' && (
             <PaymentPanel subscription={subscription} />
@@ -761,9 +771,11 @@ function UsageBar({ used, max }: { used: number; max: number | null }) {
 function PlansPanel({
   plans,
   subscription,
+  selectedPlanCode,
 }: {
   plans: PublicPlanDto[]
   subscription: SubscriptionDto | null
+  selectedPlanCode: PlanCode | null
 }) {
   const [busy, setBusy] = useState(false)
 
@@ -792,6 +804,7 @@ function PlansPanel({
       <ul role="list" className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {plans.map((plan) => {
           const isCurrent = plan.code === currentCode
+          const isSelected = plan.code === selectedPlanCode
           const isRecommended = plan.code === recommendedCode
           return (
             <li
@@ -801,6 +814,7 @@ function PlansPanel({
                 isRecommended
                   ? 'bg-brand text-brand-foreground'
                   : 'bg-surface-1 text-white ring-1 ring-white/[0.05]',
+                isSelected && 'ring-2 ring-brand',
               )}
             >
               <div className="flex items-center justify-between gap-2">
@@ -812,11 +826,15 @@ function PlansPanel({
                 >
                   {plan.name}
                 </span>
-                {isCurrent && (
+                {isSelected ? (
+                  <span className="text-[11px] uppercase tracking-[0.05em] opacity-70">
+                    Обрано
+                  </span>
+                ) : isCurrent ? (
                   <span className="text-[11px] uppercase tracking-[0.05em] opacity-70">
                     Поточний
                   </span>
-                )}
+                ) : null}
               </div>
 
               <p className="flex items-baseline gap-1 text-[44px] leading-[0.9] font-light tracking-[-0.03em]">

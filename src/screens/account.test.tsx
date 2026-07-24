@@ -148,4 +148,38 @@ describe('AccountScreen subscription state', () => {
       screen.queryByRole('button', { name: /активувати/i }),
     ).not.toBeInTheDocument()
   })
+
+  it('opens and marks the plan requested in the URL', async () => {
+    getSubscription.mockResolvedValue(subscription)
+    getPlans.mockResolvedValue([
+      {
+        code: 'pro_monthly',
+        name: 'Pro',
+        amount: 59,
+        currency: 'USD',
+        interval: '1m',
+        trialDays: 7,
+        limits: {
+          cars: 20,
+          intakes: 25,
+          parts: 2000,
+          users: 5,
+          cashRegisters: 2,
+          photosPerPart: null,
+        },
+        features: [],
+      },
+    ])
+
+    render(
+      <MemoryRouter
+        initialEntries={['/account?section=plans&plan=pro_monthly']}
+      >
+        <AccountScreen />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Обрано')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Тарифи' })).toBeInTheDocument()
+  })
 })

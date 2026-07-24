@@ -13,6 +13,7 @@ import { isAxiosError } from 'axios'
 import { BrandLogo } from '@/components/site/brand-logo'
 import { authApi } from '@/api/auth'
 import { useAuth } from '@/auth/AuthContext'
+import { postAuthPath } from '@/lib/plan-selection'
 
 type Step = 'phone' | 'otp' | 'name' | 'success'
 
@@ -58,8 +59,9 @@ export function LoginScreen() {
   const navigate = useNavigate()
   const location = useLocation()
   const auth = useAuth()
-  const returnTo =
+  const fallbackReturnTo =
     (location.state as { from?: string } | null)?.from ?? '/account'
+  const returnTo = postAuthPath(location.search, fallbackReturnTo)
   const [step, setStep] = useState<Step>('phone')
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
@@ -207,7 +209,7 @@ export function LoginScreen() {
               error={error}
             />
           )}
-          {step === 'success' && <SuccessStep />}
+          {step === 'success' && <SuccessStep returnTo={returnTo} />}
         </div>
       </main>
 
@@ -447,7 +449,7 @@ function NameStep({
   )
 }
 
-function SuccessStep() {
+function SuccessStep({ returnTo }: { returnTo: string }) {
   return (
     <div className="anim-fade-up flex flex-col items-center gap-8 text-center">
       <div className="bg-brand grid size-20 place-items-center rounded-full">
@@ -462,7 +464,7 @@ function SuccessStep() {
         </p>
       </div>
       <Link
-        to="/account"
+        to={returnTo}
         className="bg-brand hover:bg-brand-hover text-brand-foreground inline-flex h-14 items-center rounded-full px-8 text-[15px] transition-colors"
       >
         Продовжити
