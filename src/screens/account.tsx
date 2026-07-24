@@ -499,12 +499,9 @@ function SubscriptionPanel({
 
   if (!subscription) return <EmptyPanel />
 
-  // Fresh tenant that hasn't activated its trial yet → present the card as a
-  // trial invitation rather than an empty "no plan" state.
-  const offerTrial = subscription.canActivateTrial
   // Trial spent / subscription lapsed → access closed, must pick a paid plan.
   // We do NOT auto-send to Mono checkout; the user chooses a tier on /tarifs.
-  const accessEnded = subscription.state === 'blocked' && !offerTrial
+  const accessEnded = subscription.state === 'blocked'
 
   const stateMeta: Record<BillingState, { label: string }> = {
     none: { label: 'Початок' },
@@ -515,17 +512,13 @@ function SubscriptionPanel({
     blocked: { label: 'Доступ закрито' },
   }
 
-  const badgeLabel = offerTrial
-    ? 'Пробний доступ'
-    : stateMeta[subscription.state].label
+  const badgeLabel = stateMeta[subscription.state].label
 
-  const planLabel = offerTrial
-    ? '7 днів безкоштовно'
-    : accessEnded
-      ? 'Доступ закрито'
-      : subscription.state === 'trial'
-        ? (subscription.planName ?? 'Пробний доступ')
-        : (subscription.planName ?? 'Без тарифу')
+  const planLabel = accessEnded
+    ? 'Доступ закрито'
+    : subscription.state === 'trial'
+      ? (subscription.planName ?? 'Пробний доступ')
+      : (subscription.planName ?? 'Без тарифу')
 
   const primaryLabel =
     subscription.state === 'trial'
@@ -568,16 +561,6 @@ function SubscriptionPanel({
     }
   }
 
-  const handleActivateTrial = async () => {
-    setBusy(true)
-    try {
-      await billingApi.activateTrial()
-      await onRefresh()
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
     <div className="flex flex-col gap-8">
       <Header
@@ -593,11 +576,7 @@ function SubscriptionPanel({
           <p className="text-[48px] leading-[1] font-light tracking-[-0.03em] lg:text-[64px]">
             {planLabel}
           </p>
-          {offerTrial ? (
-            <p className="text-[15px] opacity-75">
-              Повний доступ до Pro. Без картки.
-            </p>
-          ) : subscription.state === 'trial' ? (
+          {subscription.state === 'trial' ? (
             <p className="text-[15px] opacity-75">7 днів безкоштовно</p>
           ) : (
             !accessEnded &&
@@ -621,27 +600,15 @@ function SubscriptionPanel({
             </p>
           </div>
         ) : (
-          !offerTrial && (
-            <div className="flex flex-col gap-1">
-              <p className="text-[14px] opacity-70">{primaryLabel}</p>
-              <p className="text-[32px] font-light tabular-nums">
-                {primaryValue}
-              </p>
-            </div>
-          )
+          <div className="flex flex-col gap-1">
+            <p className="text-[14px] opacity-70">{primaryLabel}</p>
+            <p className="text-[32px] font-light tabular-nums">
+              {primaryValue}
+            </p>
+          </div>
         )}
 
         <div className="flex flex-wrap gap-3">
-          {subscription.canActivateTrial && (
-            <button
-              type="button"
-              onClick={() => void handleActivateTrial()}
-              disabled={busy}
-              className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80 disabled:opacity-50"
-            >
-              Активувати 7 днів безкоштовно
-            </button>
-          )}
           {/* "Поновити" only for a still-active cancelled sub — never blocked. */}
           {subscription.canReactivate && subscription.state !== 'blocked' && (
             <button
@@ -668,8 +635,7 @@ function SubscriptionPanel({
             onClick={onSeePlans}
             className={cn(
               'inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] transition-colors',
-              subscription.canActivateTrial ||
-                (subscription.canReactivate && subscription.state !== 'blocked')
+              subscription.canReactivate && subscription.state !== 'blocked'
                 ? 'text-black/80 hover:text-black'
                 : 'bg-black text-white hover:bg-black/80',
             )}
