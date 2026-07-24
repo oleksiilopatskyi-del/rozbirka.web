@@ -74,6 +74,31 @@ describe('Features carousel', () => {
     expect(scroll).toHaveBeenCalledOnce()
   })
 
+  it('stays interaction-paused when user pause is toggled off on a focused control', () => {
+    vi.useFakeTimers()
+    const { container } = render(<Features />)
+    const scroller = container.querySelector<HTMLUListElement>(
+      '#features ul.overflow-x-auto',
+    )!
+    const scroll = vi.fn()
+    scroller.scrollBy = scroll
+    scroller.scrollTo = scroll
+    const pause = screen.getByRole('button', {
+      name: 'Зупинити автопрокрутку',
+    })
+
+    fireEvent.focusIn(pause)
+    fireEvent.click(pause)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Увімкнути автопрокрутку' }),
+    )
+    act(() => {
+      vi.advanceTimersByTime(3500)
+    })
+
+    expect(scroll).not.toHaveBeenCalled()
+  })
+
   it('pauses autoplay while a control is hovered and resumes after leaving', () => {
     vi.useFakeTimers()
     const { container } = render(<Features />)
@@ -96,5 +121,30 @@ describe('Features carousel', () => {
       vi.advanceTimersByTime(3500)
     })
     expect(scroll).toHaveBeenCalledOnce()
+  })
+
+  it('stays interaction-paused when user pause is toggled off on a hovered control', () => {
+    vi.useFakeTimers()
+    const { container } = render(<Features />)
+    const scroller = container.querySelector<HTMLUListElement>(
+      '#features ul.overflow-x-auto',
+    )!
+    const scroll = vi.fn()
+    scroller.scrollBy = scroll
+    scroller.scrollTo = scroll
+    const pause = screen.getByRole('button', {
+      name: 'Зупинити автопрокрутку',
+    })
+
+    fireEvent.mouseOver(pause)
+    fireEvent.click(pause)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Увімкнути автопрокрутку' }),
+    )
+    act(() => {
+      vi.advanceTimersByTime(3500)
+    })
+
+    expect(scroll).not.toHaveBeenCalled()
   })
 })

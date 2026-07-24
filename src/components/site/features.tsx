@@ -138,6 +138,7 @@ const features: Feature[] = [
 
 export function Features() {
   const interactionSurfaceRef = useRef<HTMLDivElement>(null)
+  const interactionPausedRef = useRef(false)
   const scrollerRef = useRef<HTMLUListElement>(null)
   const reducedMotion =
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
@@ -153,15 +154,23 @@ export function Features() {
   }
 
   useEffect(() => {
-    const el = scrollerRef.current
     const interactionSurface = interactionSurfaceRef.current
-    if (!el || !interactionSurface || userPaused || reducedMotion) return
+    if (!interactionSurface) return
 
-    let paused = false
-    const pause = () => {
-      paused = true
+    let pointerInside = false
+    let focusInside = false
+    const updateInteractionPaused = () => {
+      interactionPausedRef.current = pointerInside || focusInside
     }
-    const resumeAfterLeaving = (event: MouseEvent | FocusEvent) => {
+    const pauseForPointer = () => {
+      pointerInside = true
+      updateInteractionPaused()
+    }
+    const pauseForFocus = () => {
+      focusInside = true
+      updateInteractionPaused()
+    }
+    const resumePointerAfterLeaving = (event: MouseEvent) => {
       const nextTarget = event.relatedTarget
       if (
         nextTarget instanceof Node &&
@@ -169,15 +178,46 @@ export function Features() {
       ) {
         return
       }
-      paused = false
+      pointerInside = false
+      updateInteractionPaused()
     }
-    interactionSurface.addEventListener('mouseover', pause)
-    interactionSurface.addEventListener('mouseout', resumeAfterLeaving)
-    interactionSurface.addEventListener('focusin', pause)
-    interactionSurface.addEventListener('focusout', resumeAfterLeaving)
+    const resumeFocusAfterLeaving = (event: FocusEvent) => {
+      const nextTarget = event.relatedTarget
+      if (
+        nextTarget instanceof Node &&
+        interactionSurface.contains(nextTarget)
+      ) {
+        return
+      }
+      focusInside = false
+      updateInteractionPaused()
+    }
+    interactionSurface.addEventListener('mouseover', pauseForPointer)
+    interactionSurface.addEventListener('mouseout', resumePointerAfterLeaving)
+    interactionSurface.addEventListener('focusin', pauseForFocus)
+    interactionSurface.addEventListener('focusout', resumeFocusAfterLeaving)
+
+    return () => {
+      interactionPausedRef.current = false
+      interactionSurface.removeEventListener('mouseover', pauseForPointer)
+      interactionSurface.removeEventListener(
+        'mouseout',
+        resumePointerAfterLeaving,
+      )
+      interactionSurface.removeEventListener('focusin', pauseForFocus)
+      interactionSurface.removeEventListener(
+        'focusout',
+        resumeFocusAfterLeaving,
+      )
+    }
+  }, [])
+
+  useEffect(() => {
+    const el = scrollerRef.current
+    if (!el || userPaused || reducedMotion) return
 
     const id = window.setInterval(() => {
-      if (paused) return
+      if (interactionPausedRef.current) return
       const card = el.firstElementChild as HTMLElement | null
       if (!card) return
       const cardWidth = card.clientWidth
@@ -191,10 +231,6 @@ export function Features() {
 
     return () => {
       window.clearInterval(id)
-      interactionSurface.removeEventListener('mouseover', pause)
-      interactionSurface.removeEventListener('mouseout', resumeAfterLeaving)
-      interactionSurface.removeEventListener('focusin', pause)
-      interactionSurface.removeEventListener('focusout', resumeAfterLeaving)
     }
   }, [userPaused, reducedMotion])
 
