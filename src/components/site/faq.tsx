@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Section } from '@/components/layout/section'
@@ -83,18 +83,6 @@ interface FaqRowProps {
 
 function FaqRow({ number, entry, isOpen, onToggle }: FaqRowProps) {
   const panelId = useId()
-  const contentRef = useRef<HTMLDivElement>(null)
-  const [maxHeight, setMaxHeight] = useState(0)
-
-  useEffect(() => {
-    const el = contentRef.current
-    if (!el) return
-    const update = () => setMaxHeight(el.scrollHeight)
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [entry.answer])
 
   return (
     <li
@@ -139,26 +127,18 @@ function FaqRow({ number, entry, isOpen, onToggle }: FaqRowProps) {
         </span>
       </button>
 
-      <div
-        id={panelId}
-        role="region"
-        aria-label={entry.question}
-        style={{
-          maxHeight: isOpen ? `${maxHeight}px` : '0px',
-        }}
-        className="overflow-hidden transition-[max-height] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none"
-      >
-        <div ref={contentRef}>
-          <p
-            className={cn(
-              'text-brand-foreground/80 max-w-[640px] pr-12 pb-6 pl-[60px] text-[14px] leading-[1.55] transition-opacity duration-300 lg:pl-[68px] lg:text-[15px]',
-              isOpen ? 'opacity-100 delay-100' : 'opacity-0',
-            )}
-          >
+      {isOpen && (
+        <div
+          id={panelId}
+          role="region"
+          aria-label={entry.question}
+          className="overflow-hidden"
+        >
+          <p className="text-brand-foreground/80 max-w-[640px] pr-12 pb-6 pl-[60px] text-[14px] leading-[1.55] lg:pl-[68px] lg:text-[15px]">
             {entry.answer}
           </p>
         </div>
-      </div>
+      )}
     </li>
   )
 }

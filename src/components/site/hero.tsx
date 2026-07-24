@@ -116,7 +116,7 @@ export function Hero() {
             </h1>
 
             <p
-              className="anim-fade-up max-w-[400px] text-[17px] leading-[1.5] font-normal text-neutral-500"
+              className="anim-fade-up max-w-[400px] text-[17px] leading-[1.5] font-normal text-neutral-400"
               style={{ animationDelay: '1700ms' }}
             >
               Застосунок, який об&apos;єднує фінанси, функції та управління в

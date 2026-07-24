@@ -76,7 +76,7 @@ const variantStyles: Record<
   lite: {
     card: 'bg-surface-1 ring-1 ring-white/[0.05] text-white',
     pill: 'bg-white/[0.06] text-white ring-1 ring-white/10',
-    description: 'text-neutral-500',
+    description: 'text-neutral-400',
     cta: 'text-white',
     perk: 'text-neutral-300',
   },
@@ -90,7 +90,7 @@ const variantStyles: Record<
   enterprise: {
     card: 'bg-surface-1 ring-1 ring-white/[0.05] text-white',
     pill: 'bg-white/[0.06] text-white ring-1 ring-white/10',
-    description: 'text-neutral-500',
+    description: 'text-neutral-400',
     cta: 'text-white',
     perk: 'text-neutral-300',
   },

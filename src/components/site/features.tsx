@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react'
 import { Section } from '@/components/layout/section'
 import { PageContainer } from '@/components/layout/page-container'
 import avtoImg from '@/assets/features/avto.svg'
@@ -138,6 +138,10 @@ const features: Feature[] = [
 
 export function Features() {
   const scrollerRef = useRef<HTMLUListElement>(null)
+  const reducedMotion =
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const [userPaused, setUserPaused] = useState(false)
+  const autoplayPaused = reducedMotion || userPaused
 
   const scrollByCard = (direction: 1 | -1) => {
     const el = scrollerRef.current
@@ -149,13 +153,7 @@ export function Features() {
 
   useEffect(() => {
     const el = scrollerRef.current
-    if (!el) return
-    if (
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ) {
-      return
-    }
+    if (!el || userPaused || reducedMotion) return
 
     let paused = false
     const pause = () => {
@@ -189,7 +187,7 @@ export function Features() {
       el.removeEventListener('focusin', pause)
       el.removeEventListener('focusout', resume)
     }
-  }, [])
+  }, [userPaused, reducedMotion])
 
   return (
     <Section id="features" className="py-16 lg:py-24">
@@ -205,15 +203,33 @@ export function Features() {
                   <span className="block">Поточні фічі</span>
                   <span className="text-brand block">rozbirka</span>
                 </h2>
-                <p className="max-w-[340px] text-[14px] leading-[1.5] text-neutral-500">
+                <p className="max-w-[340px] text-[14px] leading-[1.5] text-neutral-400">
                   Десять модулів — один інтерфейс. Від обліку авто до фінансів і
                   команди.
                 </p>
               </div>
 
-              <div className="hidden gap-2 lg:flex">
+              <div className="flex flex-wrap gap-2">
                 <NavCircle direction="prev" onClick={() => scrollByCard(-1)} />
                 <NavCircle direction="next" onClick={() => scrollByCard(1)} />
+                <button
+                  type="button"
+                  aria-pressed={autoplayPaused}
+                  aria-label={
+                    autoplayPaused
+                      ? 'Увімкнути автопрокрутку'
+                      : 'Зупинити автопрокрутку'
+                  }
+                  disabled={reducedMotion}
+                  onClick={() => setUserPaused((value) => !value)}
+                  className="grid size-12 place-items-center rounded-full text-white ring-1 ring-white/15 transition-all hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {autoplayPaused ? (
+                    <Play className="size-4" aria-hidden />
+                  ) : (
+                    <Pause className="size-4" aria-hidden />
+                  )}
+                </button>
               </div>
             </div>
           </header>
