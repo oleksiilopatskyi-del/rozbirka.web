@@ -5,6 +5,7 @@ node_modules
 package-lock.json
 .astro
 .lighthouseci
+.wrangler
 playwright-report
 test-results
 worker-configuration.d.ts

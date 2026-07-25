@@ -44,6 +44,10 @@
   --radius-pill: 9999px;
 }
 
+.font-visuelt {
+  font-family: 'Visuelt Pro', system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
 /* shadcn semantic tokens (kept minimal — only what we use) */
 :root {
   --background: oklch(0.145 0 0);

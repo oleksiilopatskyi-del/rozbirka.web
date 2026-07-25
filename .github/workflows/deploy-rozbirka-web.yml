@@ -52,6 +52,8 @@ jobs:
       contents: read
     secrets:
       CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
     with:
       project_name: Rozbirka Web
       branch: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}

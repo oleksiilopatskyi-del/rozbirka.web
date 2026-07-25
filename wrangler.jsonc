@@ -3,7 +3,7 @@
   "name": "rozbirka-pro-web",
   "main": "worker/index.ts",
   "account_id": "22a32b350711ff6b9b27d29f8a93eb6d",
-  "compatibility_date": "2026-07-24",
+  "compatibility_date": "2026-07-08",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./dist",

@@ -8,7 +8,7 @@ export default defineConfig({
   retries: 0,
   use: { baseURL: 'http://127.0.0.1:4173' },
   webServer: {
-    command: 'npm run preview -- --host 127.0.0.1',
+    command: 'npx wrangler dev --env qa --local --ip 127.0.0.1 --port 4173',
     port: 4173,
     reuseExistingServer: false,
   },

@@ -12,6 +12,7 @@ dist
 dist-ssr
 coverage
 .lighthouseci
+.wrangler
 playwright-report
 test-results
 *.local

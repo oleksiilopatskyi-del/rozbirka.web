@@ -11,6 +11,7 @@ export default defineConfig([
     'dist',
     'coverage',
     'node_modules',
+    '.wrangler',
     'worker-configuration.d.ts',
   ]),
   {

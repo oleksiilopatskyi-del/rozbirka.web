@@ -16,7 +16,7 @@ const spaPaths = [
 
 const prototypePath = /^\/screens(?:\/|$)/
 const staticPath =
-  /^\/(?:robots\.txt|sitemap\.xml|favicon\.svg|og-cover\.webp|fonts\/[^/]+\.woff2)$/
+  /^\/(?:robots\.txt|sitemap\.xml|favicon\.svg|og-cover\.webp|fonts\/[^/]+\.(?:woff2|css))$/
 
 function withHeaders(response: Response, headers: Record<string, string>) {
   const next = new Headers(response.headers)
@@ -54,7 +54,16 @@ async function notFound(request: Request, env: EdgeEnv) {
 export async function handleRequest(request: Request, env: EdgeEnv) {
   const url = new URL(request.url)
 
-  if (url.protocol === 'http:' || url.hostname === 'www.rozbirka.pro') {
+  const requestHostname = request.headers.get('host')?.split(':')[0] ?? ''
+  const isLocalRequest =
+    requestHostname === '127.0.0.1' || requestHostname === 'localhost'
+  const isProductionHost =
+    url.hostname === 'rozbirka.pro' || url.hostname === 'www.rozbirka.pro'
+  if (
+    !isLocalRequest &&
+    ((url.protocol === 'http:' && isProductionHost) ||
+      url.hostname === 'www.rozbirka.pro')
+  ) {
     url.protocol = 'https:'
     url.hostname = 'rozbirka.pro'
     return Response.redirect(url.toString(), 308)
@@ -80,9 +89,8 @@ export async function handleRequest(request: Request, env: EdgeEnv) {
   }
 
   if (spaPaths.some((pattern) => pattern.test(url.pathname))) {
-    const response = await env.ASSETS.fetch(
-      assetRequest(request, '/index.html'),
-    )
+    const shellPath = url.pathname === '/' ? '/index.html' : '/app.html'
+    const response = await env.ASSETS.fetch(assetRequest(request, shellPath))
     return withHeaders(response, {
       'Cache-Control': 'max-age=0, must-revalidate',
       ...(shouldNoindex(url) ? { 'X-Robots-Tag': 'noindex' } : {}),

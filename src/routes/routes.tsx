@@ -2,6 +2,10 @@ import type { RouteObject } from 'react-router'
 import App from '@/App'
 import { RedirectIfAuth, RequireAuth } from '@/auth/guards'
 
+const hydrateFallbackElement = (
+  <div className="min-h-screen bg-background" aria-busy="true" />
+)
+
 export function createAppRoutes(
   includePrototypeRoutes: boolean,
 ): RouteObject[] {
@@ -9,6 +13,7 @@ export function createAppRoutes(
     { path: '/', element: <App /> },
     {
       path: '/privacy',
+      hydrateFallbackElement,
       lazy: async () => {
         const { PrivacyScreen } = await import('@/screens/privacy')
         return { element: <PrivacyScreen /> }
@@ -16,6 +21,7 @@ export function createAppRoutes(
     },
     {
       path: '/login',
+      hydrateFallbackElement,
       lazy: async () => {
         const { LoginScreen } = await import('@/screens/login')
         return {
@@ -29,6 +35,7 @@ export function createAppRoutes(
     },
     {
       path: '/account',
+      hydrateFallbackElement,
       lazy: async () => {
         const { AccountScreen } = await import('@/screens/account')
         return {
@@ -42,6 +49,7 @@ export function createAppRoutes(
     },
     {
       path: '/marketplace',
+      hydrateFallbackElement,
       lazy: async () => {
         const { MarketplaceApp } =
           await import('@/apps/marketplace/marketplace-app')
@@ -50,6 +58,7 @@ export function createAppRoutes(
     },
     {
       path: '/marketplace/listings/:slugOrId',
+      hydrateFallbackElement,
       lazy: async () => {
         const { MarketplaceLayout } =
           await import('@/apps/marketplace/marketplace-layout')
@@ -66,6 +75,7 @@ export function createAppRoutes(
     },
     {
       path: '/marketplace/shops/:slug',
+      hydrateFallbackElement,
       lazy: async () => {
         const { MarketplaceLayout } =
           await import('@/apps/marketplace/marketplace-layout')
@@ -86,6 +96,7 @@ export function createAppRoutes(
     routes.push(
       {
         path: '/screens',
+        hydrateFallbackElement,
         lazy: async () => {
           const { ScreensIndex } = await import('@/screens')
           return { element: <ScreensIndex /> }
@@ -93,6 +104,7 @@ export function createAppRoutes(
       },
       {
         path: '/screens/header',
+        hydrateFallbackElement,
         lazy: async () => {
           const { HeaderScreen } = await import('@/screens/header')
           return { element: <HeaderScreen /> }

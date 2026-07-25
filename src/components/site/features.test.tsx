@@ -49,6 +49,12 @@ describe('Features carousel', () => {
     ).toHaveAttribute('aria-pressed', 'true')
   })
 
+  it('does not advertise unsupported analytics capability', () => {
+    render(<Features />)
+    expect(screen.queryByText('Аналітика')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Динаміка продажів/)).not.toBeInTheDocument()
+  })
+
   it('pauses autoplay while a carousel control is focused', () => {
     vi.useFakeTimers()
     const { container } = render(<Features />)

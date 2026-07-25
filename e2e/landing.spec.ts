@@ -22,6 +22,36 @@ test('landing interactions work without serious accessibility violations', async
   ).toHaveAttribute('href', '/login?plan=pro_monthly')
 })
 
+test('direct SPA deep links mount one matching page without hydration warnings', async ({
+  page,
+}) => {
+  const hydrationWarnings: string[] = []
+  page.on('console', (message) => {
+    if (/hydrat|No HydrateFallback/i.test(message.text())) {
+      hydrationWarnings.push(message.text())
+    }
+  })
+  page.on('pageerror', (error) => {
+    if (/hydrat/i.test(error.message)) hydrationWarnings.push(error.message)
+  })
+
+  await page.goto('/privacy')
+
+  await expect(
+    page.getByRole('heading', {
+      level: 1,
+      name: 'Як ми поводимось з даними',
+    }),
+  ).toHaveCount(1)
+  await expect(
+    page.getByRole('heading', {
+      level: 1,
+      name: 'Знаєш де кожна деталь і де твої гроші',
+    }),
+  ).toHaveCount(0)
+  expect(hydrationWarnings).toEqual([])
+})
+
 test.describe('responsive matrix', () => {
   for (const width of [320, 375, 768, 1024, 1440]) {
     test(`has no horizontal overflow at ${width}px`, async ({

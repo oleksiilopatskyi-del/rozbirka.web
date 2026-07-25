@@ -13,6 +13,11 @@ function env(): EdgeEnv {
             headers: { 'content-type': 'text/html', etag: '"index"' },
           })
         }
+        if (path === '/app.html') {
+          return new Response('<html>shell</html>', {
+            headers: { 'content-type': 'text/html', etag: '"shell"' },
+          })
+        }
         if (path === '/404.html') {
           return new Response('<html>missing</html>', {
             headers: { 'content-type': 'text/html' },
@@ -24,6 +29,11 @@ function env(): EdgeEnv {
               'content-type': 'image/avif',
               etag: '"asset"',
             },
+          })
+        }
+        if (path === '/fonts/visuelt.css') {
+          return new Response('@font-face{}', {
+            headers: { 'content-type': 'text/css' },
           })
         }
         return new Response('missing', { status: 404 })
@@ -53,8 +63,24 @@ describe('edge routing', () => {
     )
   })
 
+  it('does not force HTTPS for the local Worker test server', async () => {
+    const response = await handleRequest(
+      new Request('http://127.0.0.1:4173/'),
+      env(),
+    )
+    expect(response.status).toBe(200)
+  })
+
+  it('serves the prerendered landing only for the root route', async () => {
+    const response = await handleRequest(
+      new Request('https://rozbirka.pro/'),
+      env(),
+    )
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('app')
+  })
+
   it.each([
-    '/',
     '/privacy',
     '/login',
     '/account',
@@ -67,7 +93,7 @@ describe('edge routing', () => {
       env(),
     )
     expect(response.status).toBe(200)
-    expect(await response.text()).toContain('app')
+    expect(await response.text()).toContain('shell')
   })
 
   it('returns immutable assets without losing MIME or ETag', async () => {
@@ -80,6 +106,18 @@ describe('edge routing', () => {
     )
     expect(response.headers.get('content-type')).toBe('image/avif')
     expect(response.headers.get('etag')).toBe('"asset"')
+  })
+
+  it('serves the deferred font stylesheet as a revalidated static asset', async () => {
+    const response = await handleRequest(
+      new Request('https://rozbirka.pro/fonts/visuelt.css'),
+      env(),
+    )
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('text/css')
+    expect(response.headers.get('cache-control')).toBe(
+      'max-age=0, must-revalidate',
+    )
   })
 
   it('adds noindex to private and QA SPA responses', async () => {

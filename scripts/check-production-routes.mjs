@@ -54,8 +54,21 @@ export function validateProductionResponses(result) {
   }
 }
 
+function accessHeaders() {
+  const clientId = process.env['CF_ACCESS_CLIENT_ID']
+  const clientSecret = process.env['CF_ACCESS_CLIENT_SECRET']
+  if (!clientId || !clientSecret) return {}
+  return {
+    'CF-Access-Client-Id': clientId,
+    'CF-Access-Client-Secret': clientSecret,
+  }
+}
+
 async function inspect(url, redirect = 'follow') {
-  const response = await fetch(url, { redirect })
+  const response = await fetch(url, {
+    redirect,
+    headers: accessHeaders(),
+  })
   return {
     status: response.status,
     contentType: response.headers.get('content-type') ?? '',
