@@ -4,5 +4,9 @@ node_modules
 *.lock
 package-lock.json
 .astro
+.lighthouseci
+playwright-report
+test-results
+worker-configuration.d.ts
 
 docs/superpowers/

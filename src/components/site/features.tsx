@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react'
 import { Section } from '@/components/layout/section'
 import { PageContainer } from '@/components/layout/page-container'
@@ -20,6 +20,23 @@ const featureImageUrls = import.meta.glob<string>(
   '../../assets/optimized/features/*.{avif,webp}',
   { eager: true, query: '?url', import: 'default' },
 )
+
+const reducedMotionQuery = '(prefers-reduced-motion: reduce)'
+
+function subscribeToReducedMotion(onStoreChange: () => void) {
+  if (!window.matchMedia) return () => undefined
+  const mediaQuery = window.matchMedia(reducedMotionQuery)
+  mediaQuery.addEventListener('change', onStoreChange)
+  return () => mediaQuery.removeEventListener('change', onStoreChange)
+}
+
+function getReducedMotionSnapshot() {
+  return window.matchMedia?.(reducedMotionQuery).matches ?? false
+}
+
+function getServerReducedMotionSnapshot() {
+  return false
+}
 
 function responsiveImage(name: string): ResponsiveImage {
   const get = (file: string) => {
@@ -157,8 +174,11 @@ export function Features() {
   const interactionSurfaceRef = useRef<HTMLDivElement>(null)
   const interactionPausedRef = useRef(false)
   const scrollerRef = useRef<HTMLUListElement>(null)
-  const reducedMotion =
-    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const reducedMotion = useSyncExternalStore(
+    subscribeToReducedMotion,
+    getReducedMotionSnapshot,
+    getServerReducedMotionSnapshot,
+  )
   const [userPaused, setUserPaused] = useState(false)
   const autoplayPaused = reducedMotion || userPaused
 
@@ -302,6 +322,8 @@ export function Features() {
           <ul
             ref={scrollerRef}
             role="list"
+            tabIndex={0}
+            aria-label="Карусель модулів rozbirka"
             className="mt-12 flex snap-x snap-mandatory overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] lg:mt-16"
           >
             {features.map((f) => (

@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { Section } from '@/components/layout/section'
 import { PageContainer } from '@/components/layout/page-container'
@@ -20,73 +19,14 @@ const heroLines: TypewriterLine[] = [
 ]
 
 function TypewriterHeading({ lines }: { lines: TypewriterLine[] }) {
-  const [revealed, setRevealed] = useState<string[]>(() => lines.map(() => ''))
-  const [activeLine, setActiveLine] = useState(0)
-  const speed = 35
-  const lineGap = 180
-
-  useEffect(() => {
-    const prefersReduced =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-    let timer: number | undefined
-
-    if (prefersReduced) {
-      timer = window.setTimeout(() => {
-        setRevealed(lines.map((l) => l.text))
-        setActiveLine(lines.length)
-      }, 0)
-      return () => {
-        if (timer) window.clearTimeout(timer)
-      }
-    }
-
-    let lineIdx = 0
-    let charIdx = 0
-
-    const tick = () => {
-      if (lineIdx >= lines.length) {
-        setActiveLine(lines.length)
-        return
-      }
-      const target = lines[lineIdx]?.text ?? ''
-      if (charIdx < target.length) {
-        charIdx++
-        const snapshot = target.slice(0, charIdx)
-        setRevealed((prev) => {
-          const next = [...prev]
-          next[lineIdx] = snapshot
-          return next
-        })
-        timer = window.setTimeout(tick, speed)
-      } else {
-        lineIdx++
-        charIdx = 0
-        setActiveLine(lineIdx)
-        timer = window.setTimeout(tick, lineGap)
-      }
-    }
-
-    tick()
-    return () => {
-      if (timer) window.clearTimeout(timer)
-    }
-  }, [lines])
-
-  const done = activeLine >= lines.length
-
   return (
     <>
       {lines.map((line, i) => {
-        const isActive = i === activeLine
         const isLast = i === lines.length - 1
-        const showCaret = isActive || (done && isLast)
         return (
           <span key={i} className={`block min-h-[1em] ${line.className ?? ''}`}>
-            {/* eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string must render a space */}
-            {revealed[i] || ' '}
-            {showCaret && (
+            {line.text}
+            {isLast && (
               <span
                 aria-hidden
                 className="ml-[0.05em] inline-block h-[0.85em] w-[0.05em] translate-y-[0.05em] animate-pulse bg-current align-baseline"
@@ -109,7 +49,10 @@ export function Hero() {
       <PageContainer>
         <div className="grid grid-cols-1 items-end gap-10 lg:grid-cols-[minmax(0,720px)_1fr] lg:gap-12">
           <div className="flex flex-col gap-6 lg:self-start lg:pl-16">
-            <h1 className="text-[52px] leading-[1] font-light tracking-[-0.035em] sm:text-[76px] lg:text-[108px]">
+            <h1
+              className="text-[52px] leading-[1] font-light tracking-[-0.035em] sm:text-[76px] lg:text-[108px]"
+              style={{ fontFamily: '"Visuelt Hero", system-ui, sans-serif' }}
+            >
               <span className="sr-only">
                 Знаєш де кожна деталь і де твої гроші
               </span>

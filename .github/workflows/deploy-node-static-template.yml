@@ -33,7 +33,7 @@ on:
         required: true
 
 env:
-  NODE_VERSION: "22"
+  NODE_VERSION: '22'
 
 jobs:
   build:
@@ -55,12 +55,19 @@ jobs:
       - run: npm ci
 
       - if: inputs.run_build
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - if: inputs.run_build
         run: |
           env_name="${{ inputs.auto_qa_deploy && 'qa' || inputs.environment }}"
           if [ "$env_name" = "prod" ]; then
-            npm run build:prod
+            npm run verify:prod
           else
+            npm run check
             npm run build:qa
+            npm run budget:assets
+            npm run test:e2e
+            npx wrangler deploy --dry-run --env qa
           fi
 
       - uses: actions/upload-artifact@v4

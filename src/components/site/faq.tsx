@@ -103,7 +103,7 @@ function FaqRow({ number, entry, isOpen, onToggle }: FaqRowProps) {
         <span
           className={cn(
             'shrink-0 text-[13px] font-medium tracking-[0.05em] tabular-nums',
-            isOpen ? 'text-brand-foreground/60' : 'text-brand',
+            isOpen ? 'text-brand-foreground/80' : 'text-brand',
           )}
           aria-hidden
         >

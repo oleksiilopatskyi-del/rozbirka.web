@@ -3,37 +3,16 @@
 @custom-variant dark (&:is(.dark *));
 
 @font-face {
-  font-family: 'Visuelt Pro';
-  src: url('/fonts/VisueltPro-Light.woff2') format('woff2');
+  font-family: 'Visuelt Hero';
+  src: url('/fonts/VisueltPro-Hero.woff2') format('woff2');
   font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Visuelt Pro';
-  src: url('/fonts/VisueltPro-Regular.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Visuelt Pro';
-  src: url('/fonts/VisueltPro-Medium.woff2') format('woff2');
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Visuelt Pro';
-  src: url('/fonts/VisueltPro-Bold.woff2') format('woff2');
-  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 
 @theme {
   /* Type */
-  --font-sans: 'Visuelt Pro', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, Consolas, monospace;
 
   /* Brand */
