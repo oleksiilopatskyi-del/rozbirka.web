@@ -30,20 +30,23 @@ test('hero content is immediately visible with reduced motion', async ({
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/')
 
-  await expect(
-    page.getByRole('heading', {
-      level: 1,
-      name: 'Знаєш де кожна деталь і де твої гроші',
-    }),
-  ).toBeVisible()
-  await expect(
-    page.getByRole('link', { name: 'Спробувати безкоштовно' }),
-  ).toBeVisible()
+  const animatedHeroNodes = [
+    page.getByText('Знаєш', { exact: true }),
+    page.getByText('де кожна', { exact: true }),
+    page.getByText('деталь і де', { exact: true }),
+    page.getByText('твої гроші', { exact: true }),
+    page.getByText(
+      "Застосунок, який об'єднує фінанси, функції та управління в одному інтерфейсі.",
+    ),
+    page.getByRole('link', { name: 'Спробувати безкоштовно' }).locator('..'),
+  ]
 
-  const visibleLine = page.getByText('Знаєш', { exact: true })
-  await expect(visibleLine).toHaveCSS('animation-name', 'none')
-  await expect(visibleLine).toHaveCSS('opacity', '1')
-  await expect(visibleLine).toHaveCSS('transform', 'none')
+  for (const node of animatedHeroNodes) {
+    await expect(node).toBeVisible()
+    await expect(node).toHaveCSS('animation-name', 'none')
+    await expect(node).toHaveCSS('opacity', '1')
+    await expect(node).toHaveCSS('transform', 'none')
+  }
 })
 
 test('direct SPA deep links mount one matching page without hydration warnings', async ({

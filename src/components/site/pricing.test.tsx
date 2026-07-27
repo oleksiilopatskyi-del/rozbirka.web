@@ -166,8 +166,12 @@ describe('Pricing destinations', () => {
     periods.forEach((period) => {
       expect(period).toHaveClass(
         'font-visuelt',
+        'text-[14px]',
         'leading-none',
         'whitespace-nowrap',
+        'font-normal',
+        'tracking-normal',
+        'mb-[0.55em]',
         'self-end',
       )
     })
@@ -188,8 +192,10 @@ describe('Pricing destinations', () => {
     expect(enterpriseCard).toHaveClass(
       'md:col-span-2',
       'md:mx-auto',
+      'md:w-[calc(50%-0.5rem)]',
       'lg:col-span-1',
       'lg:mx-0',
+      'lg:w-auto',
     )
   })
 })
