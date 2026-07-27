@@ -38,3 +38,4 @@ test-results
 # Claude / MCP runtime artifacts
 .claude/settings.local.json
 .playwright-mcp/
+.superpowers/
