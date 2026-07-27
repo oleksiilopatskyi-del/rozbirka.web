@@ -121,15 +121,15 @@ jobs:
           fi
 
           if [ "$wrangler_env" = "production" ]; then
-            npm run check:routes -- https://qa.rozbirka.pro
+            npm run check:routes -- https://qa.rozbirka.pro https://qaapi.rozbirka.pro
           fi
 
           npx wrangler deploy --env "$wrangler_env"
 
           if [ "$wrangler_env" = "production" ]; then
-            npm run check:routes -- https://rozbirka.pro
+            npm run check:routes -- https://rozbirka.pro https://api.rozbirka.pro
           else
-            npm run check:routes -- https://qa.rozbirka.pro
+            npm run check:routes -- https://qa.rozbirka.pro https://qaapi.rozbirka.pro
           fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}

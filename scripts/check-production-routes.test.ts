@@ -1,6 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { validateProductionResponses } from './check-production-routes.mjs'
+import {
+  buildRouteTargets,
+  validateProductionResponses,
+} from './check-production-routes.mjs'
 
 function validResponses() {
   return {
@@ -39,6 +42,20 @@ function validResponses() {
 }
 
 describe('production route validation', () => {
+  it('probes the API gateway instead of the landing origin', () => {
+    expect(
+      buildRouteTargets(
+        'https://rozbirka.pro',
+        'https://api.rozbirka.pro',
+        '/assets/app.js',
+      ),
+    ).toMatchObject({
+      home: 'https://rozbirka.pro/',
+      api: 'https://api.rozbirka.pro/api/v1/billing/plans',
+      asset: 'https://rozbirka.pro/assets/app.js',
+    })
+  })
+
   it('accepts the complete production response contract', () => {
     expect(() => validateProductionResponses(validResponses())).not.toThrow()
   })

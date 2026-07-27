@@ -7,9 +7,9 @@ import axios, {
 import { tokens } from './tokens'
 import type { RefreshResponse } from './types'
 
-// Same-origin by default: backend and SPA share the app domains
-// (qa.rozbirka.pro, rozbirka.pro). VITE_API_URL is only for local dev or
-// temporary split-host deployments pointing at a different host.
+// The deployed landing and API gateway use separate hosts
+// (rozbirka.pro → api.rozbirka.pro, qa.rozbirka.pro → qaapi.rozbirka.pro).
+// Local development may omit VITE_API_URL to keep same-origin proxying.
 const API_URL = (import.meta.env['VITE_API_URL'] as string | undefined) ?? ''
 
 const TIMEOUT = 15000

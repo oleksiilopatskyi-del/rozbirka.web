@@ -78,26 +78,44 @@ async function inspect(url, redirect = 'follow') {
   }
 }
 
-export async function checkProductionRoutes(baseUrl) {
+export function buildRouteTargets(baseUrl, apiBaseUrl, assetPath) {
   const base = new URL(baseUrl)
-  const home = await inspect(new URL('/', base))
+  const apiBase = new URL(apiBaseUrl)
+  return {
+    home: new URL('/', base).href,
+    unknown: new URL('/definitely-missing', base).href,
+    robots: new URL('/robots.txt', base).href,
+    sitemap: new URL('/sitemap.xml', base).href,
+    asset: new URL(assetPath, base).href,
+    api: new URL('/api/v1/billing/plans', apiBase).href,
+    privacy: new URL('/privacy', base).href,
+    listing: new URL('/marketplace/listings/qa-probe', base).href,
+    screens: new URL('/screens', base).href,
+    header: new URL('/screens/header', base).href,
+  }
+}
+
+export async function checkProductionRoutes(baseUrl, apiBaseUrl) {
+  const home = await inspect(new URL('/', baseUrl))
   const assetPath = home.body.match(/\/assets\/[^"' ]+/)?.[0]
   assert(assetPath, 'home did not expose a fingerprinted asset')
+  const targets = buildRouteTargets(baseUrl, apiBaseUrl, assetPath)
+  const base = new URL(baseUrl)
 
   const result = {
     home,
-    unknown: await inspect(new URL('/definitely-missing', base)),
-    robots: await inspect(new URL('/robots.txt', base)),
-    sitemap: await inspect(new URL('/sitemap.xml', base)),
-    asset: await inspect(new URL(assetPath, base)),
-    api: await inspect(new URL('/api/v1/billing/plans', base)),
+    unknown: await inspect(targets.unknown),
+    robots: await inspect(targets.robots),
+    sitemap: await inspect(targets.sitemap),
+    asset: await inspect(targets.asset),
+    api: await inspect(targets.api),
     spaRoutes: {
-      privacy: await inspect(new URL('/privacy', base)),
-      listing: await inspect(new URL('/marketplace/listings/qa-probe', base)),
+      privacy: await inspect(targets.privacy),
+      listing: await inspect(targets.listing),
     },
     prototypes: {
-      screens: await inspect(new URL('/screens', base)),
-      header: await inspect(new URL('/screens/header', base)),
+      screens: await inspect(targets.screens),
+      header: await inspect(targets.header),
     },
     redirects:
       base.hostname === 'rozbirka.pro'
@@ -122,6 +140,11 @@ if (
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
   const baseUrl = process.argv[2]
-  if (!baseUrl) throw new Error('Usage: npm run check:routes -- <base-url>')
-  await checkProductionRoutes(baseUrl)
+  const apiBaseUrl = process.argv[3]
+  if (!baseUrl || !apiBaseUrl) {
+    throw new Error(
+      'Usage: npm run check:routes -- <landing-base-url> <api-base-url>',
+    )
+  }
+  await checkProductionRoutes(baseUrl, apiBaseUrl)
 }
