@@ -42,13 +42,15 @@ describe('Hero conversion', () => {
       expect(line).toHaveStyle({ animationDelay: delay })
     })
 
-    expect(screen.getByText(/Застосунок, який об'єднує фінанси/)).toHaveStyle({
-      animationDelay: '520ms',
-    })
-    expect(
-      screen.getByRole('link', { name: 'Спробувати безкоштовно' })
-        .parentElement,
-    ).toHaveStyle({ animationDelay: '680ms' })
+    const copy = screen.getByText(/Застосунок, який об'єднує фінанси/)
+    expect(copy).toHaveClass('anim-fade-up')
+    expect(copy).toHaveStyle({ animationDelay: '520ms' })
+
+    const cta = screen.getByRole('link', {
+      name: 'Спробувати безкоштовно',
+    }).parentElement
+    expect(cta).toHaveClass('anim-fade-up')
+    expect(cta).toHaveStyle({ animationDelay: '680ms' })
     expect(container.querySelector('.animate-pulse')).toBeNull()
   })
 })
