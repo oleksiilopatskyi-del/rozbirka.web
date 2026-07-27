@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "rozbirka-pro-web",
+  "name": "qa-rozbirka-pro-web",
   "main": "worker/index.ts",
   "account_id": "22a32b350711ff6b9b27d29f8a93eb6d",
   "compatibility_date": "2026-07-08",
