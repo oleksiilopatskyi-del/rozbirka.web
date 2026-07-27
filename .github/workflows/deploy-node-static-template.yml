@@ -76,6 +76,15 @@ jobs:
             npx wrangler deploy --dry-run --env qa
           fi
 
+      - if: failure() && inputs.run_build
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure
+          path: |
+            test-results
+            e2e/**/*-snapshots/*-linux-*.png
+          if-no-files-found: warn
+
       - uses: actions/upload-artifact@v4
         with:
           name: web-dist

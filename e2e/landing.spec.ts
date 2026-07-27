@@ -79,10 +79,14 @@ test.describe('responsive matrix', () => {
           () => document.documentElement.scrollWidth === window.innerWidth,
         ),
       ).toBe(true)
-      await expect(page).toHaveScreenshot(`landing-${width}.png`, {
-        fullPage: true,
-        animations: 'disabled',
-      })
+      const platformSuffix = process.platform === 'linux' ? '-linux' : ''
+      await expect(page).toHaveScreenshot(
+        `landing-${width}${platformSuffix}.png`,
+        {
+          fullPage: true,
+          animations: 'disabled',
+        },
+      )
     })
   }
 })
