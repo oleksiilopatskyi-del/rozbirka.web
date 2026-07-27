@@ -49,10 +49,12 @@ describe('Features carousel', () => {
     ).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('does not advertise unsupported analytics capability', () => {
+  it('does not advertise unsupported analytics or export capabilities', () => {
     render(<Features />)
     expect(screen.queryByText('Аналітика')).not.toBeInTheDocument()
     expect(screen.queryByText(/Динаміка продажів/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Експорт у PDF/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Десять модулів/)).not.toBeInTheDocument()
   })
 
   it('pauses autoplay while a carousel control is focused', () => {

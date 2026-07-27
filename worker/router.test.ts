@@ -14,9 +14,16 @@ function env(): EdgeEnv {
           })
         }
         if (path === '/app.html') {
-          return new Response('<html>shell</html>', {
-            headers: { 'content-type': 'text/html', etag: '"shell"' },
-          })
+          return new Response(
+            '<html><head><link rel="canonical" href="https://rozbirka.pro/" /><meta property="og:url" content="https://rozbirka.pro/" /></head><body>shell</body></html>',
+            {
+              headers: {
+                'content-type': 'text/html',
+                etag: '"shell"',
+                'content-length': '999',
+              },
+            },
+          )
         }
         if (path === '/404.html') {
           return new Response('<html>missing</html>', {
@@ -96,6 +103,23 @@ describe('edge routing', () => {
     expect(await response.text()).toContain('shell')
   })
 
+  it('publishes route-specific canonical metadata for indexable deep links', async () => {
+    const response = await handleRequest(
+      new Request('https://rozbirka.pro/privacy?source=test'),
+      env(),
+    )
+    const html = await response.text()
+
+    expect(html).toContain(
+      '<link rel="canonical" href="https://rozbirka.pro/privacy" />',
+    )
+    expect(html).toContain(
+      '<meta property="og:url" content="https://rozbirka.pro/privacy" />',
+    )
+    expect(response.headers.get('etag')).toBeNull()
+    expect(response.headers.get('content-length')).toBeNull()
+  })
+
   it('returns immutable assets without losing MIME or ETag', async () => {
     const response = await handleRequest(
       new Request('https://rozbirka.pro/assets/hero-AbCd1234.avif'),
@@ -106,6 +130,22 @@ describe('edge routing', () => {
     )
     expect(response.headers.get('content-type')).toBe('image/avif')
     expect(response.headers.get('etag')).toBe('"asset"')
+  })
+
+  it('adds noindex to assets served from QA and workers.dev hosts', async () => {
+    const qaAsset = await handleRequest(
+      new Request('https://qa.rozbirka.pro/assets/hero.avif'),
+      env(),
+    )
+    const previewAsset = await handleRequest(
+      new Request(
+        'https://rozbirka-pro-web.example.workers.dev/assets/hero.avif',
+      ),
+      env(),
+    )
+
+    expect(qaAsset.headers.get('x-robots-tag')).toBe('noindex')
+    expect(previewAsset.headers.get('x-robots-tag')).toBe('noindex')
   })
 
   it('serves the deferred font stylesheet as a revalidated static asset', async () => {

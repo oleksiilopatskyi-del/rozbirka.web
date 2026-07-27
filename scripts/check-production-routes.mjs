@@ -34,6 +34,12 @@ export function validateProductionResponses(result) {
       response.contentType.includes('text/html'),
       `${name} must return HTML`,
     )
+    assert(
+      response.body.includes(
+        `<link rel="canonical" href="${response.canonical}"`,
+      ),
+      `${name} canonical URL is wrong`,
+    )
   }
   for (const [name, response] of Object.entries(result.prototypes)) {
     assert(response.status === 404, `${name} must return 404`)
@@ -78,6 +84,13 @@ async function inspect(url, redirect = 'follow') {
   }
 }
 
+async function inspectSpaRoute(url) {
+  return {
+    ...(await inspect(url)),
+    canonical: url,
+  }
+}
+
 export function buildRouteTargets(baseUrl, apiBaseUrl, assetPath) {
   const base = new URL(baseUrl)
   const apiBase = new URL(apiBaseUrl)
@@ -110,8 +123,8 @@ export async function checkProductionRoutes(baseUrl, apiBaseUrl) {
     asset: await inspect(targets.asset),
     api: await inspect(targets.api),
     spaRoutes: {
-      privacy: await inspect(targets.privacy),
-      listing: await inspect(targets.listing),
+      privacy: await inspectSpaRoute(targets.privacy),
+      listing: await inspectSpaRoute(targets.listing),
     },
     prototypes: {
       screens: await inspect(targets.screens),

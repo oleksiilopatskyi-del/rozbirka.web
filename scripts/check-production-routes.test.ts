@@ -21,8 +21,18 @@ function validResponses() {
       body: '[{"code":"pro_monthly"}]',
     },
     spaRoutes: {
-      privacy: { status: 200, contentType: 'text/html' },
-      listing: { status: 200, contentType: 'text/html' },
+      privacy: {
+        status: 200,
+        contentType: 'text/html',
+        body: '<link rel="canonical" href="https://rozbirka.pro/privacy">',
+        canonical: 'https://rozbirka.pro/privacy',
+      },
+      listing: {
+        status: 200,
+        contentType: 'text/html',
+        body: '<link rel="canonical" href="https://rozbirka.pro/marketplace/listings/qa-probe">',
+        canonical: 'https://rozbirka.pro/marketplace/listings/qa-probe',
+      },
     },
     prototypes: {
       screens: { status: 404 },
@@ -90,6 +100,13 @@ describe('production route validation', () => {
       'broken SPA deep link',
       (value: ReturnType<typeof validResponses>) => {
         value.spaRoutes.privacy.status = 404
+      },
+    ],
+    [
+      'wrong deep-link canonical',
+      (value: ReturnType<typeof validResponses>) => {
+        value.spaRoutes.privacy.body =
+          '<link rel="canonical" href="https://rozbirka.pro/">'
       },
     ],
     [

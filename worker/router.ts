@@ -28,6 +28,24 @@ function withHeaders(response: Response, headers: Record<string, string>) {
   })
 }
 
+async function withCanonicalMetadata(response: Response, url: URL) {
+  const canonical = new URL(url.pathname, 'https://rozbirka.pro').href.replace(
+    /\/$/,
+    '',
+  )
+  const html = (await response.text())
+    .replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${canonical}$2`)
+    .replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${canonical}$2`)
+  const headers = new Headers(response.headers)
+  headers.delete('Content-Length')
+  headers.delete('ETag')
+  return new Response(html, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 function assetRequest(request: Request, path: string) {
   const url = new URL(request.url)
   url.pathname = path
@@ -76,6 +94,7 @@ export async function handleRequest(request: Request, env: EdgeEnv) {
     if (response.status === 404) return notFound(request, env)
     return withHeaders(response, {
       'Cache-Control': 'public, max-age=31536000, immutable',
+      ...(shouldNoindex(url) ? { 'X-Robots-Tag': 'noindex' } : {}),
     })
   }
 
@@ -90,7 +109,10 @@ export async function handleRequest(request: Request, env: EdgeEnv) {
 
   if (spaPaths.some((pattern) => pattern.test(url.pathname))) {
     const shellPath = url.pathname === '/' ? '/index.html' : '/app.html'
-    const response = await env.ASSETS.fetch(assetRequest(request, shellPath))
+    let response = await env.ASSETS.fetch(assetRequest(request, shellPath))
+    if (url.pathname !== '/') {
+      response = await withCanonicalMetadata(response, url)
+    }
     return withHeaders(response, {
       'Cache-Control': 'max-age=0, must-revalidate',
       ...(shouldNoindex(url) ? { 'X-Robots-Tag': 'noindex' } : {}),
