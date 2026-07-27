@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildRouteTargets,
+  productionCanonical,
   validateProductionResponses,
 } from './check-production-routes.mjs'
 
@@ -64,6 +65,12 @@ describe('production route validation', () => {
       api: 'https://api.rozbirka.pro/api/v1/billing/plans',
       asset: 'https://rozbirka.pro/assets/app.js',
     })
+  })
+
+  it('expects production canonical metadata when probing QA', () => {
+    expect(productionCanonical('https://qa.rozbirka.pro/privacy')).toBe(
+      'https://rozbirka.pro/privacy',
+    )
   })
 
   it('accepts the complete production response contract', () => {

@@ -84,10 +84,14 @@ async function inspect(url, redirect = 'follow') {
   }
 }
 
+export function productionCanonical(url) {
+  return new URL(new URL(url).pathname, 'https://rozbirka.pro').href
+}
+
 async function inspectSpaRoute(url) {
   return {
     ...(await inspect(url)),
-    canonical: url,
+    canonical: productionCanonical(url),
   }
 }
 
