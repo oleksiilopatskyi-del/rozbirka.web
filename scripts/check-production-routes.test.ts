@@ -1,8 +1,9 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   buildRouteTargets,
   productionCanonical,
+  retryRouteCheck,
   validateProductionResponses,
 } from './check-production-routes.mjs'
 
@@ -75,6 +76,33 @@ describe('production route validation', () => {
 
   it('accepts the complete production response contract', () => {
     expect(() => validateProductionResponses(validResponses())).not.toThrow()
+  })
+
+  it('retries a transient post-deploy response without weakening validation', async () => {
+    const check = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('unknown route must return 404'))
+      .mockResolvedValueOnce(validResponses())
+    const sleep = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      retryRouteCheck(check, { attempts: 3, delayMs: 1000, sleep }),
+    ).resolves.toEqual(validResponses())
+    expect(check).toHaveBeenCalledTimes(2)
+    expect(sleep).toHaveBeenCalledOnce()
+    expect(sleep).toHaveBeenCalledWith(1000)
+  })
+
+  it('still fails after the retry budget is exhausted', async () => {
+    const error = new Error('home must return 200')
+    const check = vi.fn().mockRejectedValue(error)
+    const sleep = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      retryRouteCheck(check, { attempts: 3, delayMs: 1000, sleep }),
+    ).rejects.toBe(error)
+    expect(check).toHaveBeenCalledTimes(3)
+    expect(sleep).toHaveBeenCalledTimes(2)
   })
 
   it.each([

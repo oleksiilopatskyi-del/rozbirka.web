@@ -112,6 +112,27 @@ export function buildRouteTargets(baseUrl, apiBaseUrl, assetPath) {
   }
 }
 
+export async function retryRouteCheck(
+  check,
+  {
+    attempts = 5,
+    delayMs = 2000,
+    sleep = (milliseconds) =>
+      new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  } = {},
+) {
+  let lastError
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await check()
+    } catch (error) {
+      lastError = error
+      if (attempt < attempts) await sleep(delayMs)
+    }
+  }
+  throw lastError
+}
+
 export async function checkProductionRoutes(baseUrl, apiBaseUrl) {
   const home = await inspect(new URL('/', baseUrl))
   const assetPath = home.body.match(/\/assets\/[^"' ]+/)?.[0]
@@ -163,5 +184,5 @@ if (
       'Usage: npm run check:routes -- <landing-base-url> <api-base-url>',
     )
   }
-  await checkProductionRoutes(baseUrl, apiBaseUrl)
+  await retryRouteCheck(() => checkProductionRoutes(baseUrl, apiBaseUrl))
 }
