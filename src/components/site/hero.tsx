@@ -6,35 +6,31 @@ import hero1080Avif from '@/assets/optimized/hero/hero-1080.avif'
 import hero720Webp from '@/assets/optimized/hero/hero-720.webp'
 import hero1080Webp from '@/assets/optimized/hero/hero-1080.webp'
 
-interface TypewriterLine {
+interface HeroLine {
   text: string
   className?: string
+  delay: string
 }
 
-const heroLines: TypewriterLine[] = [
-  { text: 'Знаєш' },
-  { text: 'де кожна' },
-  { text: 'деталь і де' },
-  { text: 'твої гроші', className: 'text-brand' },
+const heroLines: HeroLine[] = [
+  { text: 'Знаєш', delay: '0ms' },
+  { text: 'де кожна', delay: '100ms' },
+  { text: 'деталь і де', delay: '200ms' },
+  { text: 'твої гроші', className: 'text-brand', delay: '300ms' },
 ]
 
-function TypewriterHeading({ lines }: { lines: TypewriterLine[] }) {
+function AnimatedHeading({ lines }: { lines: HeroLine[] }) {
   return (
     <>
-      {lines.map((line, i) => {
-        const isLast = i === lines.length - 1
-        return (
-          <span key={i} className={`block min-h-[1em] ${line.className ?? ''}`}>
-            {line.text}
-            {isLast && (
-              <span
-                aria-hidden
-                className="ml-[0.05em] inline-block h-[0.85em] w-[0.05em] translate-y-[0.05em] animate-pulse bg-current align-baseline"
-              />
-            )}
-          </span>
-        )
-      })}
+      {lines.map((line) => (
+        <span
+          key={line.text}
+          className={`anim-fade-up block min-h-[1em] ${line.className ?? ''}`}
+          style={{ animationDelay: line.delay }}
+        >
+          {line.text}
+        </span>
+      ))}
     </>
   )
 }
@@ -57,13 +53,13 @@ export function Hero() {
                 Знаєш де кожна деталь і де твої гроші
               </span>
               <span aria-hidden>
-                <TypewriterHeading lines={heroLines} />
+                <AnimatedHeading lines={heroLines} />
               </span>
             </h1>
 
             <p
               className="anim-fade-up max-w-[400px] text-[17px] leading-[1.5] font-normal text-neutral-400"
-              style={{ animationDelay: '1700ms' }}
+              style={{ animationDelay: '520ms' }}
             >
               Застосунок, який об&apos;єднує фінанси, функції та управління в
               одному інтерфейсі.
@@ -71,7 +67,7 @@ export function Hero() {
 
             <div
               className="anim-fade-up mt-3 flex flex-wrap items-center gap-3"
-              style={{ animationDelay: '1900ms' }}
+              style={{ animationDelay: '680ms' }}
             >
               <Link
                 to="/login"

@@ -22,6 +22,28 @@ test('landing interactions work without serious accessibility violations', async
   ).toHaveAttribute('href', '/login?plan=pro_monthly')
 })
 
+test('hero content is immediately visible with reduced motion', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/')
+
+  await expect(
+    page.getByRole('heading', {
+      level: 1,
+      name: 'Знаєш де кожна деталь і де твої гроші',
+    }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('link', { name: 'Спробувати безкоштовно' }),
+  ).toBeVisible()
+
+  const visibleLine = page.getByText('Знаєш', { exact: true })
+  await expect(visibleLine).toHaveCSS('animation-name', 'none')
+  await expect(visibleLine).toHaveCSS('opacity', '1')
+  await expect(visibleLine).toHaveCSS('transform', 'none')
+})
+
 test('direct SPA deep links mount one matching page without hydration warnings', async ({
   page,
 }) => {
