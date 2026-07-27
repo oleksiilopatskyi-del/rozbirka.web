@@ -153,4 +153,43 @@ describe('Pricing destinations', () => {
     expect(await screen.findByText('3 авто')).toBeInTheDocument()
     expect(screen.getAllByRole('link')).toHaveLength(3)
   })
+
+  it('renders a stable full monthly period label beside every price', async () => {
+    render(
+      <MemoryRouter>
+        <Pricing />
+      </MemoryRouter>,
+    )
+
+    const periods = await screen.findAllByText('/ місяць')
+    expect(periods).toHaveLength(3)
+    periods.forEach((period) => {
+      expect(period).toHaveClass(
+        'font-visuelt',
+        'leading-none',
+        'whitespace-nowrap',
+        'self-end',
+      )
+    })
+  })
+
+  it('centers Enterprise on tablet and restores the third column on desktop', async () => {
+    const { container } = render(
+      <MemoryRouter>
+        <Pricing />
+      </MemoryRouter>,
+    )
+
+    await screen.findByText('Enterprise')
+    const grid = container.querySelector('#pricing ul')
+    expect(grid).toHaveClass('md:grid-cols-2', 'lg:grid-cols-3')
+
+    const enterpriseCard = screen.getByText('Enterprise').closest('li')
+    expect(enterpriseCard).toHaveClass(
+      'md:col-span-2',
+      'md:mx-auto',
+      'lg:col-span-1',
+      'lg:mx-0',
+    )
+  })
 })

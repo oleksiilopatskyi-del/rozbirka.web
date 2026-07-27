@@ -68,7 +68,7 @@ export function Pricing() {
           </h2>
           <ul
             role="list"
-            className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+            className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
           >
             {plans.map((plan) => {
               const destination =
@@ -100,12 +100,15 @@ function PlanCard({
 }) {
   const styles = variantStyles[plan.variant]
   const isPro = plan.variant === 'pro'
+  const isEnterprise = plan.variant === 'enterprise'
 
   return (
     <li
       className={cn(
         'group rounded-(--radius-card) relative flex min-h-[440px] flex-col gap-6 p-8 transition-all duration-500 ease-out hover:-translate-y-1 hover:shadow-2xl motion-reduce:transition-none motion-reduce:hover:translate-y-0 lg:p-10',
         styles.card,
+        isEnterprise &&
+          'md:col-span-2 md:mx-auto md:w-[calc(50%-0.5rem)] lg:col-span-1 lg:mx-0 lg:w-auto',
       )}
     >
       <div className="flex items-center justify-between gap-2">
@@ -125,10 +128,12 @@ function PlanCard({
       </div>
 
       <div className="flex flex-col gap-2">
-        <p className="flex items-baseline gap-2 text-[64px] leading-[0.9] font-light tracking-[-0.04em] lg:text-[80px]">
-          <span>{plan.price}</span>
-          <span className="text-[14px] font-normal opacity-70">
-            /{plan.period}
+        <p className="flex items-end gap-2 font-light tracking-[-0.04em]">
+          <span className="text-[64px] leading-[0.9] lg:text-[80px]">
+            {plan.price}
+          </span>
+          <span className="font-visuelt mb-[0.55em] self-end whitespace-nowrap text-[14px] leading-none font-normal tracking-normal opacity-70">
+            / {plan.period}
           </span>
         </p>
         {isPro && (
