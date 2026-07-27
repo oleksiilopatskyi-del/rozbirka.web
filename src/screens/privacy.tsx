@@ -35,9 +35,9 @@ export function PrivacyScreen() {
               1. Хто ми
             </h2>
             <p>
-              Rozbirka — платформа для обліку діяльності авторозбірок:
-              облік авто, складу запчастин, замовлень, кас і команди. Доступна
-              як веб-застосунок на rozbirka.com та мобільний додаток для iOS.
+              Rozbirka — платформа для обліку діяльності авторозбірок: облік
+              авто, складу запчастин, замовлень, кас і команди. Доступна як
+              веб-застосунок на rozbirka.com та мобільний додаток для iOS.
             </p>
             <p className="mt-3">
               Контролером даних (data controller) щодо персональних даних
@@ -70,9 +70,9 @@ export function PrivacyScreen() {
               <li>
                 <strong>Платіжні дані:</strong> для оплати підписки ми не
                 зберігаємо номери карток. Платежі обробляє{' '}
-                <strong>Monobank (Mono Acquiring)</strong> згідно з PCI DSS.
-                Ми отримуємо тільки маскований номер картки (останні 4 цифри)
-                та платіжний токен.
+                <strong>Monobank (Mono Acquiring)</strong> згідно з PCI DSS. Ми
+                отримуємо тільки маскований номер картки (останні 4 цифри) та
+                платіжний токен.
               </li>
               <li>
                 <strong>Технічні дані:</strong> IP-адреса, тип пристрою, версія
@@ -86,13 +86,19 @@ export function PrivacyScreen() {
               3. Як ми використовуємо дані
             </h2>
             <ul className="list-disc space-y-2 pl-6">
-              <li>Надавати функціональність сервісу (вхід, облік, аналітика).</li>
+              <li>
+                Надавати функціональність сервісу (вхід, облік, аналітика).
+              </li>
               <li>Обробляти підписку та платежі (через Monobank).</li>
-              <li>Сповіщати про важливі зміни в обліковому записі чи сервісі.</li>
-              <li>Запобігати шахрайству, зловживанням і несанкціонованому
-                доступу.</li>
-              <li>Покращувати продукт на основі знеособлених метрик
-                використання.</li>
+              <li>
+                Сповіщати про важливі зміни в обліковому записі чи сервісі.
+              </li>
+              <li>
+                Запобігати шахрайству, зловживанням і несанкціонованому доступу.
+              </li>
+              <li>
+                Покращувати продукт на основі знеособлених метрик використання.
+              </li>
             </ul>
             <p className="mt-3">
               <strong>Ми НЕ продаємо</strong> ваші дані третім сторонам і не
@@ -110,12 +116,12 @@ export function PrivacyScreen() {
               </li>
               <li>
                 <strong>Постачальники хмарної інфраструктури</strong> (Google
-                Cloud, Cloudflare) — для розміщення сервісу та зберігання
-                даних на захищених серверах.
+                Cloud, Cloudflare) — для розміщення сервісу та зберігання даних
+                на захищених серверах.
               </li>
               <li>
-                <strong>SMS-провайдер</strong> — для доставки одноразових
-                кодів авторизації на номер телефону.
+                <strong>SMS-провайдер</strong> — для доставки одноразових кодів
+                авторизації на номер телефону.
               </li>
               <li>
                 <strong>Apple / Google</strong> — для розповсюдження мобільного
@@ -182,10 +188,10 @@ export function PrivacyScreen() {
               7. Безпека
             </h2>
             <p>
-              Усе передається через HTTPS (TLS 1.2+). Паролі/токени зберігаємо
-              в захешованому вигляді. Регулярно оновлюємо залежності й
-              моніторимо доступ. Жодна система не дає 100% гарантії, але ми
-              застосовуємо галузеві стандарти захисту.
+              Усе передається через HTTPS (TLS 1.2+). Паролі/токени зберігаємо в
+              захешованому вигляді. Регулярно оновлюємо залежності й моніторимо
+              доступ. Жодна система не дає 100% гарантії, але ми застосовуємо
+              галузеві стандарти захисту.
             </p>
           </section>
 
@@ -207,8 +213,8 @@ export function PrivacyScreen() {
             </h2>
             <p>
               Якщо ми внесемо суттєві зміни, повідомимо вас через email або
-              сповіщенням у застосунку щонайменше за 14 днів до набрання чинності.
-              Поточну версію завжди можна знайти за цією адресою.
+              сповіщенням у застосунку щонайменше за 14 днів до набрання
+              чинності. Поточну версію завжди можна знайти за цією адресою.
             </p>
           </section>
 
@@ -236,13 +242,13 @@ export function PrivacyScreen() {
             </p>
             <p className="mt-3">
               Rozbirka collects only the data needed to operate the service:
-              your phone number for login, your business inventory data
-              (cars, parts, orders, customers, photos) — all created by you
-              within your own organization, and minimal technical logs for
-              security. We use Monobank to process subscription payments and
-              don't store card numbers ourselves. We never sell your data or
-              use it for advertising. You can request access, correction,
-              export, or deletion at any time by emailing{' '}
+              your phone number for login, your business inventory data (cars,
+              parts, orders, customers, photos) — all created by you within your
+              own organization, and minimal technical logs for security. We use
+              Monobank to process subscription payments and don't store card
+              numbers ourselves. We never sell your data or use it for
+              advertising. You can request access, correction, export, or
+              deletion at any time by emailing{' '}
               <a
                 href="mailto:support@rozbirka.com"
                 className="text-brand underline-offset-2 hover:underline"
@@ -257,10 +263,7 @@ export function PrivacyScreen() {
 
       <footer className="border-t border-border/40 py-10 text-center text-sm text-muted-foreground">
         © 2026 Rozbirka ·{' '}
-        <a
-          href="mailto:support@rozbirka.com"
-          className="hover:text-foreground"
-        >
+        <a href="mailto:support@rozbirka.com" className="hover:text-foreground">
           support@rozbirka.com
         </a>
       </footer>

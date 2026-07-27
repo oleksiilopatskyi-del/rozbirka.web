@@ -1,18 +1,36 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "rozbirka-pro-web",
+  "main": "worker/index.ts",
   "account_id": "22a32b350711ff6b9b27d29f8a93eb6d",
-  "compatibility_date": "2026-07-04",
+  "compatibility_date": "2026-07-08",
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    "run_worker_first": true,
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
   },
   "env": {
     "qa": {
-      "name": "qa-rozbirka-pro-web"
+      "name": "qa-rozbirka-pro-web",
     },
     "production": {
-      "name": "rozbirka-pro-web"
-    }
-  }
+      "name": "rozbirka-pro-web",
+      "routes": [
+        {
+          "pattern": "rozbirka.pro",
+          "custom_domain": true,
+        },
+        {
+          "pattern": "www.rozbirka.pro",
+          "custom_domain": true,
+        },
+      ],
+    },
+  },
 }

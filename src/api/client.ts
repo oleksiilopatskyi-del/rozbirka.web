@@ -1,5 +1,5 @@
+import type { AxiosError } from 'axios'
 import axios, {
-  AxiosError,
   type AxiosInstance,
   type AxiosResponse,
   type InternalAxiosRequestConfig,
@@ -7,9 +7,9 @@ import axios, {
 import { tokens } from './tokens'
 import type { RefreshResponse } from './types'
 
-// Same-origin by default: backend and SPA share the apex (qa.rozbirka.com,
-// rozbirka.com). VITE_API_URL is only for local dev pointing at a different
-// host (e.g. http://localhost:5000 when running the API directly).
+// The deployed landing and API gateway use separate hosts
+// (rozbirka.pro → api.rozbirka.pro, qa.rozbirka.pro → qaapi.rozbirka.pro).
+// Local development may omit VITE_API_URL to keep same-origin proxying.
 const API_URL = (import.meta.env['VITE_API_URL'] as string | undefined) ?? ''
 
 const TIMEOUT = 15000
@@ -23,6 +23,13 @@ export const identityClient: AxiosInstance = axios.create({
 
 // Core client — /api/v1, attaches tenant
 export const apiClient: AxiosInstance = axios.create({
+  baseURL: `${API_URL}/api/v1`,
+  headers: { 'Content-Type': 'application/json' },
+  timeout: TIMEOUT,
+})
+
+// Public client — /api/v1, no auth or tenant headers (marketplace public routes)
+export const publicApiClient: AxiosInstance = axios.create({
   baseURL: `${API_URL}/api/v1`,
   headers: { 'Content-Type': 'application/json' },
   timeout: TIMEOUT,
@@ -63,6 +70,7 @@ const unwrap = (resp: AxiosResponse): AxiosResponse => {
 
 identityClient.interceptors.response.use(unwrap)
 apiClient.interceptors.response.use(unwrap)
+publicApiClient.interceptors.response.use(unwrap)
 
 // 401 refresh handling — deduped
 let refreshPromise: Promise<string | null> | null = null
@@ -76,10 +84,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
       { refreshToken: refresh },
       { headers: { 'Content-Type': 'application/json' }, timeout: TIMEOUT },
     )
-    const payload =
-      'data' in resp.data
-        ? (resp.data as { data: RefreshResponse }).data
-        : (resp.data as RefreshResponse)
+    const payload = 'data' in resp.data ? resp.data.data : resp.data
     tokens.set(payload.accessToken, payload.refreshToken)
     return payload.accessToken
   } catch {
@@ -164,6 +169,10 @@ apiClient.interceptors.response.use(undefined, async (e: AxiosError) => {
   } catch (err) {
     stampError(err as AxiosError)
   }
+})
+
+publicApiClient.interceptors.response.use(undefined, (e: AxiosError) => {
+  stampError(e)
 })
 
 declare module 'axios' {

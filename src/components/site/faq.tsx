@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Section } from '@/components/layout/section'
@@ -21,14 +21,14 @@ const entries: FaqEntry[] = [
       'За 10 хвилин. Створюєш перше авто, додаєш запчастини — і вже працюєш. Без довгих налаштувань і навчання.',
   },
   {
-    question: 'Як працює пробний тиждень?',
+    question: 'Як працює безкоштовний період?',
     answer:
-      'Сім днів повного доступу до всіх модулів — без введення картки. Якщо не підійде — нічого не списується автоматично.',
+      'Після створення робочого простору автоматично активуються 14 днів Pro-рівня — без введення картки. Після завершення нічого не списується автоматично.',
   },
   {
     question: 'Скільки людей з команди можуть працювати одночасно?',
     answer:
-      'Стільки, скільки потрібно. Кожному — окрема роль і права доступу. Власник бачить усе, продавець — лише те, що йому належить.',
+      'Ліміт залежить від тарифу: Lite — 1 користувач, Pro — 5, Enterprise — без обмежень. Для кожного можна налаштувати окрему роль і права доступу.',
   },
   {
     question: 'Чи можна продавати запчастини в доларах?',
@@ -83,18 +83,6 @@ interface FaqRowProps {
 
 function FaqRow({ number, entry, isOpen, onToggle }: FaqRowProps) {
   const panelId = useId()
-  const contentRef = useRef<HTMLDivElement>(null)
-  const [maxHeight, setMaxHeight] = useState(0)
-
-  useEffect(() => {
-    const el = contentRef.current
-    if (!el) return
-    const update = () => setMaxHeight(el.scrollHeight)
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [entry.answer])
 
   return (
     <li
@@ -115,7 +103,7 @@ function FaqRow({ number, entry, isOpen, onToggle }: FaqRowProps) {
         <span
           className={cn(
             'shrink-0 text-[13px] font-medium tracking-[0.05em] tabular-nums',
-            isOpen ? 'text-brand-foreground/60' : 'text-brand',
+            isOpen ? 'text-brand-foreground/80' : 'text-brand',
           )}
           aria-hidden
         >
@@ -139,26 +127,18 @@ function FaqRow({ number, entry, isOpen, onToggle }: FaqRowProps) {
         </span>
       </button>
 
-      <div
-        id={panelId}
-        role="region"
-        aria-label={entry.question}
-        style={{
-          maxHeight: isOpen ? `${maxHeight}px` : '0px',
-        }}
-        className="overflow-hidden transition-[max-height] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none"
-      >
-        <div ref={contentRef}>
-          <p
-            className={cn(
-              'text-brand-foreground/80 max-w-[640px] pr-12 pb-6 pl-[60px] text-[14px] leading-[1.55] transition-opacity duration-300 lg:pl-[68px] lg:text-[15px]',
-              isOpen ? 'opacity-100 delay-100' : 'opacity-0',
-            )}
-          >
+      {isOpen && (
+        <div
+          id={panelId}
+          role="region"
+          aria-label={entry.question}
+          className="overflow-hidden"
+        >
+          <p className="text-brand-foreground/80 max-w-[640px] pr-12 pb-6 pl-[60px] text-[14px] leading-[1.55] lg:pl-[68px] lg:text-[15px]">
             {entry.answer}
           </p>
         </div>
-      </div>
+      )}
     </li>
   )
 }

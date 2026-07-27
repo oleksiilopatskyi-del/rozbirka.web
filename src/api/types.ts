@@ -12,6 +12,8 @@ export interface SendOtpResponse {
 export interface VerifyOtpRequest {
   phone: string
   code: string
+  /** Web allows creating a new account on first verify. Mobile omits this (sign-in only). */
+  allowRegistration?: boolean
 }
 
 export interface VerifyUser {
@@ -36,7 +38,7 @@ export interface RefreshResponse {
   refreshToken: string
 }
 
-export type UserRole = 'owner' | 'manager' | 'master' | string
+export type UserRole = 'owner' | 'manager' | 'master' | (string & {})
 
 export interface User {
   id: string
@@ -49,7 +51,7 @@ export interface User {
 
 // === Tenants (rozbirka.core) ===
 
-export type TenantPlan = 'trial' | 'active' | 'blocked' | string
+export type TenantPlan = 'trial' | 'active' | 'blocked' | (string & {})
 
 export interface Tenant {
   id: string

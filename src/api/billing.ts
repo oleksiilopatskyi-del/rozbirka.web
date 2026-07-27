@@ -1,4 +1,4 @@
-import { apiClient } from './client'
+import { apiClient, publicApiClient } from './client'
 import type {
   CancelRequest,
   CheckoutResponse,
@@ -23,7 +23,7 @@ export const billingApi = {
    * Public plan catalog. Auth optional (pricing page).
    */
   async getPlans(): Promise<PublicPlanDto[]> {
-    const resp = await apiClient.get<PublicPlanDto[]>('/billing/plans')
+    const resp = await publicApiClient.get<PublicPlanDto[]>('/billing/plans')
     return resp.data
   },
 
@@ -38,14 +38,6 @@ export const billingApi = {
       req ?? {},
     )
     return resp.data
-  },
-
-  /**
-   * Activate the one-time free 7-day trial. Lifts the block on a fresh tenant.
-   * Backend: 409 billing.trial_already_used / billing.already_subscribed.
-   */
-  async activateTrial(): Promise<void> {
-    await apiClient.post('/billing/trial')
   },
 
   async cancel(req?: CancelRequest): Promise<void> {

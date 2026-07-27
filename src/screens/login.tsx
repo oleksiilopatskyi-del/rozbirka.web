@@ -13,6 +13,7 @@ import { isAxiosError } from 'axios'
 import { BrandLogo } from '@/components/site/brand-logo'
 import { authApi } from '@/api/auth'
 import { useAuth } from '@/auth/AuthContext'
+import { postAuthPath } from '@/lib/plan-selection'
 
 type Step = 'phone' | 'otp' | 'name' | 'success'
 
@@ -58,8 +59,9 @@ export function LoginScreen() {
   const navigate = useNavigate()
   const location = useLocation()
   const auth = useAuth()
-  const returnTo =
+  const fallbackReturnTo =
     (location.state as { from?: string } | null)?.from ?? '/account'
+  const returnTo = postAuthPath(location.search, fallbackReturnTo)
   const [step, setStep] = useState<Step>('phone')
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
@@ -112,7 +114,9 @@ export function LoginScreen() {
       } else {
         await auth.hydrate()
         setStep('success')
-        window.setTimeout(() => navigate(returnTo, { replace: true }), 800)
+        window.setTimeout(() => {
+          void navigate(returnTo, { replace: true })
+        }, 800)
       }
     } catch (err) {
       setError(extractError(err, 'Невірний код'))
@@ -134,7 +138,9 @@ export function LoginScreen() {
       await authApi.updateName(trimmed)
       await auth.hydrate()
       setStep('success')
-      window.setTimeout(() => navigate(returnTo, { replace: true }), 800)
+      window.setTimeout(() => {
+        void navigate(returnTo, { replace: true })
+      }, 800)
     } catch (err) {
       setError(extractError(err, 'Не вдалося зберегти ім’я'))
     } finally {
@@ -176,7 +182,7 @@ export function LoginScreen() {
             <PhoneStep
               phone={phone}
               onChange={setPhone}
-              onSubmit={handlePhoneSubmit}
+              onSubmit={(e) => void handlePhoneSubmit(e)}
               loading={loading}
               error={error}
             />
@@ -186,13 +192,13 @@ export function LoginScreen() {
               phone={phone}
               otp={otp}
               onChange={setOtp}
-              onSubmit={handleOtpSubmit}
+              onSubmit={(e) => void handleOtpSubmit(e)}
               onBack={() => {
                 setStep('phone')
                 setOtp('')
                 setError(null)
               }}
-              onResend={handleResend}
+              onResend={() => void handleResend()}
               resendIn={resendIn}
               loading={loading}
               error={error}
@@ -202,12 +208,12 @@ export function LoginScreen() {
             <NameStep
               name={name}
               onChange={setName}
-              onSubmit={handleNameSubmit}
+              onSubmit={(e) => void handleNameSubmit(e)}
               loading={loading}
               error={error}
             />
           )}
-          {step === 'success' && <SuccessStep />}
+          {step === 'success' && <SuccessStep returnTo={returnTo} />}
         </div>
       </main>
 
@@ -372,7 +378,7 @@ function OtpStep({
           className="mt-2 text-center text-[13px] text-neutral-500 transition-colors hover:text-white disabled:cursor-not-allowed disabled:hover:text-neutral-500"
         >
           {resendIn > 0
-            ? `Надіслати код ще раз — через ${resendIn} с`
+            ? `Надіслати код ще раз — через ${resendIn}\u00A0с`
             : 'Надіслати код ще раз'}
         </button>
       </form>
@@ -447,7 +453,7 @@ function NameStep({
   )
 }
 
-function SuccessStep() {
+function SuccessStep({ returnTo }: { returnTo: string }) {
   return (
     <div className="anim-fade-up flex flex-col items-center gap-8 text-center">
       <div className="bg-brand grid size-20 place-items-center rounded-full">
@@ -462,7 +468,7 @@ function SuccessStep() {
         </p>
       </div>
       <Link
-        to="/account"
+        to={returnTo}
         className="bg-brand hover:bg-brand-hover text-brand-foreground inline-flex h-14 items-center rounded-full px-8 text-[15px] transition-colors"
       >
         Продовжити

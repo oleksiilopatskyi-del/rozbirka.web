@@ -1,8 +1,10 @@
-import { Download } from 'lucide-react'
 import { Section } from '@/components/layout/section'
 import { PageContainer } from '@/components/layout/page-container'
 import { AppStoreBadge, GooglePlayBadge } from '@/components/site/store-badges'
-import ctaPhones from '@/assets/cta-phones.png'
+import cta720Avif from '@/assets/optimized/cta/cta-720.avif'
+import cta1100Avif from '@/assets/optimized/cta/cta-1100.avif'
+import cta720Webp from '@/assets/optimized/cta/cta-720.webp'
+import cta1100Webp from '@/assets/optimized/cta/cta-1100.webp'
 
 export function CtaBanner() {
   return (
@@ -18,31 +20,35 @@ export function CtaBanner() {
             <p className="text-brand-foreground/70 max-w-[360px] text-[14px] leading-[1.55] lg:text-[15px]">
               Завантажуй застосунок і тримай весь бізнес у кишені.
             </p>
-            <a
-              href="#download-app"
-              className="group inline-flex h-[64px] w-fit items-center gap-3 rounded-full bg-black pr-2 pl-7 text-[15px] text-white transition-all duration-300 hover:scale-[1.03] hover:bg-black/80"
-            >
-              <span>Завантажити</span>
-              <span className="bg-brand grid size-12 place-items-center rounded-full transition-transform duration-300 group-hover:translate-y-0.5">
-                <Download className="size-5 text-black" aria-hidden />
-              </span>
-            </a>
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap">
+              <AppStoreBadge />
+              <GooglePlayBadge />
+            </div>
           </div>
 
-          <img
-            src={ctaPhones}
-            alt="rozbirka на телефонах"
-            width={668}
-            height={374}
-            loading="lazy"
-            decoding="async"
-            className="anim-float-slow absolute top-1/2 right-0 hidden h-[90%] w-auto max-w-none -translate-y-1/2 object-contain object-right [filter:drop-shadow(0_30px_50px_rgba(0,0,0,0.55))_drop-shadow(0_10px_20px_rgba(0,0,0,0.4))] lg:block"
-          />
-
-          <div className="absolute top-6 right-6 z-10 flex flex-col gap-3">
-            <AppStoreBadge />
-            <GooglePlayBadge />
-          </div>
+          <picture>
+            <source
+              media="(min-width: 1024px)"
+              type="image/avif"
+              srcSet={`${cta720Avif} 720w, ${cta1100Avif} 1100w`}
+              sizes="668px"
+            />
+            <source
+              media="(min-width: 1024px)"
+              type="image/webp"
+              srcSet={`${cta720Webp} 720w, ${cta1100Webp} 1100w`}
+              sizes="668px"
+            />
+            <img
+              src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
+              alt="rozbirka на телефонах"
+              width={668}
+              height={374}
+              loading="lazy"
+              decoding="async"
+              className="anim-float-slow absolute top-1/2 right-0 hidden h-[90%] w-auto max-w-none -translate-y-1/2 object-contain object-right [filter:drop-shadow(0_30px_50px_rgba(0,0,0,0.55))_drop-shadow(0_10px_20px_rgba(0,0,0,0.4))] lg:block"
+            />
+          </picture>
         </div>
       </PageContainer>
     </Section>

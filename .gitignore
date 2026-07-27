@@ -11,6 +11,10 @@ node_modules
 dist
 dist-ssr
 coverage
+.lighthouseci
+.wrangler
+playwright-report
+test-results
 *.local
 
 # Env
@@ -34,3 +38,4 @@ coverage
 # Claude / MCP runtime artifacts
 .claude/settings.local.json
 .playwright-mcp/
+.superpowers/

@@ -1,10 +1,6 @@
 import { apiClient } from './client'
 import { tokens } from './tokens'
-import type {
-  CreateTenantRequest,
-  CreateTenantResponse,
-  Tenant,
-} from './types'
+import type { CreateTenantRequest, CreateTenantResponse, Tenant } from './types'
 
 export const tenantsApi = {
   async list(): Promise<Tenant[]> {

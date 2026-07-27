@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "build:qa": "tsc -b && vite build --mode qa",
-    "build:prod": "tsc -b && vite build --mode production",
+    "build": "tsc -b && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && node scripts/prerender.mjs",
+    "build:qa": "tsc -b && vite build --mode qa && vite build --ssr src/entry-server.tsx --outDir dist-ssr --mode qa && node scripts/prerender.mjs",
+    "build:prod": "tsc -b && vite build --mode production && vite build --ssr src/entry-server.tsx --outDir dist-ssr --mode production && node scripts/prerender.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
@@ -18,6 +18,12 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
+    "assets:optimize": "node scripts/optimize-assets.mjs",
+    "budget:assets": "node scripts/check-asset-budget.mjs",
+    "audit:lhci": "lhci autorun",
+    "test:e2e": "playwright test",
+    "check:routes": "node scripts/check-production-routes.mjs",
+    "verify:prod": "npm run check && npm run build:prod && npm run budget:assets && npm run test:e2e && npm run audit:lhci && wrangler deploy --dry-run --env production",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test"
   },
   "dependencies": {
@@ -36,7 +42,11 @@
     "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@cloudflare/workers-types": "^4.20260702.1",
     "@eslint/js": "^10.0.1",
+    "@lhci/cli": "^0.15.1",
+    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -53,6 +63,7 @@
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.8.3",
+    "sharp": "^0.35.3",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12",

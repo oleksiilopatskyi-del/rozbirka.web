@@ -1,28 +1,62 @@
-import { useEffect, useRef } from 'react'
-import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { ArrowLeft, ArrowRight, Pause, Play } from 'lucide-react'
 import { Section } from '@/components/layout/section'
 import { PageContainer } from '@/components/layout/page-container'
-import avtoImg from '@/assets/features/avto.svg'
-import intakeImg from '@/assets/features/intake.svg'
-import partsImg from '@/assets/features/parts.svg'
-import stickersImg from '@/assets/features/stickers.svg'
-import ordersImg from '@/assets/features/orders.svg'
-import customersImg from '@/assets/features/customers.svg'
-import cashImg from '@/assets/features/cash.svg'
-import analyticsImg from '@/assets/features/analytics.svg'
-import reportsImg from '@/assets/features/reports.svg'
-import teamImg from '@/assets/features/team.svg'
+
+interface ResponsiveImage {
+  avif: string
+  avif2x: string
+  webp: string
+  webp2x: string
+}
 
 interface Feature {
   title: string
   bullets?: string[]
-  image?: string
+  image: ResponsiveImage
+}
+
+const featureImageUrls = import.meta.glob<string>(
+  '../../assets/optimized/features/*.{avif,webp}',
+  { eager: true, query: '?url', import: 'default' },
+)
+
+const reducedMotionQuery = '(prefers-reduced-motion: reduce)'
+
+function subscribeToReducedMotion(onStoreChange: () => void) {
+  if (!window.matchMedia) return () => undefined
+  const mediaQuery = window.matchMedia(reducedMotionQuery)
+  mediaQuery.addEventListener('change', onStoreChange)
+  return () => mediaQuery.removeEventListener('change', onStoreChange)
+}
+
+function getReducedMotionSnapshot() {
+  return window.matchMedia?.(reducedMotionQuery).matches ?? false
+}
+
+function getServerReducedMotionSnapshot() {
+  return false
+}
+
+function responsiveImage(name: string): ResponsiveImage {
+  const get = (file: string) => {
+    const path = `../../assets/optimized/features/${file}`
+    const url = featureImageUrls[path]
+    if (!url) throw new Error(`Missing optimized feature image: ${path}`)
+    return url
+  }
+  return {
+    avif: get(`${name}-480.avif`),
+    avif2x: get(`${name}-720.avif`),
+    webp: get(`${name}-480.webp`),
+    webp2x: get(`${name}-720.webp`),
+  }
 }
 
 const features: Feature[] = [
   {
     title: 'Авто',
-    image: avtoImg,
+    image: responsiveImage('avto'),
     bullets: [
       'Розбирай авто — система рахує кожну деталь',
       'Прозорий прибуток по кожному кузову',
@@ -34,7 +68,7 @@ const features: Feature[] = [
   },
   {
     title: 'Партії',
-    image: intakeImg,
+    image: responsiveImage('intake'),
     bullets: [
       'Закупив партію — додав одним рухом, без переписування',
       'Бачиш звідки прийшла кожна деталь і скільки коштувала',
@@ -46,7 +80,7 @@ const features: Feature[] = [
   },
   {
     title: 'Склад',
-    image: partsImg,
+    image: responsiveImage('parts'),
     bullets: [
       'Кожна деталь на своєму місці — знаходиш за секунди',
       'Шукай по машині, партії або коду — миттєво',
@@ -58,7 +92,7 @@ const features: Feature[] = [
   },
   {
     title: 'Стікери',
-    image: stickersImg,
+    image: responsiveImage('stickers'),
     bullets: [
       'Друкуєш стікер на кожну деталь: QR + назва',
       'Сканування з телефону — миттєво відкриває картку',
@@ -69,7 +103,7 @@ const features: Feature[] = [
   },
   {
     title: 'Замовлення',
-    image: ordersImg,
+    image: responsiveImage('orders'),
     bullets: [
       'Збираєш замовлення в кілька кліків: клієнт, деталь, ціна',
       'Ціна фіксується в доларах — стабільно, без прив’язки до курсу',
@@ -81,7 +115,7 @@ const features: Feature[] = [
   },
   {
     title: 'Клієнти',
-    image: customersImg,
+    image: responsiveImage('customers'),
     bullets: [
       'База клієнтів завжди під рукою: контакти й історія',
       'Зателефонувати чи написати — в один тап з картки',
@@ -92,7 +126,7 @@ const features: Feature[] = [
   },
   {
     title: 'Каси',
-    image: cashImg,
+    image: responsiveImage('cash'),
     bullets: [
       'Кілька кас на різні валюти й рахунки — не плутаєш',
       'Бачиш баланс кожної каси в реальному часі',
@@ -102,30 +136,18 @@ const features: Feature[] = [
     ],
   },
   {
-    title: 'Аналітика',
-    image: analyticsImg,
-    bullets: [
-      'Дашборд за день, тиждень або місяць — у три кліки',
-      'Топ запчастин: що продається, що залежалось',
-      'Знаєш яка машина окупилась, а яка тягне в мінус',
-      'Маржа й прибуток у реальному часі',
-      'Динаміка продажів — графіки замість таблиць',
-    ],
-  },
-  {
     title: 'Звіти',
-    image: reportsImg,
+    image: responsiveImage('reports'),
     bullets: [
       'Готові звіти по продажах, складу, фінансах',
       'За будь-який період: день, місяць, рік',
       'Шаблони під різні задачі: податкова, інвентаризація, аудит',
-      'Експорт у PDF — для бухгалтера або в архів',
       'Друкуєш і відправляєш — без ручного редагування',
     ],
   },
   {
     title: 'Команда',
-    image: teamImg,
+    image: responsiveImage('team'),
     bullets: [
       'Додаєш співробітників — кожному своя роль і доступ',
       'Бачиш хто і що зробив — повний журнал дій',
@@ -137,7 +159,16 @@ const features: Feature[] = [
 ]
 
 export function Features() {
+  const interactionSurfaceRef = useRef<HTMLDivElement>(null)
+  const interactionPausedRef = useRef(false)
   const scrollerRef = useRef<HTMLUListElement>(null)
+  const reducedMotion = useSyncExternalStore(
+    subscribeToReducedMotion,
+    getReducedMotionSnapshot,
+    getServerReducedMotionSnapshot,
+  )
+  const [userPaused, setUserPaused] = useState(false)
+  const autoplayPaused = reducedMotion || userPaused
 
   const scrollByCard = (direction: 1 | -1) => {
     const el = scrollerRef.current
@@ -148,29 +179,70 @@ export function Features() {
   }
 
   useEffect(() => {
-    const el = scrollerRef.current
-    if (!el) return
-    if (
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ) {
-      return
-    }
+    const interactionSurface = interactionSurfaceRef.current
+    if (!interactionSurface) return
 
-    let paused = false
-    const pause = () => {
-      paused = true
+    let pointerInside = false
+    let focusInside = false
+    const updateInteractionPaused = () => {
+      interactionPausedRef.current = pointerInside || focusInside
     }
-    const resume = () => {
-      paused = false
+    const pauseForPointer = () => {
+      pointerInside = true
+      updateInteractionPaused()
     }
-    el.addEventListener('mouseenter', pause)
-    el.addEventListener('mouseleave', resume)
-    el.addEventListener('focusin', pause)
-    el.addEventListener('focusout', resume)
+    const pauseForFocus = () => {
+      focusInside = true
+      updateInteractionPaused()
+    }
+    const resumePointerAfterLeaving = (event: MouseEvent) => {
+      const nextTarget = event.relatedTarget
+      if (
+        nextTarget instanceof Node &&
+        interactionSurface.contains(nextTarget)
+      ) {
+        return
+      }
+      pointerInside = false
+      updateInteractionPaused()
+    }
+    const resumeFocusAfterLeaving = (event: FocusEvent) => {
+      const nextTarget = event.relatedTarget
+      if (
+        nextTarget instanceof Node &&
+        interactionSurface.contains(nextTarget)
+      ) {
+        return
+      }
+      focusInside = false
+      updateInteractionPaused()
+    }
+    interactionSurface.addEventListener('mouseover', pauseForPointer)
+    interactionSurface.addEventListener('mouseout', resumePointerAfterLeaving)
+    interactionSurface.addEventListener('focusin', pauseForFocus)
+    interactionSurface.addEventListener('focusout', resumeFocusAfterLeaving)
+
+    return () => {
+      interactionPausedRef.current = false
+      interactionSurface.removeEventListener('mouseover', pauseForPointer)
+      interactionSurface.removeEventListener(
+        'mouseout',
+        resumePointerAfterLeaving,
+      )
+      interactionSurface.removeEventListener('focusin', pauseForFocus)
+      interactionSurface.removeEventListener(
+        'focusout',
+        resumeFocusAfterLeaving,
+      )
+    }
+  }, [])
+
+  useEffect(() => {
+    const el = scrollerRef.current
+    if (!el || userPaused || reducedMotion) return
 
     const id = window.setInterval(() => {
-      if (paused) return
+      if (interactionPausedRef.current) return
       const card = el.firstElementChild as HTMLElement | null
       if (!card) return
       const cardWidth = card.clientWidth
@@ -184,17 +256,16 @@ export function Features() {
 
     return () => {
       window.clearInterval(id)
-      el.removeEventListener('mouseenter', pause)
-      el.removeEventListener('mouseleave', resume)
-      el.removeEventListener('focusin', pause)
-      el.removeEventListener('focusout', resume)
     }
-  }, [])
+  }, [userPaused, reducedMotion])
 
   return (
     <Section id="features" className="py-16 lg:py-24">
       <PageContainer>
-        <div className="bg-surface-1 rounded-(--radius-section) ring-1 ring-white/[0.04]">
+        <div
+          ref={interactionSurfaceRef}
+          className="bg-surface-1 rounded-(--radius-section) ring-1 ring-white/[0.04]"
+        >
           <header className="flex flex-col items-start gap-8 px-8 pt-12 lg:px-14 lg:pt-16">
             <span className="text-brand text-[11px] font-medium tracking-[0.28em] uppercase">
               Модулі
@@ -205,15 +276,33 @@ export function Features() {
                   <span className="block">Поточні фічі</span>
                   <span className="text-brand block">rozbirka</span>
                 </h2>
-                <p className="max-w-[340px] text-[14px] leading-[1.5] text-neutral-500">
-                  Десять модулів — один інтерфейс. Від обліку авто до фінансів і
+                <p className="max-w-[340px] text-[14px] leading-[1.5] text-neutral-400">
+                  Усі модулі — один інтерфейс. Від обліку авто до фінансів і
                   команди.
                 </p>
               </div>
 
-              <div className="hidden gap-2 lg:flex">
+              <div className="flex flex-wrap gap-2">
                 <NavCircle direction="prev" onClick={() => scrollByCard(-1)} />
                 <NavCircle direction="next" onClick={() => scrollByCard(1)} />
+                <button
+                  type="button"
+                  aria-pressed={autoplayPaused}
+                  aria-label={
+                    autoplayPaused
+                      ? 'Увімкнути автопрокрутку'
+                      : 'Зупинити автопрокрутку'
+                  }
+                  disabled={reducedMotion}
+                  onClick={() => setUserPaused((value) => !value)}
+                  className="grid size-12 place-items-center rounded-full text-white ring-1 ring-white/15 transition-all hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {autoplayPaused ? (
+                    <Play className="size-4" aria-hidden />
+                  ) : (
+                    <Pause className="size-4" aria-hidden />
+                  )}
+                </button>
               </div>
             </div>
           </header>
@@ -221,6 +310,8 @@ export function Features() {
           <ul
             ref={scrollerRef}
             role="list"
+            tabIndex={0}
+            aria-label="Карусель модулів rozbirka"
             className="mt-12 flex snap-x snap-mandatory overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none] lg:mt-16"
           >
             {features.map((f) => (
@@ -258,20 +349,25 @@ function FeatureCard({ feature }: { feature: Feature }) {
 
   return (
     <li className="group flex w-[85%] shrink-0 snap-start flex-col gap-8 border-l border-white/[0.06] p-8 first:border-l-0 md:w-[50%] lg:w-[calc(100%/3)] lg:p-10">
-      <div
-        className={`relative aspect-[4/5] overflow-hidden rounded-[28px] ${feature.image ? '' : 'bg-brand'}`}
-      >
-        {feature.image ? (
+      <div className="relative aspect-[4/5] overflow-hidden rounded-[28px]">
+        <picture>
+          <source
+            type="image/avif"
+            srcSet={`${feature.image.avif} 480w, ${feature.image.avif2x} 720w`}
+            sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 85vw"
+          />
           <img
-            src={feature.image}
+            src={feature.image.webp}
+            srcSet={`${feature.image.webp} 480w, ${feature.image.webp2x} 720w`}
+            sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 85vw"
+            width={363}
+            height={346}
             alt={`Скриншот фічі ${feature.title}`}
             loading="lazy"
             decoding="async"
             className="absolute inset-0 h-full w-full scale-[1.15] object-contain object-center transition-transform duration-700 ease-out group-hover:scale-[1.22]"
           />
-        ) : (
-          <PhoneSilhouette className="absolute top-1/2 left-1/2 h-[82%] -translate-x-1/2 -translate-y-1/2" />
-        )}
+        </picture>
       </div>
 
       <div className="flex flex-col gap-5">
@@ -294,37 +390,6 @@ function FeatureCard({ feature }: { feature: Feature }) {
         )}
       </div>
     </li>
-  )
-}
-
-function PhoneSilhouette({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 160 320"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden
-    >
-      <rect
-        x="2"
-        y="2"
-        width="156"
-        height="316"
-        rx="28"
-        fill="#0a0a0a"
-        stroke="rgba(255,255,255,0.08)"
-        strokeWidth="1.5"
-      />
-      <rect
-        x="60"
-        y="10"
-        width="40"
-        height="10"
-        rx="5"
-        fill="rgba(255,255,255,0.12)"
-      />
-    </svg>
   )
 }
 

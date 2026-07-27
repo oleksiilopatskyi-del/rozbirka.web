@@ -5,17 +5,22 @@ on:
     branches:
       - main
     paths:
-      - "src/**"
-      - "public/**"
-      - "package.json"
-      - "package-lock.json"
-      - "vite.config.*"
-      - "wrangler.jsonc"
-      - ".env.qa"
-      - ".env.production"
-      - "tsconfig*.json"
-      - ".github/workflows/deploy-rozbirka-web.yml"
-      - ".github/workflows/deploy-node-static-template.yml"
+      - 'src/**'
+      - 'public/**'
+      - 'worker/**'
+      - 'e2e/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'lighthouserc.cjs'
+      - 'playwright.config.ts'
+      - 'vite.config.*'
+      - 'wrangler.jsonc'
+      - '.env.qa'
+      - '.env.production'
+      - 'tsconfig*.json'
+      - '.github/workflows/deploy-rozbirka-web.yml'
+      - '.github/workflows/deploy-node-static-template.yml'
   push:
     branches:
       - develop
@@ -47,10 +52,12 @@ jobs:
       contents: read
     secrets:
       CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
     with:
       project_name: Rozbirka Web
       branch: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
-      environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref_name == 'main' && 'prod' || 'qa' }}
-      enable_deployment: ${{ (github.event_name == 'push' && (github.ref_name == 'develop' || github.ref_name == 'main')) || (github.event_name == 'workflow_dispatch' && inputs.enable_deployment) }}
+      environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'qa' }}
+      enable_deployment: ${{ (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.enable_deployment) }}
       auto_qa_deploy: ${{ github.event_name == 'push' && github.ref_name == 'develop' }}
       run_build: true

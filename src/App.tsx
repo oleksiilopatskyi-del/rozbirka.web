@@ -19,12 +19,16 @@ function App() {
         <SiteHeader />
         <main id="main">
           <Hero />
-          <Features />
-          <Pricing />
-          <FAQ />
-          <CtaBanner />
+          <div className="font-visuelt">
+            <Features />
+            <Pricing />
+            <FAQ />
+            <CtaBanner />
+          </div>
         </main>
-        <SiteFooter />
+        <div className="font-visuelt">
+          <SiteFooter />
+        </div>
       </div>
     </>
   )

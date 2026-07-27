@@ -3,37 +3,16 @@
 @custom-variant dark (&:is(.dark *));
 
 @font-face {
-  font-family: 'Visuelt Pro';
-  src: url('/fonts/VisueltPro-Light.ttf') format('truetype');
+  font-family: 'Visuelt Hero';
+  src: url('/fonts/VisueltPro-Hero.woff2') format('woff2');
   font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Visuelt Pro';
-  src: url('/fonts/VisueltPro-Regular.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Visuelt Pro';
-  src: url('/fonts/VisueltPro-Medium.ttf') format('truetype');
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Visuelt Pro';
-  src: url('/fonts/VisueltPro-Bold.ttf') format('truetype');
-  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 
 @theme {
   /* Type */
-  --font-sans: 'Visuelt Pro', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, Consolas, monospace;
 
   /* Brand */
@@ -63,6 +42,10 @@
   --radius-section: 48px;
   --radius-card: 32px;
   --radius-pill: 9999px;
+}
+
+.font-visuelt {
+  font-family: 'Visuelt Pro', system-ui, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* shadcn semantic tokens (kept minimal — only what we use) */
@@ -142,8 +125,9 @@ html {
     @apply font-sans;
   }
   *:focus-visible {
-    outline: 2px solid var(--color-brand);
+    outline: 2px solid #ffffff;
     outline-offset: 2px;
+    box-shadow: 0 0 0 4px #000000;
     border-radius: 4px;
   }
 }

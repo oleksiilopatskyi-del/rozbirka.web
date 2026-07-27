@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import {
   ArrowRight,
   Check,
@@ -17,6 +17,8 @@ import { billingApi } from '@/api/billing'
 import { tenantsApi } from '@/api/tenants'
 import { tokens } from '@/api/tokens'
 import { useAuth } from '@/auth/AuthContext'
+import { SellerMarketplacePanel } from '@/features/seller-marketplace/seller-marketplace-panel'
+import { readPlanCode, type PlanCode } from '@/lib/plan-selection'
 import type {
   BillingState,
   LimitUsageDto,
@@ -29,7 +31,7 @@ import type {
   User,
 } from '@/api/types'
 
-type Section = 'subscription' | 'plans' | 'payment' | 'billing'
+type Section = 'subscription' | 'plans' | 'payment' | 'billing' | 'marketplace'
 
 interface NavEntry {
   id: Section
@@ -42,12 +44,18 @@ const navEntries: NavEntry[] = [
   { id: 'plans', label: 'Тарифи', Icon: Receipt },
   { id: 'payment', label: 'Оплата', Icon: CreditCard },
   { id: 'billing', label: 'Білінг', Icon: Receipt },
+  { id: 'marketplace', label: 'Магазин', Icon: Store },
 ]
 
 export function AccountScreen() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const auth = useAuth()
-  const [section, setSection] = useState<Section>('subscription')
+  const requestedSection = searchParams.get('section')
+  const selectedPlanCode = readPlanCode(`?${searchParams.toString()}`)
+  const [section, setSection] = useState<Section>(
+    requestedSection === 'plans' ? 'plans' : 'subscription',
+  )
   const [subscription, setSubscription] = useState<SubscriptionDto | null>(null)
   const [plans, setPlans] = useState<PublicPlanDto[]>([])
   const [payments, setPayments] = useState<PagedResult<PaymentDto> | null>(null)
@@ -58,23 +66,23 @@ export function AccountScreen() {
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setError(null)
-    ;(async () => {
-      const [sub, pay, planList] = await Promise.all([
-        billingApi.getSubscription().catch(() => null),
-        billingApi.getPayments(1, 10).catch(() => null),
-        billingApi.getPlans().catch(() => []),
-      ])
-      if (cancelled) return
-      setSubscription(sub)
-      setPayments(pay)
-      setPlans(planList)
-      if (sub === null && pay === null) {
-        setError('Не вдалось завантажити дані. Спробуйте оновити сторінку.')
-      }
-      setLoading(false)
-    })()
+    void Promise.all([
+      billingApi.getSubscription().catch(() => null),
+      billingApi.getPayments(1, 10).catch(() => null),
+      billingApi.getPlans().catch(() => []),
+    ])
+      .then(([sub, pay, planList]) => {
+        if (cancelled) return
+        setSubscription(sub)
+        setPayments(pay)
+        setPlans(planList)
+        if (sub === null && pay === null) {
+          setError('Не вдалось завантажити дані. Спробуйте оновити сторінку.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
     return () => {
       cancelled = true
     }
@@ -82,7 +90,7 @@ export function AccountScreen() {
 
   const handleLogout = async () => {
     await auth.signOut()
-    navigate('/', { replace: true })
+    void navigate('/', { replace: true })
   }
 
   const refreshSubscription = async () => {
@@ -105,7 +113,12 @@ export function AccountScreen() {
 
   // Fresh user with no розбірка yet → onboarding.
   if (auth.tenants.length === 0) {
-    return <OnboardingScreen onLogout={handleLogout} onCreated={auth.hydrate} />
+    return (
+      <OnboardingScreen
+        onLogout={() => void handleLogout()}
+        onCreated={auth.hydrate}
+      />
+    )
   }
 
   return (
@@ -117,7 +130,7 @@ export function AccountScreen() {
         tenant={auth.tenant}
         tenants={auth.tenants}
         onSwitchTenant={auth.switchTenant}
-        onLogout={handleLogout}
+        onLogout={() => void handleLogout()}
       />
 
       <main className="flex-1 px-6 py-10 lg:px-12 lg:py-14">
@@ -135,13 +148,26 @@ export function AccountScreen() {
             />
           )}
           {section === 'plans' && (
-            <PlansPanel plans={plans} subscription={subscription} />
+            <PlansPanel
+              plans={plans}
+              subscription={subscription}
+              selectedPlanCode={selectedPlanCode}
+            />
           )}
           {section === 'payment' && (
             <PaymentPanel subscription={subscription} />
           )}
           {section === 'billing' && (
             <BillingPanel payments={payments} onRefresh={refreshPayments} />
+          )}
+          {section === 'marketplace' && (
+            <div className="flex flex-col gap-8">
+              <Header
+                title="Магазин"
+                subtitle="Публікуйте запчастини на маркетплейсі"
+              />
+              <SellerMarketplacePanel />
+            </div>
           )}
         </div>
       </main>
@@ -269,16 +295,20 @@ function OnboardingScreen({
               Перший крок
             </span>
             <h1 className="text-[40px] leading-[0.95] font-light tracking-[-0.025em] lg:text-[52px]">
-              Створіть<br />
+              Створіть
+              <br />
               <span className="text-brand">свою розбірку</span>
             </h1>
             <p className="max-w-[360px] text-[14px] leading-[1.5] text-neutral-500">
-              Це ваш робочий простір — авто, склад, продажі й команда. Далі
-              активуєте 7 днів безкоштовно.
+              Це ваш робочий простір — авто, склад, продажі й команда. Після
+              створення автоматично активуються 14 днів безкоштовно.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
+          <form
+            onSubmit={(e) => void handleSubmit(e)}
+            className="mt-8 flex flex-col gap-4"
+          >
             <div className="flex flex-col gap-2">
               <label
                 htmlFor="tenant-name"
@@ -297,7 +327,10 @@ function OnboardingScreen({
             </div>
 
             <div className="flex flex-col gap-2">
-              <label htmlFor="tenant-city" className="text-[12px] text-neutral-500">
+              <label
+                htmlFor="tenant-city"
+                className="text-[12px] text-neutral-500"
+              >
                 Місто <span className="text-neutral-600">(необовʼязково)</span>
               </label>
               <input
@@ -373,6 +406,7 @@ function TenantSwitcher({
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] text-white">
+            {/* eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty strings should fall through */}
             {user?.displayName || user?.phone || '—'}
           </p>
           <p className="truncate text-[11px] text-neutral-500">{subtitle}</p>
@@ -398,6 +432,7 @@ function TenantSwitcher({
             {tenant?.name ?? 'Оберіть розбірку'}
           </p>
           <p className="truncate text-[11px] text-neutral-500">
+            {/* eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty strings should fall through */}
             {user?.displayName || user?.phone || '—'}
           </p>
         </div>
@@ -474,12 +509,9 @@ function SubscriptionPanel({
 
   if (!subscription) return <EmptyPanel />
 
-  // Fresh tenant that hasn't activated its trial yet → present the card as a
-  // trial invitation rather than an empty "no plan" state.
-  const offerTrial = subscription.canActivateTrial
   // Trial spent / subscription lapsed → access closed, must pick a paid plan.
   // We do NOT auto-send to Mono checkout; the user chooses a tier on /tarifs.
-  const accessEnded = subscription.state === 'blocked' && !offerTrial
+  const accessEnded = subscription.state === 'blocked'
 
   const stateMeta: Record<BillingState, { label: string }> = {
     none: { label: 'Початок' },
@@ -490,17 +522,13 @@ function SubscriptionPanel({
     blocked: { label: 'Доступ закрито' },
   }
 
-  const badgeLabel = offerTrial
-    ? 'Пробний доступ'
-    : stateMeta[subscription.state].label
+  const badgeLabel = stateMeta[subscription.state].label
 
-  const planLabel = offerTrial
-    ? '7 днів безкоштовно'
-    : accessEnded
-      ? 'Доступ закрито'
-      : subscription.state === 'trial'
-        ? (subscription.planName ?? 'Пробний доступ')
-        : (subscription.planName ?? 'Без тарифу')
+  const planLabel = accessEnded
+    ? 'Доступ закрито'
+    : subscription.state === 'trial'
+      ? (subscription.planName ?? 'Пробний доступ')
+      : (subscription.planName ?? 'Без тарифу')
 
   const primaryLabel =
     subscription.state === 'trial'
@@ -543,16 +571,6 @@ function SubscriptionPanel({
     }
   }
 
-  const handleActivateTrial = async () => {
-    setBusy(true)
-    try {
-      await billingApi.activateTrial()
-      await onRefresh()
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
     <div className="flex flex-col gap-8">
       <Header
@@ -568,12 +586,8 @@ function SubscriptionPanel({
           <p className="text-[48px] leading-[1] font-light tracking-[-0.03em] lg:text-[64px]">
             {planLabel}
           </p>
-          {offerTrial ? (
-            <p className="text-[15px] opacity-75">
-              Повний доступ до Pro. Без картки.
-            </p>
-          ) : subscription.state === 'trial' ? (
-            <p className="text-[15px] opacity-75">7 днів безкоштовно</p>
+          {subscription.state === 'trial' ? (
+            <p className="text-[15px] opacity-75">14 днів безкоштовно</p>
           ) : (
             !accessEnded &&
             typeof subscription.amount === 'number' && (
@@ -591,37 +605,25 @@ function SubscriptionPanel({
         {accessEnded ? (
           <div className="rounded-2xl bg-black/15 px-5 py-4">
             <p className="text-[14px] leading-[1.5]">
-              Пробний період завершився. Щоб продовжити користуватись —
-              оформіть підписку: оберіть тариф нижче.
+              Пробний період завершився. Щоб продовжити користуватись — оформіть
+              підписку: оберіть тариф нижче.
             </p>
           </div>
         ) : (
-          !offerTrial && (
-            <div className="flex flex-col gap-1">
-              <p className="text-[14px] opacity-70">{primaryLabel}</p>
-              <p className="text-[32px] font-light tabular-nums">
-                {primaryValue}
-              </p>
-            </div>
-          )
+          <div className="flex flex-col gap-1">
+            <p className="text-[14px] opacity-70">{primaryLabel}</p>
+            <p className="text-[32px] font-light tabular-nums">
+              {primaryValue}
+            </p>
+          </div>
         )}
 
         <div className="flex flex-wrap gap-3">
-          {subscription.canActivateTrial && (
-            <button
-              type="button"
-              onClick={handleActivateTrial}
-              disabled={busy}
-              className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80 disabled:opacity-50"
-            >
-              Активувати 7 днів безкоштовно
-            </button>
-          )}
           {/* "Поновити" only for a still-active cancelled sub — never blocked. */}
           {subscription.canReactivate && subscription.state !== 'blocked' && (
             <button
               type="button"
-              onClick={handleSubscribe}
+              onClick={() => void handleSubscribe()}
               disabled={busy}
               className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80 disabled:opacity-50"
             >
@@ -631,7 +633,7 @@ function SubscriptionPanel({
           {subscription.canCancel && (
             <button
               type="button"
-              onClick={handleCancel}
+              onClick={() => void handleCancel()}
               disabled={busy}
               className="inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] text-black ring-1 ring-black/30 transition-colors hover:bg-black/10 disabled:opacity-50"
             >
@@ -643,9 +645,7 @@ function SubscriptionPanel({
             onClick={onSeePlans}
             className={cn(
               'inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] transition-colors',
-              subscription.canActivateTrial ||
-                (subscription.canReactivate &&
-                  subscription.state !== 'blocked')
+              subscription.canReactivate && subscription.state !== 'blocked'
                 ? 'text-black/80 hover:text-black'
                 : 'bg-black text-white hover:bg-black/80',
             )}
@@ -725,7 +725,11 @@ function UsageBlock({
                 >
                   {item.data.used}
                   {item.data.max !== null ? (
-                    <span className={over ? 'text-amber-300/60' : 'text-neutral-600'}>
+                    <span
+                      className={
+                        over ? 'text-amber-300/60' : 'text-neutral-600'
+                      }
+                    >
                       {' '}
                       / {item.data.max}
                     </span>
@@ -767,9 +771,11 @@ function UsageBar({ used, max }: { used: number; max: number | null }) {
 function PlansPanel({
   plans,
   subscription,
+  selectedPlanCode,
 }: {
   plans: PublicPlanDto[]
   subscription: SubscriptionDto | null
+  selectedPlanCode: PlanCode | null
 }) {
   const [busy, setBusy] = useState(false)
 
@@ -798,6 +804,7 @@ function PlansPanel({
       <ul role="list" className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {plans.map((plan) => {
           const isCurrent = plan.code === currentCode
+          const isSelected = plan.code === selectedPlanCode
           const isRecommended = plan.code === recommendedCode
           return (
             <li
@@ -807,6 +814,7 @@ function PlansPanel({
                 isRecommended
                   ? 'bg-brand text-brand-foreground'
                   : 'bg-surface-1 text-white ring-1 ring-white/[0.05]',
+                isSelected && 'ring-2 ring-brand',
               )}
             >
               <div className="flex items-center justify-between gap-2">
@@ -818,11 +826,15 @@ function PlansPanel({
                 >
                   {plan.name}
                 </span>
-                {isCurrent && (
+                {isSelected ? (
+                  <span className="text-[11px] uppercase tracking-[0.05em] opacity-70">
+                    Обрано
+                  </span>
+                ) : isCurrent ? (
                   <span className="text-[11px] uppercase tracking-[0.05em] opacity-70">
                     Поточний
                   </span>
-                )}
+                ) : null}
               </div>
 
               <p className="flex items-baseline gap-1 text-[44px] leading-[0.9] font-light tracking-[-0.03em]">
@@ -841,7 +853,7 @@ function PlansPanel({
               <button
                 type="button"
                 disabled={isCurrent || busy}
-                onClick={() => handleSubscribe(plan.code)}
+                onClick={() => void handleSubscribe(plan.code)}
                 className={cn(
                   'mt-auto inline-flex h-12 items-center justify-center rounded-full text-[14px] transition-colors disabled:opacity-50',
                   isCurrent
@@ -973,7 +985,7 @@ function BillingPanel({
                 {item.status === 'pending' && (
                   <button
                     type="button"
-                    onClick={() => cancel(item.id)}
+                    onClick={() => void cancel(item.id)}
                     disabled={cancellingId === item.id}
                     className="rounded-full px-3 py-1 text-[12px] font-medium text-red-300 ring-1 ring-red-500/30 hover:bg-red-500/10 transition disabled:opacity-50"
                   >

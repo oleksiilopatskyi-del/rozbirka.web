@@ -1,72 +1,26 @@
+import { useEffect, useState } from 'react'
 import { ArrowUpRight, Check } from 'lucide-react'
 import { Link } from 'react-router'
+import { billingApi } from '@/api/billing'
+import { useAuth } from '@/auth/AuthContext'
+import {
+  FALLBACK_LANDING_PLANS,
+  resolveLandingPlans,
+  type LandingPlan,
+} from '@/lib/landing-plans'
 import { cn } from '@/lib/utils'
+import { accountPathForPlan, loginPathForPlan } from '@/lib/plan-selection'
 import { Section } from '@/components/layout/section'
 import { PageContainer } from '@/components/layout/page-container'
 
-type PlanVariant = 'lite' | 'pro' | 'enterprise'
-
-interface Plan {
-  name: string
-  price: string
-  period: string
-  /** Sub-line under the price (e.g. trial note). Optional. */
-  note?: string
-  description: string
-  perks: string[]
-  ctaLabel: string
-  variant: PlanVariant
-}
-
-// Mirrors rozbirka.core's BillingPlanCatalog. Could be wired to
-// GET /billing/plans later; pricing rarely changes so static is fine.
-const plans: Plan[] = [
-  {
-    name: 'Lite',
-    price: '$19',
-    period: 'місяць',
-    description: 'Старт для маленької розбірки',
-    perks: ['5 авто', '300 запчастин', '1 користувач, 1 каса'],
-    ctaLabel: 'Обрати',
-    variant: 'lite',
-  },
-  {
-    name: 'Pro',
-    price: '$59',
-    period: 'місяць',
-    note: '7 днів безкоштовно',
-    description: 'Все необхідне щоб масштабувати продажі',
-    perks: [
-      '50 авто, 5 000 запчастин',
-      '10 користувачів, 3 каси',
-      'Звіти, експорт, аналітика',
-    ],
-    ctaLabel: 'Почати 7 днів безкоштовно',
-    variant: 'pro',
-  },
-  {
-    name: 'Enterprise',
-    price: '$299',
-    period: 'місяць',
-    description: 'Для мережі розбірок без обмежень',
-    perks: [
-      'Без лімітів на авто та запчастини',
-      'API і мульти-локація',
-      'Пріоритетна підтримка',
-    ],
-    ctaLabel: 'Обрати',
-    variant: 'enterprise',
-  },
-]
-
 const variantStyles: Record<
-  PlanVariant,
+  LandingPlan['variant'],
   { card: string; pill: string; description: string; cta: string; perk: string }
 > = {
   lite: {
     card: 'bg-surface-1 ring-1 ring-white/[0.05] text-white',
     pill: 'bg-white/[0.06] text-white ring-1 ring-white/10',
-    description: 'text-neutral-500',
+    description: 'text-neutral-400',
     cta: 'text-white',
     perk: 'text-neutral-300',
   },
@@ -80,13 +34,31 @@ const variantStyles: Record<
   enterprise: {
     card: 'bg-surface-1 ring-1 ring-white/[0.05] text-white',
     pill: 'bg-white/[0.06] text-white ring-1 ring-white/10',
-    description: 'text-neutral-500',
+    description: 'text-neutral-400',
     cta: 'text-white',
     perk: 'text-neutral-300',
   },
 }
 
 export function Pricing() {
+  const { status } = useAuth()
+  const [plans, setPlans] = useState(FALLBACK_LANDING_PLANS)
+
+  useEffect(() => {
+    let cancelled = false
+    void billingApi
+      .getPlans()
+      .then((value) => {
+        if (!cancelled) setPlans(resolveLandingPlans(value))
+      })
+      .catch(() => {
+        if (!cancelled) setPlans(FALLBACK_LANDING_PLANS)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   return (
     <Section id="pricing" className="py-16 lg:py-24">
       <PageContainer width="md">
@@ -96,11 +68,22 @@ export function Pricing() {
           </h2>
           <ul
             role="list"
-            className="grid grid-cols-1 gap-4 md:grid-cols-3"
+            className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
           >
-            {plans.map((plan) => (
-              <PlanCard key={plan.name} plan={plan} />
-            ))}
+            {plans.map((plan) => {
+              const destination =
+                status === 'authenticated'
+                  ? accountPathForPlan(plan.code)
+                  : loginPathForPlan(plan.code)
+
+              return (
+                <PlanCard
+                  key={plan.name}
+                  plan={plan}
+                  destination={destination}
+                />
+              )
+            })}
           </ul>
         </div>
       </PageContainer>
@@ -108,15 +91,24 @@ export function Pricing() {
   )
 }
 
-function PlanCard({ plan }: { plan: Plan }) {
+function PlanCard({
+  plan,
+  destination,
+}: {
+  plan: LandingPlan
+  destination: string
+}) {
   const styles = variantStyles[plan.variant]
   const isPro = plan.variant === 'pro'
+  const isEnterprise = plan.variant === 'enterprise'
 
   return (
     <li
       className={cn(
         'group rounded-(--radius-card) relative flex min-h-[440px] flex-col gap-6 p-8 transition-all duration-500 ease-out hover:-translate-y-1 hover:shadow-2xl motion-reduce:transition-none motion-reduce:hover:translate-y-0 lg:p-10',
         styles.card,
+        isEnterprise &&
+          'md:col-span-2 md:mx-auto md:w-[calc(50%-0.5rem)] lg:col-span-1 lg:mx-0 lg:w-auto',
       )}
     >
       <div className="flex items-center justify-between gap-2">
@@ -136,14 +128,18 @@ function PlanCard({ plan }: { plan: Plan }) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <p className="flex items-baseline gap-2 text-[64px] leading-[0.9] font-light tracking-[-0.04em] lg:text-[80px]">
-          <span>{plan.price}</span>
-          <span className="text-[14px] font-normal opacity-70">
-            /{plan.period}
+        <p className="flex items-end gap-2 font-light tracking-[-0.04em]">
+          <span className="text-[64px] leading-[0.9] lg:text-[80px]">
+            {plan.price}
+          </span>
+          <span className="font-visuelt mb-[0.55em] self-end whitespace-nowrap text-[14px] leading-none font-normal tracking-normal opacity-70">
+            / {plan.period}
           </span>
         </p>
-        {plan.note && (
-          <p className="text-[13px] font-medium opacity-80">{plan.note}</p>
+        {isPro && (
+          <p className="text-[13px] font-medium opacity-80">
+            {plan.trialDays} днів безкоштовно
+          </p>
         )}
       </div>
 
@@ -167,9 +163,9 @@ function PlanCard({ plan }: { plan: Plan }) {
       </ul>
 
       <Link
-        to="/login"
+        to={destination}
         className={cn(
-          'mt-auto inline-flex items-center gap-2 text-[13px] font-normal tracking-[0.02em] uppercase transition-opacity hover:opacity-70',
+          'mt-auto inline-flex min-h-11 items-center gap-2 py-2 text-[13px] font-normal tracking-[0.02em] uppercase transition-opacity hover:opacity-70',
           styles.cta,
         )}
       >

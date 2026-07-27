@@ -15,10 +15,11 @@ export const authApi = {
   },
 
   async otpVerify(req: VerifyOtpRequest): Promise<OtpVerifyResponse> {
-    const resp = await identityClient.post<OtpVerifyResponse>(
-      '/auth/verify',
-      req,
-    )
+    // Web is the registration surface: allow account creation on first verify.
+    const resp = await identityClient.post<OtpVerifyResponse>('/auth/verify', {
+      allowRegistration: true,
+      ...req,
+    })
     tokens.set(resp.data.accessToken, resp.data.refreshToken)
     return resp.data
   },
