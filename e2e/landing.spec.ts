@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test'
 test('landing interactions work without serious accessibility violations', async ({
   page,
 }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/')
   const results = await new AxeBuilder({ page }).analyze()
   expect(
@@ -12,6 +13,7 @@ test('landing interactions work without serious accessibility violations', async
     ),
   ).toEqual([])
 
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
   await page.getByRole('button', { name: 'Наступна' }).click()
   await page.getByRole('button', { name: 'Зупинити автопрокрутку' }).click()
   await expect(
