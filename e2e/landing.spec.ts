@@ -1,6 +1,44 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
+const seoUseCaseRoutes = [
+  {
+    path: '/oblik-avtozapchastyn',
+    canonical: 'https://rozbirka.pro/oblik-avtozapchastyn',
+    h1: 'Облік автозапчастин для авторозбірки без таблиць і хаосу',
+  },
+  {
+    path: '/oblik-prodazhiv-avtozapchastyn',
+    canonical: 'https://rozbirka.pro/oblik-prodazhiv-avtozapchastyn',
+    h1: 'Облік продажів автозапчастин: від замовлення до оплати',
+  },
+] as const
+
+test('SEO use-case pages expose one semantic conversion contract', async ({
+  page,
+}) => {
+  for (const route of seoUseCaseRoutes) {
+    await page.goto(route.path)
+
+    await expect(page.locator('h1')).toHaveCount(1)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(route.h1)
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+      'href',
+      route.canonical,
+    )
+    await expect(page.locator('script[data-product-json-ld]')).toHaveCount(1)
+    await expect(
+      page.getByRole('link', { name: 'Спробувати rozbirka' }),
+    ).toHaveAttribute('href', '/login')
+    const finalCta = page.getByRole('region', {
+      name: 'Готові впорядкувати роботу авторозбірки?',
+    })
+    await expect(
+      finalCta.getByRole('link', { name: 'Зареєструватися в rozbirka' }),
+    ).toHaveAttribute('href', '/login')
+  }
+})
+
 test('landing interactions work without serious accessibility violations', async ({
   page,
 }) => {
@@ -31,12 +69,13 @@ test('hero content is immediately visible with reduced motion', async ({
   await page.goto('/')
 
   const animatedHeroNodes = [
-    page.getByText('Знаєш', { exact: true }),
-    page.getByText('де кожна', { exact: true }),
-    page.getByText('деталь і де', { exact: true }),
-    page.getByText('твої гроші', { exact: true }),
+    page.getByText('Програма для', { exact: true }),
+    page.getByText('авторозбірки,', { exact: true }),
+    page.getByText('де кожна деталь', { exact: true }),
+    page.getByText('і кожна оплата', { exact: true }),
+    page.getByText('під контролем', { exact: true }),
     page.getByText(
-      "Застосунок, який об'єднує фінанси, функції та управління в одному інтерфейсі.",
+      'Облік авто, запчастин, замовлень, кас і команди в одному застосунку.',
     ),
     page.getByRole('link', { name: 'Спробувати безкоштовно' }).locator('..'),
   ]
@@ -47,6 +86,24 @@ test('hero content is immediately visible with reduced motion', async ({
     await expect(node).toHaveCSS('opacity', '1')
     await expect(node).toHaveCSS('transform', 'none')
   }
+})
+
+test('hero LCP line is visible from initial paint while later lines stagger', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  const firstHeroLine = page.getByText('Програма для', { exact: true })
+  await expect(firstHeroLine).toBeVisible()
+  await expect(firstHeroLine).toHaveCSS('opacity', '1')
+  await expect(firstHeroLine).toHaveCSS('transform', 'none')
+  await expect(firstHeroLine).toHaveCSS('animation-name', 'none')
+
+  await expect(page.getByText('авторозбірки,', { exact: true })).toHaveCSS(
+    'animation-name',
+    'fade-up',
+  )
 })
 
 test('direct SPA deep links mount one matching page without hydration warnings', async ({

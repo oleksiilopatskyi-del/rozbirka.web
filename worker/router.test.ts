@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { handleRequest, type EdgeEnv } from './router'
 
-function env(): EdgeEnv {
+function env({ missingProductDocument = false } = {}): EdgeEnv {
   return {
     ASSETS: {
       // eslint-disable-next-line @typescript-eslint/require-await
@@ -15,7 +15,7 @@ function env(): EdgeEnv {
         }
         if (path === '/app.html') {
           return new Response(
-            '<html><head><link rel="canonical" href="https://rozbirka.pro/" /><meta property="og:url" content="https://rozbirka.pro/" /></head><body>shell</body></html>',
+            '<html><head><title data-product-seo>Homepage title</title><meta data-product-seo name="description" content="Homepage description" /><link data-product-seo rel="canonical" href="https://rozbirka.pro/" /><meta data-product-seo property="og:title" content="Homepage title" /><meta data-product-seo property="og:description" content="Homepage description" /><meta data-product-seo property="og:url" content="https://rozbirka.pro/" /><meta data-product-seo name="twitter:title" content="Homepage title" /><meta data-product-seo name="twitter:description" content="Homepage description" /></head><body>shell</body></html>',
             {
               headers: {
                 'content-type': 'text/html',
@@ -25,8 +25,25 @@ function env(): EdgeEnv {
             },
           )
         }
+        if (
+          path === '/oblik-avtozapchastyn/index.html' ||
+          path === '/oblik-prodazhiv-avtozapchastyn/index.html'
+        ) {
+          if (missingProductDocument)
+            return new Response('nested document missing', { status: 404 })
+          const canonical = `https://rozbirka.pro${path.replace('/index.html', '')}`
+          return new Response(
+            `<html><head><link data-product-seo rel="canonical" href="${canonical}" /></head><body>product</body></html>`,
+            {
+              headers: {
+                'content-type': 'text/html',
+                etag: '"product"',
+              },
+            },
+          )
+        }
         if (path === '/404.html') {
-          return new Response('<html>missing</html>', {
+          return new Response('<html>branded 404</html>', {
             headers: { 'content-type': 'text/html' },
           })
         }
@@ -88,6 +105,46 @@ describe('edge routing', () => {
   })
 
   it.each([
+    ['/oblik-avtozapchastyn', '/oblik-avtozapchastyn/index.html'],
+    ['/oblik-avtozapchastyn/', '/oblik-avtozapchastyn/index.html'],
+    [
+      '/oblik-prodazhiv-avtozapchastyn',
+      '/oblik-prodazhiv-avtozapchastyn/index.html',
+    ],
+  ])(
+    'serves the prerendered product document for %s',
+    async (pathname, documentPath) => {
+      const response = await handleRequest(
+        new Request(`https://rozbirka.pro${pathname}`),
+        env(),
+      )
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-type')).toBe('text/html')
+      expect(response.headers.get('cache-control')).toBe(
+        'max-age=0, must-revalidate',
+      )
+      expect(response.headers.get('x-robots-tag')).toBeNull()
+      expect(response.headers.get('etag')).toBe('"product"')
+      expect(await response.text()).toContain(
+        `href="https://rozbirka.pro${documentPath.replace('/index.html', '')}"`,
+      )
+    },
+  )
+
+  it('returns the branded 404 when a prerendered product document is missing', async () => {
+    const response = await handleRequest(
+      new Request('https://rozbirka.pro/oblik-avtozapchastyn'),
+      env({ missingProductDocument: true }),
+    )
+
+    expect(response.status).toBe(404)
+    const body = await response.text()
+    expect(body).toContain('branded 404')
+    expect(body).not.toContain('nested document missing')
+  })
+
+  it.each([
     '/privacy',
     '/login',
     '/account',
@@ -103,22 +160,64 @@ describe('edge routing', () => {
     expect(await response.text()).toContain('shell')
   })
 
-  it('publishes route-specific canonical metadata for indexable deep links', async () => {
-    const response = await handleRequest(
-      new Request('https://rozbirka.pro/privacy?source=test'),
-      env(),
-    )
-    const html = await response.text()
+  it.each(['/privacy', '/marketplace'])(
+    'rewrites current app shell canonical and OG URL metadata for %s',
+    async (path) => {
+      const response = await handleRequest(
+        new Request(`https://rozbirka.pro${path}?source=test`),
+        env(),
+      )
+      const html = await response.text()
 
-    expect(html).toContain(
-      '<link rel="canonical" href="https://rozbirka.pro/privacy" />',
-    )
-    expect(html).toContain(
-      '<meta property="og:url" content="https://rozbirka.pro/privacy" />',
-    )
-    expect(response.headers.get('etag')).toBeNull()
-    expect(response.headers.get('content-length')).toBeNull()
-  })
+      expect(html).toContain(
+        `<link data-product-seo rel="canonical" href="https://rozbirka.pro${path}" />`,
+      )
+      expect(html).toContain(
+        `<meta data-product-seo property="og:url" content="https://rozbirka.pro${path}" />`,
+      )
+      expect(response.headers.get('etag')).toBeNull()
+      expect(response.headers.get('content-length')).toBeNull()
+    },
+  )
+
+  it.each([
+    [
+      '/privacy',
+      'Політика конфіденційності | rozbirka',
+      'Дізнайтеся, які дані збирає rozbirka, як використовує та захищає їх, а також які права мають користувачі сервісу.',
+    ],
+    [
+      '/marketplace',
+      'Автозапчастини з авторозбірок — каталог | Rozbirka Маркет',
+      'Знаходьте автозапчастини з авторозбірок за назвою, OEM-кодом, маркою та моделлю автомобіля у каталозі Rozbirka Маркет.',
+    ],
+  ])(
+    'rewrites route identity metadata for %s',
+    async (path, title, description) => {
+      const response = await handleRequest(
+        new Request(`https://rozbirka.pro${path}`),
+        env(),
+      )
+      const html = await response.text()
+
+      expect(html).toContain(`<title data-product-seo>${title}</title>`)
+      expect(html).toContain(
+        `<meta data-product-seo name="description" content="${description}" />`,
+      )
+      expect(html).toContain(
+        `<meta data-product-seo property="og:title" content="${title}" />`,
+      )
+      expect(html).toContain(
+        `<meta data-product-seo property="og:description" content="${description}" />`,
+      )
+      expect(html).toContain(
+        `<meta data-product-seo name="twitter:title" content="${title}" />`,
+      )
+      expect(html).toContain(
+        `<meta data-product-seo name="twitter:description" content="${description}" />`,
+      )
+    },
+  )
 
   it('returns immutable assets without losing MIME or ETag', async () => {
     const response = await handleRequest(
@@ -181,7 +280,7 @@ describe('edge routing', () => {
         env(),
       )
       expect(response.status).toBe(404)
-      expect(await response.text()).toContain('missing')
+      expect(await response.text()).toContain('branded 404')
     },
   )
 })

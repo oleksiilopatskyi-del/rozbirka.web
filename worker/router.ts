@@ -17,6 +17,25 @@ const spaPaths = [
 const prototypePath = /^\/screens(?:\/|$)/
 const staticPath =
   /^\/(?:robots\.txt|sitemap\.xml|favicon\.svg|og-cover\.webp|fonts\/[^/]+\.(?:woff2|css))$/
+const productDocumentPath: Record<string, string> = {
+  '/': '/index.html',
+  '/oblik-avtozapchastyn': '/oblik-avtozapchastyn/index.html',
+  '/oblik-prodazhiv-avtozapchastyn':
+    '/oblik-prodazhiv-avtozapchastyn/index.html',
+}
+
+const appShellMetadata = {
+  privacy: {
+    title: 'Політика конфіденційності | rozbirka',
+    description:
+      'Дізнайтеся, які дані збирає rozbirka, як використовує та захищає їх, а також які права мають користувачі сервісу.',
+  },
+  marketplace: {
+    title: 'Автозапчастини з авторозбірок — каталог | Rozbirka Маркет',
+    description:
+      'Знаходьте автозапчастини з авторозбірок за назвою, OEM-кодом, маркою та моделлю автомобіля у каталозі Rozbirka Маркет.',
+  },
+} as const
 
 function withHeaders(response: Response, headers: Record<string, string>) {
   const next = new Headers(response.headers)
@@ -33,9 +52,43 @@ async function withCanonicalMetadata(response: Response, url: URL) {
     /\/$/,
     '',
   )
+  const routeMetadata =
+    url.pathname === '/privacy'
+      ? appShellMetadata.privacy
+      : url.pathname === '/marketplace'
+        ? appShellMetadata.marketplace
+        : undefined
   const html = (await response.text())
-    .replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${canonical}$2`)
-    .replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${canonical}$2`)
+    .replace(/<title\b[^>]*>[\s\S]*?<\/title>/i, (tag) =>
+      routeMetadata
+        ? tag.replace(/>[\s\S]*?<\/title>/i, `>${routeMetadata.title}</title>`)
+        : tag,
+    )
+    .replace(/<link\b[^>]*>/gi, (tag) => {
+      const rel = attributeValue(tag, 'rel')
+      return rel?.split(/\s+/).some((token) => token === 'canonical')
+        ? replaceAttribute(tag, 'href', canonical)
+        : tag
+    })
+    .replace(/<meta\b[^>]*>/gi, (tag) => {
+      const property = attributeValue(tag, 'property')
+      const name = attributeValue(tag, 'name')
+      if (property === 'og:url') {
+        return replaceAttribute(tag, 'content', canonical)
+      }
+      if (!routeMetadata) return tag
+      if (property === 'og:title' || name === 'twitter:title') {
+        return replaceAttribute(tag, 'content', routeMetadata.title)
+      }
+      if (
+        property === 'og:description' ||
+        name === 'description' ||
+        name === 'twitter:description'
+      ) {
+        return replaceAttribute(tag, 'content', routeMetadata.description)
+      }
+      return tag
+    })
   const headers = new Headers(response.headers)
   headers.delete('Content-Length')
   headers.delete('ETag')
@@ -44,6 +97,22 @@ async function withCanonicalMetadata(response: Response, url: URL) {
     statusText: response.statusText,
     headers,
   })
+}
+
+function attributeValue(tag: string, attribute: string) {
+  const match = new RegExp(
+    `\\s${attribute}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`,
+    'i',
+  ).exec(tag)
+  return (match?.[1] ?? match?.[2])?.toLowerCase()
+}
+
+function replaceAttribute(tag: string, attribute: string, value: string) {
+  return tag.replace(
+    new RegExp(`(\\s${attribute}\\s*=\\s*)(["'])(.*?)\\2`, 'i'),
+    (_match, prefix: string, quote: string) =>
+      `${prefix}${quote}${value}${quote}`,
+  )
 }
 
 function assetRequest(request: Request, path: string) {
@@ -100,6 +169,20 @@ export async function handleRequest(request: Request, env: EdgeEnv) {
 
   if (staticPath.test(url.pathname)) {
     const response = await env.ASSETS.fetch(request)
+    if (response.status === 404) return notFound(request, env)
+    return withHeaders(response, {
+      'Cache-Control': 'max-age=0, must-revalidate',
+      ...(shouldNoindex(url) ? { 'X-Robots-Tag': 'noindex' } : {}),
+    })
+  }
+
+  const normalizedProductPath =
+    url.pathname.length > 1 && url.pathname.endsWith('/')
+      ? url.pathname.slice(0, -1)
+      : url.pathname
+  const documentPath = productDocumentPath[normalizedProductPath]
+  if (documentPath) {
+    const response = await env.ASSETS.fetch(assetRequest(request, documentPath))
     if (response.status === 404) return notFound(request, env)
     return withHeaders(response, {
       'Cache-Control': 'max-age=0, must-revalidate',

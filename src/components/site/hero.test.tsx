@@ -13,7 +13,7 @@ describe('Hero conversion', () => {
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: 'Знаєш де кожна деталь і де твої гроші',
+        name: 'Програма для авторозбірки, де кожна деталь і кожна оплата під контролем',
       }),
     ).toBeInTheDocument()
     expect(
@@ -29,20 +29,27 @@ describe('Hero conversion', () => {
       </MemoryRouter>,
     )
 
-    const expectedLines = [
-      ['Знаєш', '0ms'],
-      ['де кожна', '100ms'],
-      ['деталь і де', '200ms'],
-      ['твої гроші', '300ms'],
+    const expectedAnimatedLines = [
+      ['авторозбірки,', '100ms'],
+      ['де кожна деталь', '200ms'],
+      ['і кожна оплата', '300ms'],
+      ['під контролем', '400ms'],
     ] as const
 
-    expectedLines.forEach(([text, delay]) => {
+    const firstLine = screen.getByText('Програма для')
+    expect(firstLine).toHaveClass('anim-fade-up-visible')
+    expect(firstLine).not.toHaveClass('anim-fade-up')
+    expect(firstLine).not.toHaveAttribute('style')
+
+    expectedAnimatedLines.forEach(([text, delay]) => {
       const line = screen.getByText(text)
       expect(line).toHaveClass('anim-fade-up')
       expect(line).toHaveStyle({ animationDelay: delay })
     })
 
-    const copy = screen.getByText(/Застосунок, який об'єднує фінанси/)
+    const copy = screen.getByText(
+      'Облік авто, запчастин, замовлень, кас і команди в одному застосунку.',
+    )
     expect(copy).toHaveClass('anim-fade-up')
     expect(copy).toHaveStyle({ animationDelay: '520ms' })
 
