@@ -24,6 +24,19 @@ const productDocumentPath: Record<string, string> = {
     '/oblik-prodazhiv-avtozapchastyn/index.html',
 }
 
+const appShellMetadata = {
+  privacy: {
+    title: 'Політика конфіденційності | rozbirka',
+    description:
+      'Дізнайтеся, які дані збирає rozbirka, як використовує та захищає їх, а також які права мають користувачі сервісу.',
+  },
+  marketplace: {
+    title: 'Автозапчастини з авторозбірок — каталог | Rozbirka Маркет',
+    description:
+      'Знаходьте автозапчастини з авторозбірок за назвою, OEM-кодом, маркою та моделлю автомобіля у каталозі Rozbirka Маркет.',
+  },
+} as const
+
 function withHeaders(response: Response, headers: Record<string, string>) {
   const next = new Headers(response.headers)
   for (const [name, value] of Object.entries(headers)) next.set(name, value)
@@ -39,18 +52,43 @@ async function withCanonicalMetadata(response: Response, url: URL) {
     /\/$/,
     '',
   )
+  const routeMetadata =
+    url.pathname === '/privacy'
+      ? appShellMetadata.privacy
+      : url.pathname === '/marketplace'
+        ? appShellMetadata.marketplace
+        : undefined
   const html = (await response.text())
+    .replace(/<title\b[^>]*>[\s\S]*?<\/title>/i, (tag) =>
+      routeMetadata
+        ? tag.replace(/>[\s\S]*?<\/title>/i, `>${routeMetadata.title}</title>`)
+        : tag,
+    )
     .replace(/<link\b[^>]*>/gi, (tag) => {
       const rel = attributeValue(tag, 'rel')
       return rel?.split(/\s+/).some((token) => token === 'canonical')
         ? replaceAttribute(tag, 'href', canonical)
         : tag
     })
-    .replace(/<meta\b[^>]*>/gi, (tag) =>
-      attributeValue(tag, 'property') === 'og:url'
-        ? replaceAttribute(tag, 'content', canonical)
-        : tag,
-    )
+    .replace(/<meta\b[^>]*>/gi, (tag) => {
+      const property = attributeValue(tag, 'property')
+      const name = attributeValue(tag, 'name')
+      if (property === 'og:url') {
+        return replaceAttribute(tag, 'content', canonical)
+      }
+      if (!routeMetadata) return tag
+      if (property === 'og:title' || name === 'twitter:title') {
+        return replaceAttribute(tag, 'content', routeMetadata.title)
+      }
+      if (
+        property === 'og:description' ||
+        name === 'description' ||
+        name === 'twitter:description'
+      ) {
+        return replaceAttribute(tag, 'content', routeMetadata.description)
+      }
+      return tag
+    })
   const headers = new Headers(response.headers)
   headers.delete('Content-Length')
   headers.delete('ETag')

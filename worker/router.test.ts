@@ -15,7 +15,7 @@ function env({ missingProductDocument = false } = {}): EdgeEnv {
         }
         if (path === '/app.html') {
           return new Response(
-            '<html><head><link data-product-seo rel="canonical" href="https://rozbirka.pro/" /><meta data-product-seo property="og:url" content="https://rozbirka.pro/" /></head><body>shell</body></html>',
+            '<html><head><title data-product-seo>Homepage title</title><meta data-product-seo name="description" content="Homepage description" /><link data-product-seo rel="canonical" href="https://rozbirka.pro/" /><meta data-product-seo property="og:title" content="Homepage title" /><meta data-product-seo property="og:description" content="Homepage description" /><meta data-product-seo property="og:url" content="https://rozbirka.pro/" /><meta data-product-seo name="twitter:title" content="Homepage title" /><meta data-product-seo name="twitter:description" content="Homepage description" /></head><body>shell</body></html>',
             {
               headers: {
                 'content-type': 'text/html',
@@ -177,6 +177,45 @@ describe('edge routing', () => {
       )
       expect(response.headers.get('etag')).toBeNull()
       expect(response.headers.get('content-length')).toBeNull()
+    },
+  )
+
+  it.each([
+    [
+      '/privacy',
+      'Політика конфіденційності | rozbirka',
+      'Дізнайтеся, які дані збирає rozbirka, як використовує та захищає їх, а також які права мають користувачі сервісу.',
+    ],
+    [
+      '/marketplace',
+      'Автозапчастини з авторозбірок — каталог | Rozbirka Маркет',
+      'Знаходьте автозапчастини з авторозбірок за назвою, OEM-кодом, маркою та моделлю автомобіля у каталозі Rozbirka Маркет.',
+    ],
+  ])(
+    'rewrites route identity metadata for %s',
+    async (path, title, description) => {
+      const response = await handleRequest(
+        new Request(`https://rozbirka.pro${path}`),
+        env(),
+      )
+      const html = await response.text()
+
+      expect(html).toContain(`<title data-product-seo>${title}</title>`)
+      expect(html).toContain(
+        `<meta data-product-seo name="description" content="${description}" />`,
+      )
+      expect(html).toContain(
+        `<meta data-product-seo property="og:title" content="${title}" />`,
+      )
+      expect(html).toContain(
+        `<meta data-product-seo property="og:description" content="${description}" />`,
+      )
+      expect(html).toContain(
+        `<meta data-product-seo name="twitter:title" content="${title}" />`,
+      )
+      expect(html).toContain(
+        `<meta data-product-seo name="twitter:description" content="${description}" />`,
+      )
     },
   )
 
