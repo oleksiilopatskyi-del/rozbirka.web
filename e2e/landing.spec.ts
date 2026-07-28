@@ -1,6 +1,38 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
+const seoUseCaseRoutes = [
+  {
+    path: '/oblik-avtozapchastyn',
+    canonical: 'https://rozbirka.pro/oblik-avtozapchastyn',
+    h1: 'Облік автозапчастин для авторозбірки без таблиць і хаосу',
+  },
+  {
+    path: '/oblik-prodazhiv-avtozapchastyn',
+    canonical: 'https://rozbirka.pro/oblik-prodazhiv-avtozapchastyn',
+    h1: 'Облік продажів автозапчастин: від замовлення до оплати',
+  },
+] as const
+
+test('SEO use-case pages expose one semantic conversion contract', async ({
+  page,
+}) => {
+  for (const route of seoUseCaseRoutes) {
+    await page.goto(route.path)
+
+    await expect(page.locator('h1')).toHaveCount(1)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(route.h1)
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+      'href',
+      route.canonical,
+    )
+    await expect(page.locator('script[data-product-json-ld]')).toHaveCount(1)
+    await expect(
+      page.getByRole('link', { name: 'Спробувати rozbirka' }),
+    ).toHaveAttribute('href', '/login')
+  }
+})
+
 test('landing interactions work without serious accessibility violations', async ({
   page,
 }) => {
@@ -31,12 +63,13 @@ test('hero content is immediately visible with reduced motion', async ({
   await page.goto('/')
 
   const animatedHeroNodes = [
-    page.getByText('Знаєш', { exact: true }),
-    page.getByText('де кожна', { exact: true }),
-    page.getByText('деталь і де', { exact: true }),
-    page.getByText('твої гроші', { exact: true }),
+    page.getByText('Програма для', { exact: true }),
+    page.getByText('авторозбірки,', { exact: true }),
+    page.getByText('де кожна деталь', { exact: true }),
+    page.getByText('і кожна оплата', { exact: true }),
+    page.getByText('під контролем', { exact: true }),
     page.getByText(
-      "Застосунок, який об'єднує фінанси, функції та управління в одному інтерфейсі.",
+      'Облік авто, запчастин, замовлень, кас і команди в одному застосунку.',
     ),
     page.getByRole('link', { name: 'Спробувати безкоштовно' }).locator('..'),
   ]
