@@ -9,11 +9,12 @@ import hero1080Webp from '@/assets/optimized/hero/hero-1080.webp'
 interface HeroLine {
   text: string
   className?: string
-  delay: string
+  delay?: string
+  visibleFromStart?: boolean
 }
 
 const heroLines: HeroLine[] = [
-  { text: 'Програма для', delay: '0ms' },
+  { text: 'Програма для', visibleFromStart: true },
   { text: 'авторозбірки,', delay: '100ms' },
   { text: 'де кожна деталь', delay: '200ms' },
   { text: 'і кожна оплата', delay: '300ms' },
@@ -26,8 +27,8 @@ function AnimatedHeading({ lines }: { lines: HeroLine[] }) {
       {lines.map((line) => (
         <span
           key={line.text}
-          className={`anim-fade-up block min-h-[1em] ${line.className ?? ''}`}
-          style={{ animationDelay: line.delay }}
+          className={`${line.visibleFromStart ? 'anim-fade-up-visible' : 'anim-fade-up'} block min-h-[1em] ${line.className ?? ''}`}
+          style={line.delay ? { animationDelay: line.delay } : undefined}
         >
           {line.text}
         </span>

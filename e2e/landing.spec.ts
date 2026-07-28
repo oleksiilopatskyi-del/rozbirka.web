@@ -82,6 +82,24 @@ test('hero content is immediately visible with reduced motion', async ({
   }
 })
 
+test('hero LCP line is visible from initial paint while later lines stagger', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  const firstHeroLine = page.getByText('Програма для', { exact: true })
+  await expect(firstHeroLine).toBeVisible()
+  await expect(firstHeroLine).toHaveCSS('opacity', '1')
+  await expect(firstHeroLine).toHaveCSS('transform', 'none')
+  await expect(firstHeroLine).toHaveCSS('animation-name', 'none')
+
+  await expect(page.getByText('авторозбірки,', { exact: true })).toHaveCSS(
+    'animation-name',
+    'fade-up',
+  )
+})
+
 test('direct SPA deep links mount one matching page without hydration warnings', async ({
   page,
 }) => {
