@@ -6,7 +6,9 @@ import { RouteSeo } from './route-seo'
 
 describe('RouteSeo', () => {
   beforeEach(() => {
-    document.head.innerHTML = ''
+    document.head
+      .querySelectorAll('script[data-product-json-ld]')
+      .forEach((script) => script.remove())
   })
 
   it('synchronizes inventory metadata and structured data into the browser head', () => {
@@ -52,5 +54,33 @@ describe('RouteSeo', () => {
         'script[type="application/ld+json"][data-product-json-ld]',
       ),
     ).toHaveLength(1)
+  })
+
+  it('adopts an untagged template schema as the single current route graph', () => {
+    const legacyScript = document.createElement('script')
+    legacyScript.type = 'application/ld+json'
+    legacyScript.textContent = '{"stale":true}'
+    document.head.append(legacyScript)
+
+    render(
+      <RouteSeo
+        entry={getProductSeo('/oblik-avtozapchastyn')!}
+        faq={getUseCasePage('/oblik-avtozapchastyn').faq}
+      />,
+    )
+
+    const scripts = document.head.querySelectorAll(
+      'script[type="application/ld+json"]',
+    )
+    const routeScript = document.head.querySelector(
+      'script[type="application/ld+json"][data-product-json-ld]',
+    )
+
+    expect(scripts).toHaveLength(1)
+    expect(routeScript).toBe(legacyScript)
+    expect(routeScript).toHaveTextContent(
+      'https://rozbirka.pro/oblik-avtozapchastyn',
+    )
+    expect(routeScript).not.toHaveTextContent('{"stale":true}')
   })
 })
