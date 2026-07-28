@@ -94,3 +94,49 @@ bundle (the entry gzip size increased by roughly 4 kB) to prevent a React
 hydration mismatch on their prerendered documents. Their content is central to
 the SEO landing experience, and all other application routes retain lazy
 loading.
+
+## Fix round 1/5: complete document metadata and JSON-LD validation
+
+### RED
+
+Extended the pure prerender helper tests to cover a wrong-but-unique title and
+description, stale OG/Twitter values, duplicate canonical nodes, malformed and
+empty JSON-LD, and unsafe title text.
+
+```bash
+npm test -- scripts/prerender-helpers.test.ts
+```
+
+Result before the fix: 17 tests ran; 8 failed. The old assertion accepted all
+of the altered metadata and JSON-LD documents, and title injection emitted raw
+markup.
+
+### GREEN
+
+- Title content now escapes `&`, `<`, and `>` before injection.
+- `assertProductDocument()` requires exactly one marked title, description,
+  canonical, every OG field, and every Twitter field, and compares each value
+  to its escaped manifest value.
+- It parses the only tagged JSON-LD script and validates the Schema.org
+  context, route-specific graph types and IDs, manifest-backed WebPage or
+  SoftwareApplication fields, breadcrumbs, and FAQ shape.
+- The deterministic post-build checker now receives this full contract through
+  `assertProductDocument()`, rather than relying only on metadata uniqueness.
+
+Focused verification:
+
+```bash
+npm test -- scripts/prerender-helpers.test.ts
+# 1 file passed, 17 tests passed
+```
+
+Final verification:
+
+```bash
+npm run check
+# 32 files passed, 124 tests passed; typecheck, lint, and format check passed
+
+npm run build:prod
+npm run check:prerender
+# build passed; "Validated 3 prerendered product documents"
+```

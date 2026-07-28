@@ -4,6 +4,7 @@ export interface ProductDocumentSeo {
   description: string
   canonical: string
   ogImage: string
+  breadcrumbs: readonly { name: string; path: string }[]
 }
 
 export function documentPathForRoute(pathname: string): string
