@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { ArrowUp } from 'lucide-react'
+import { useLocation } from 'react-router'
 import { PageContainer } from '@/components/layout/page-container'
 import { BrandLogo } from '@/components/site/brand-logo'
 import { NavLinks } from '@/components/site/nav-links'
@@ -9,7 +10,9 @@ const secondaryLinks = [
 ]
 
 export function SiteFooter() {
+  const { pathname } = useLocation()
   const reducedMotion = useRef(false)
+  const activeNavProps = pathname === '/' ? { activeHref: '#top' } : {}
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
@@ -38,7 +41,7 @@ export function SiteFooter() {
         >
           <div className="flex flex-wrap items-center gap-6">
             <BrandLogo />
-            <NavLinks activeHref="#top" />
+            <NavLinks {...activeNavProps} />
           </div>
 
           <div className="flex flex-wrap items-center gap-6">

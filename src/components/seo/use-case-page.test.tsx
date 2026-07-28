@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAuth } from '@/auth/AuthContext'
@@ -22,7 +22,7 @@ describe('use-case pages', () => {
 
   it('renders the inventory use case with unique content and destinations', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/oblik-avtozapchastyn']}>
         <PartsInventoryScreen />
       </MemoryRouter>,
     )
@@ -40,6 +40,29 @@ describe('use-case pages', () => {
     expect(
       screen.getByRole('link', { name: 'Спробувати rozbirka' }),
     ).toHaveAttribute('href', '/login')
+    const related = screen.getByRole('region', { name: 'Пов’язаний процес' })
+    const finalCta = screen.getByRole('region', {
+      name: 'Готові впорядкувати роботу авторозбірки?',
+    })
+    expect(
+      related.compareDocumentPosition(finalCta) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      within(finalCta).getByRole('link', {
+        name: 'Зареєструватися в rozbirka',
+      }),
+    ).toHaveAttribute('href', '/login')
+    expect(
+      within(screen.getByRole('banner')).getByRole('link', {
+        name: 'Головна',
+      }),
+    ).not.toHaveAttribute('aria-current')
+    expect(
+      within(screen.getByRole('contentinfo')).getByRole('link', {
+        name: 'Головна',
+      }),
+    ).not.toHaveAttribute('aria-current')
     expect(screen.getAllByText(/QR-стікер/).length).toBeGreaterThan(0)
   })
 
@@ -60,6 +83,13 @@ describe('use-case pages', () => {
     expect(
       screen.getByRole('link', { name: 'Облік автозапчастин' }),
     ).toHaveAttribute('href', '/oblik-avtozapchastyn')
+    expect(
+      within(
+        screen.getByRole('region', {
+          name: 'Готові впорядкувати роботу авторозбірки?',
+        }),
+      ).getByRole('link', { name: 'Зареєструватися в rozbirka' }),
+    ).toHaveAttribute('href', '/login')
     expect(screen.getAllByText(/кілька платежів/).length).toBeGreaterThan(0)
   })
 })

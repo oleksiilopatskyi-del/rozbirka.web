@@ -40,8 +40,17 @@ async function withCanonicalMetadata(response: Response, url: URL) {
     '',
   )
   const html = (await response.text())
-    .replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${canonical}$2`)
-    .replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${canonical}$2`)
+    .replace(/<link\b[^>]*>/gi, (tag) => {
+      const rel = attributeValue(tag, 'rel')
+      return rel?.split(/\s+/).some((token) => token === 'canonical')
+        ? replaceAttribute(tag, 'href', canonical)
+        : tag
+    })
+    .replace(/<meta\b[^>]*>/gi, (tag) =>
+      attributeValue(tag, 'property') === 'og:url'
+        ? replaceAttribute(tag, 'content', canonical)
+        : tag,
+    )
   const headers = new Headers(response.headers)
   headers.delete('Content-Length')
   headers.delete('ETag')
@@ -50,6 +59,22 @@ async function withCanonicalMetadata(response: Response, url: URL) {
     statusText: response.statusText,
     headers,
   })
+}
+
+function attributeValue(tag: string, attribute: string) {
+  const match = new RegExp(
+    `\\s${attribute}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`,
+    'i',
+  ).exec(tag)
+  return (match?.[1] ?? match?.[2])?.toLowerCase()
+}
+
+function replaceAttribute(tag: string, attribute: string, value: string) {
+  return tag.replace(
+    new RegExp(`(\\s${attribute}\\s*=\\s*)(["'])(.*?)\\2`, 'i'),
+    (_match, prefix: string, quote: string) =>
+      `${prefix}${quote}${value}${quote}`,
+  )
 }
 
 function assetRequest(request: Request, path: string) {

@@ -57,9 +57,7 @@ export function validateProductionResponses(result) {
       `${name} must return HTML`,
     )
     assert(
-      response.body.includes(
-        `<link rel="canonical" href="${response.canonical}"`,
-      ),
+      hasCanonicalLink(response.body, response.canonical),
       `${name} canonical URL is wrong`,
     )
   }

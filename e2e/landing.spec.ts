@@ -30,6 +30,12 @@ test('SEO use-case pages expose one semantic conversion contract', async ({
     await expect(
       page.getByRole('link', { name: 'Спробувати rozbirka' }),
     ).toHaveAttribute('href', '/login')
+    const finalCta = page.getByRole('region', {
+      name: 'Готові впорядкувати роботу авторозбірки?',
+    })
+    await expect(
+      finalCta.getByRole('link', { name: 'Зареєструватися в rozbirka' }),
+    ).toHaveAttribute('href', '/login')
   }
 })
 

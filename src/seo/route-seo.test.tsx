@@ -7,7 +7,9 @@ import { RouteSeo } from './route-seo'
 describe('RouteSeo', () => {
   beforeEach(() => {
     document.head
-      .querySelectorAll('script[data-product-json-ld]')
+      .querySelectorAll(
+        'script[data-product-json-ld], script[data-test-unrelated-json-ld]',
+      )
       .forEach((script) => script.remove())
   })
 
@@ -56,11 +58,12 @@ describe('RouteSeo', () => {
     ).toHaveLength(1)
   })
 
-  it('adopts an untagged template schema as the single current route graph', () => {
-    const legacyScript = document.createElement('script')
-    legacyScript.type = 'application/ld+json'
-    legacyScript.textContent = '{"stale":true}'
-    document.head.append(legacyScript)
+  it('upserts only the tagged route graph and preserves unrelated JSON-LD', () => {
+    const unrelatedScript = document.createElement('script')
+    unrelatedScript.type = 'application/ld+json'
+    unrelatedScript.setAttribute('data-test-unrelated-json-ld', '')
+    unrelatedScript.textContent = '{"unrelated":true}'
+    document.head.append(unrelatedScript)
 
     render(
       <RouteSeo
@@ -76,11 +79,12 @@ describe('RouteSeo', () => {
       'script[type="application/ld+json"][data-product-json-ld]',
     )
 
-    expect(scripts).toHaveLength(1)
-    expect(routeScript).toBe(legacyScript)
+    expect(scripts).toHaveLength(2)
+    expect(routeScript).not.toBe(unrelatedScript)
     expect(routeScript).toHaveTextContent(
       'https://rozbirka.pro/oblik-avtozapchastyn',
     )
-    expect(routeScript).not.toHaveTextContent('{"stale":true}')
+    expect(unrelatedScript).toHaveTextContent('{"unrelated":true}')
+    expect(unrelatedScript).not.toHaveAttribute('data-product-json-ld')
   })
 })

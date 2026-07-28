@@ -15,7 +15,7 @@ function env({ missingProductDocument = false } = {}): EdgeEnv {
         }
         if (path === '/app.html') {
           return new Response(
-            '<html><head><link rel="canonical" href="https://rozbirka.pro/" /><meta property="og:url" content="https://rozbirka.pro/" /></head><body>shell</body></html>',
+            '<html><head><link data-product-seo rel="canonical" href="https://rozbirka.pro/" /><meta data-product-seo property="og:url" content="https://rozbirka.pro/" /></head><body>shell</body></html>',
             {
               headers: {
                 'content-type': 'text/html',
@@ -160,22 +160,25 @@ describe('edge routing', () => {
     expect(await response.text()).toContain('shell')
   })
 
-  it('publishes route-specific canonical metadata for indexable deep links', async () => {
-    const response = await handleRequest(
-      new Request('https://rozbirka.pro/privacy?source=test'),
-      env(),
-    )
-    const html = await response.text()
+  it.each(['/privacy', '/marketplace'])(
+    'rewrites current app shell canonical and OG URL metadata for %s',
+    async (path) => {
+      const response = await handleRequest(
+        new Request(`https://rozbirka.pro${path}?source=test`),
+        env(),
+      )
+      const html = await response.text()
 
-    expect(html).toContain(
-      '<link rel="canonical" href="https://rozbirka.pro/privacy" />',
-    )
-    expect(html).toContain(
-      '<meta property="og:url" content="https://rozbirka.pro/privacy" />',
-    )
-    expect(response.headers.get('etag')).toBeNull()
-    expect(response.headers.get('content-length')).toBeNull()
-  })
+      expect(html).toContain(
+        `<link data-product-seo rel="canonical" href="https://rozbirka.pro${path}" />`,
+      )
+      expect(html).toContain(
+        `<meta data-product-seo property="og:url" content="https://rozbirka.pro${path}" />`,
+      )
+      expect(response.headers.get('etag')).toBeNull()
+      expect(response.headers.get('content-length')).toBeNull()
+    },
+  )
 
   it('returns immutable assets without losing MIME or ETag', async () => {
     const response = await handleRequest(

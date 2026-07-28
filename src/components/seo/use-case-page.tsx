@@ -130,9 +130,40 @@ export function UseCasePage({ content, breadcrumbs }: UseCasePageProps) {
             </div>
           </PageContainer>
         </Section>
+        <FinalRegistrationCta />
       </main>
       <SiteFooter />
     </div>
+  )
+}
+
+function FinalRegistrationCta() {
+  return (
+    <Section
+      aria-labelledby="final-cta-heading"
+      className="pt-16 pb-24 lg:pt-24 lg:pb-32"
+    >
+      <PageContainer width="md">
+        <div className="bg-brand text-brand-foreground rounded-(--radius-section) p-8 lg:p-12">
+          <h2
+            id="final-cta-heading"
+            className="max-w-3xl text-[36px] leading-none font-light tracking-[-0.025em] lg:text-[52px]"
+          >
+            Готові впорядкувати роботу авторозбірки?
+          </h2>
+          <p className="mt-6 max-w-2xl leading-relaxed opacity-80">
+            Створіть акаунт і перенесіть облік запчастин, продажів та оплат в
+            один робочий простір.
+          </p>
+          <Link
+            to="/login"
+            className="mt-8 inline-flex min-h-11 items-center rounded-full bg-black px-6 text-sm font-medium text-white transition-opacity hover:opacity-85"
+          >
+            Зареєструватися в rozbirka
+          </Link>
+        </div>
+      </PageContainer>
+    </Section>
   )
 }
 

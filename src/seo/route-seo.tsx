@@ -61,31 +61,19 @@ function syncHead(entry: ProductSeoEntry, faq: readonly FaqEntry[]) {
   setMeta('name', 'twitter:description', entry.description)
   setMeta('name', 'twitter:image', entry.ogImage)
 
-  const jsonLdScripts = Array.from(
-    document.head.querySelectorAll<HTMLScriptElement>(
-      'script[type="application/ld+json"]',
-    ),
+  const script = upsertHeadElement(
+    'script[type="application/ld+json"][data-product-json-ld]',
+    () => {
+      const element = document.createElement('script')
+      element.type = 'application/ld+json'
+      element.setAttribute('data-product-json-ld', '')
+      return element
+    },
   )
-  const script =
-    jsonLdScripts.find((item) => item.hasAttribute('data-product-json-ld')) ??
-    jsonLdScripts[0] ??
-    upsertHeadElement(
-      'script[type="application/ld+json"][data-product-json-ld]',
-      () => {
-        const element = document.createElement('script')
-        element.type = 'application/ld+json'
-        element.setAttribute('data-product-json-ld', '')
-        return element
-      },
-    )
 
   script.type = 'application/ld+json'
   script.setAttribute('data-product-json-ld', '')
   script.textContent = serializeStructuredData(buildStructuredData(entry, faq))
-
-  for (const candidate of jsonLdScripts) {
-    if (candidate !== script) candidate.remove()
-  }
 }
 
 export function RouteSeo({ entry, faq }: RouteSeoProps) {

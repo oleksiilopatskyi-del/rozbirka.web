@@ -26,13 +26,13 @@ function validResponses() {
       privacy: {
         status: 200,
         contentType: 'text/html',
-        body: '<link rel="canonical" href="https://rozbirka.pro/privacy">',
+        body: '<link href="https://rozbirka.pro/privacy" data-product-seo rel="alternate canonical">',
         canonical: 'https://rozbirka.pro/privacy',
       },
       listing: {
         status: 200,
         contentType: 'text/html',
-        body: '<link rel="canonical" href="https://rozbirka.pro/marketplace/listings/qa-probe">',
+        body: '<link data-product-seo href="https://rozbirka.pro/marketplace/listings/qa-probe" media="all" rel="canonical">',
         canonical: 'https://rozbirka.pro/marketplace/listings/qa-probe',
       },
     },
