@@ -13,10 +13,11 @@ interface HeroLine {
 }
 
 const heroLines: HeroLine[] = [
-  { text: 'Знаєш', delay: '0ms' },
-  { text: 'де кожна', delay: '100ms' },
-  { text: 'деталь і де', delay: '200ms' },
-  { text: 'твої гроші', className: 'text-brand', delay: '300ms' },
+  { text: 'Програма для', delay: '0ms' },
+  { text: 'авторозбірки,', delay: '100ms' },
+  { text: 'де кожна деталь', delay: '200ms' },
+  { text: 'і кожна оплата', delay: '300ms' },
+  { text: 'під контролем', className: 'text-brand', delay: '400ms' },
 ]
 
 function AnimatedHeading({ lines }: { lines: HeroLine[] }) {
@@ -50,7 +51,8 @@ export function Hero() {
               style={{ fontFamily: '"Visuelt Hero", system-ui, sans-serif' }}
             >
               <span className="sr-only">
-                Знаєш де кожна деталь і де твої гроші
+                Програма для авторозбірки, де кожна деталь і кожна оплата під
+                контролем
               </span>
               <span aria-hidden>
                 <AnimatedHeading lines={heroLines} />
@@ -61,8 +63,8 @@ export function Hero() {
               className="anim-fade-up max-w-[400px] text-[17px] leading-[1.5] font-normal text-neutral-400"
               style={{ animationDelay: '520ms' }}
             >
-              Застосунок, який об&apos;єднує фінанси, функції та управління в
-              одному інтерфейсі.
+              Облік авто, запчастин, замовлень, кас і команди в одному
+              застосунку.
             </p>
 
             <div
