@@ -18,7 +18,7 @@ export function NavLinks({ activeHref, className, onNavigate }: NavLinksProps) {
         return (
           <li key={item.label}>
             <a
-              href={item.href}
+              href={item.destination}
               aria-current={isActive ? 'page' : undefined}
               onClick={onNavigate}
               className={cn(

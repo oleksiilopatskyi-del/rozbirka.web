@@ -13,4 +13,10 @@ describe('production route boundary', () => {
     expect(paths).toContain('/screens')
     expect(paths).toContain('/screens/header')
   })
+
+  it('publishes both ROZ-13 product routes in production', () => {
+    const paths = createAppRoutes(false).map((route) => route.path)
+    expect(paths).toContain('/oblik-avtozapchastyn')
+    expect(paths).toContain('/oblik-prodazhiv-avtozapchastyn')
+  })
 })

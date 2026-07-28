@@ -12,6 +12,23 @@ export function createAppRoutes(
   const routes: RouteObject[] = [
     { path: '/', element: <App /> },
     {
+      path: '/oblik-avtozapchastyn',
+      hydrateFallbackElement,
+      lazy: async () => {
+        const { PartsInventoryScreen } =
+          await import('@/screens/parts-inventory')
+        return { element: <PartsInventoryScreen /> }
+      },
+    },
+    {
+      path: '/oblik-prodazhiv-avtozapchastyn',
+      hydrateFallbackElement,
+      lazy: async () => {
+        const { PartsSalesScreen } = await import('@/screens/parts-sales')
+        return { element: <PartsSalesScreen /> }
+      },
+    },
+    {
       path: '/privacy',
       hydrateFallbackElement,
       lazy: async () => {
