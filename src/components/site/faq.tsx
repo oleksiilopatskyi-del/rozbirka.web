@@ -4,12 +4,13 @@ import { cn } from '@/lib/utils'
 import { Section } from '@/components/layout/section'
 import { PageContainer } from '@/components/layout/page-container'
 
-interface FaqEntry {
+export interface FaqEntry {
   question: string
   answer: string
 }
 
-const entries: FaqEntry[] = [
+// eslint-disable-next-line react-refresh/only-export-components
+export const homepageFaqEntries: readonly FaqEntry[] = [
   {
     question: 'Чи бачу я прибуток окремо по кожному авто?',
     answer:
@@ -59,7 +60,7 @@ export function FAQ() {
         </header>
 
         <ul role="list" className="flex flex-col gap-3">
-          {entries.map((entry, i) => (
+          {homepageFaqEntries.map((entry, i) => (
             <FaqRow
               key={entry.question}
               number={String(i + 1).padStart(2, '0')}

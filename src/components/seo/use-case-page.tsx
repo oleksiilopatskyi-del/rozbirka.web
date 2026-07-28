@@ -5,7 +5,8 @@ import { SiteFooter } from '@/components/site/site-footer'
 import { SiteHeader } from '@/components/site/header'
 import { Breadcrumbs } from '@/components/seo/breadcrumbs'
 import type { UseCasePageContent } from '@/content/use-case-pages'
-import type { SeoBreadcrumb } from '@/seo/product-seo'
+import { getProductSeo, type SeoBreadcrumb } from '@/seo/product-seo'
+import { RouteSeo } from '@/seo/route-seo'
 
 interface UseCasePageProps {
   content: UseCasePageContent
@@ -16,8 +17,15 @@ const cardClassName =
   'bg-surface-1 rounded-(--radius-card) p-6 ring-1 ring-white/[0.06] lg:p-8'
 
 export function UseCasePage({ content, breadcrumbs }: UseCasePageProps) {
+  const entry = getProductSeo(content.path)
+
+  if (!entry) {
+    throw new Error(`Missing SEO metadata for ${content.path}`)
+  }
+
   return (
     <div className="bg-background min-h-screen text-white">
+      <RouteSeo entry={entry} faq={content.faq} />
       <SiteHeader />
       <main id="main">
         <Section className="pt-10 pb-16 lg:pt-16 lg:pb-24">
