@@ -1,6 +1,8 @@
 import type { RouteObject } from 'react-router'
 import App from '@/App'
 import { RedirectIfAuth, RequireAuth } from '@/auth/guards'
+import { PartsInventoryScreen } from '@/screens/parts-inventory'
+import { PartsSalesScreen } from '@/screens/parts-sales'
 
 const hydrateFallbackElement = (
   <div className="min-h-screen bg-background" aria-busy="true" />
@@ -13,20 +15,11 @@ export function createAppRoutes(
     { path: '/', element: <App /> },
     {
       path: '/oblik-avtozapchastyn',
-      hydrateFallbackElement,
-      lazy: async () => {
-        const { PartsInventoryScreen } =
-          await import('@/screens/parts-inventory')
-        return { element: <PartsInventoryScreen /> }
-      },
+      element: <PartsInventoryScreen />,
     },
     {
       path: '/oblik-prodazhiv-avtozapchastyn',
-      hydrateFallbackElement,
-      lazy: async () => {
-        const { PartsSalesScreen } = await import('@/screens/parts-sales')
-        return { element: <PartsSalesScreen /> }
-      },
+      element: <PartsSalesScreen />,
     },
     {
       path: '/privacy',

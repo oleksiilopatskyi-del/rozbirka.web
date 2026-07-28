@@ -19,4 +19,18 @@ describe('production route boundary', () => {
     expect(paths).toContain('/oblik-avtozapchastyn')
     expect(paths).toContain('/oblik-prodazhiv-avtozapchastyn')
   })
+
+  it('provides prerendered product route elements without a hydration fallback', () => {
+    const routes = createAppRoutes(false)
+
+    for (const path of [
+      '/oblik-avtozapchastyn',
+      '/oblik-prodazhiv-avtozapchastyn',
+    ]) {
+      const route = routes.find((candidate) => candidate.path === path)
+      expect(route?.element).toBeDefined()
+      expect(route?.lazy).toBeUndefined()
+      expect(route?.hydrateFallbackElement).toBeUndefined()
+    }
+  })
 })

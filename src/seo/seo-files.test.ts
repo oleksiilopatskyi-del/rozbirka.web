@@ -6,7 +6,9 @@ import { describe, expect, it } from 'vitest'
 describe('SEO surface', () => {
   it('publishes canonical social and structured metadata', async () => {
     const html = await readFile('index.html', 'utf8')
-    expect(html).toContain('<link rel="canonical" href="https://rozbirka.pro/"')
+    expect(html).toContain(
+      '<link data-product-seo rel="canonical" href="https://rozbirka.pro/"',
+    )
     expect(html).toContain('property="og:url" content="https://rozbirka.pro/"')
     expect(html).toContain('name="twitter:card" content="summary_large_image"')
     expect(html).toContain('application/ld+json')
