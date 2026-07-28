@@ -36,6 +36,22 @@ function validResponses() {
         canonical: 'https://rozbirka.pro/marketplace/listings/qa-probe',
       },
     },
+    seoRoutes: {
+      partsInventory: {
+        status: 200,
+        contentType: 'text/html',
+        body: '<link data-product-seo rel="canonical" href="https://rozbirka.pro/oblik-avtozapchastyn"><h1 class="hero">Облік автозапчастин для авторозбірки без таблиць і хаосу</h1>',
+        canonical: 'https://rozbirka.pro/oblik-avtozapchastyn',
+        h1: 'Облік автозапчастин для авторозбірки без таблиць і хаосу',
+      },
+      partsSales: {
+        status: 200,
+        contentType: 'text/html',
+        body: '<link data-product-seo rel="canonical" href="https://rozbirka.pro/oblik-prodazhiv-avtozapchastyn"><h1 class="hero">Облік продажів автозапчастин: від замовлення до оплати</h1>',
+        canonical: 'https://rozbirka.pro/oblik-prodazhiv-avtozapchastyn',
+        h1: 'Облік продажів автозапчастин: від замовлення до оплати',
+      },
+    },
     prototypes: {
       screens: { status: 404 },
       header: { status: 404 },
@@ -65,6 +81,8 @@ describe('production route validation', () => {
       home: 'https://rozbirka.pro/',
       api: 'https://api.rozbirka.pro/api/v1/billing/plans',
       asset: 'https://rozbirka.pro/assets/app.js',
+      partsInventory: 'https://rozbirka.pro/oblik-avtozapchastyn',
+      partsSales: 'https://rozbirka.pro/oblik-prodazhiv-avtozapchastyn',
     })
   })
 
@@ -142,6 +160,20 @@ describe('production route validation', () => {
       (value: ReturnType<typeof validResponses>) => {
         value.spaRoutes.privacy.body =
           '<link rel="canonical" href="https://rozbirka.pro/">'
+      },
+    ],
+    [
+      'missing product route H1',
+      (value: ReturnType<typeof validResponses>) => {
+        value.seoRoutes.partsInventory.body =
+          '<link data-product-seo rel="canonical" href="https://rozbirka.pro/oblik-avtozapchastyn">'
+      },
+    ],
+    [
+      'wrong product route canonical',
+      (value: ReturnType<typeof validResponses>) => {
+        value.seoRoutes.partsInventory.body =
+          '<link data-product-seo rel="canonical" href="https://rozbirka.pro/">'
       },
     ],
     [

@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { handleRequest, type EdgeEnv } from './router'
 
-function env(): EdgeEnv {
+function env({ missingProductDocument = false } = {}): EdgeEnv {
   return {
     ASSETS: {
       // eslint-disable-next-line @typescript-eslint/require-await
@@ -21,6 +21,23 @@ function env(): EdgeEnv {
                 'content-type': 'text/html',
                 etag: '"shell"',
                 'content-length': '999',
+              },
+            },
+          )
+        }
+        if (
+          path === '/oblik-avtozapchastyn/index.html' ||
+          path === '/oblik-prodazhiv-avtozapchastyn/index.html'
+        ) {
+          if (missingProductDocument)
+            return new Response('missing', { status: 404 })
+          const canonical = `https://rozbirka.pro${path.replace('/index.html', '')}`
+          return new Response(
+            `<html><head><link data-product-seo rel="canonical" href="${canonical}" /></head><body>product</body></html>`,
+            {
+              headers: {
+                'content-type': 'text/html',
+                etag: '"product"',
               },
             },
           )
@@ -85,6 +102,44 @@ describe('edge routing', () => {
     )
     expect(response.status).toBe(200)
     expect(await response.text()).toContain('app')
+  })
+
+  it.each([
+    ['/oblik-avtozapchastyn', '/oblik-avtozapchastyn/index.html'],
+    ['/oblik-avtozapchastyn/', '/oblik-avtozapchastyn/index.html'],
+    [
+      '/oblik-prodazhiv-avtozapchastyn',
+      '/oblik-prodazhiv-avtozapchastyn/index.html',
+    ],
+  ])(
+    'serves the prerendered product document for %s',
+    async (pathname, documentPath) => {
+      const response = await handleRequest(
+        new Request(`https://rozbirka.pro${pathname}`),
+        env(),
+      )
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-type')).toBe('text/html')
+      expect(response.headers.get('cache-control')).toBe(
+        'max-age=0, must-revalidate',
+      )
+      expect(response.headers.get('x-robots-tag')).toBeNull()
+      expect(response.headers.get('etag')).toBe('"product"')
+      expect(await response.text()).toContain(
+        `href="https://rozbirka.pro${documentPath.replace('/index.html', '')}"`,
+      )
+    },
+  )
+
+  it('returns the branded 404 when a prerendered product document is missing', async () => {
+    const response = await handleRequest(
+      new Request('https://rozbirka.pro/oblik-avtozapchastyn'),
+      env({ missingProductDocument: true }),
+    )
+
+    expect(response.status).toBe(404)
+    expect(await response.text()).toContain('missing')
   })
 
   it.each([

@@ -2,6 +2,7 @@
 /// <reference types="node" />
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
+import { productSeoEntries } from './product-seo'
 
 describe('SEO surface', () => {
   it('publishes canonical social and structured metadata', async () => {
@@ -26,6 +27,11 @@ describe('SEO surface', () => {
     )
     expect(sitemap).toContain('<loc>https://rozbirka.pro/</loc>')
     expect(sitemap).toContain('<loc>https://rozbirka.pro/privacy</loc>')
+    for (const seo of productSeoEntries.filter(
+      (entry) => entry.includeInSitemap,
+    )) {
+      expect(sitemap).toContain(`<loc>${seo.canonical}</loc>`)
+    }
     expect(sitemap).not.toMatch(/screens|account|login/)
     expect(notFound).toContain('<title>Сторінку не знайдено — rozbirka</title>')
     expect(notFound).toContain('href="/"')

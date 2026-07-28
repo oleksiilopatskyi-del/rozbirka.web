@@ -4,6 +4,10 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export function validateProductionResponses(result) {
   assert(result.home.status === 200, 'home must return 200')
   assert(result.home.contentType.includes('text/html'), 'home must be HTML')
@@ -39,6 +43,23 @@ export function validateProductionResponses(result) {
         `<link rel="canonical" href="${response.canonical}"`,
       ),
       `${name} canonical URL is wrong`,
+    )
+  }
+  for (const [name, response] of Object.entries(result.seoRoutes)) {
+    assert(response.status === 200, `${name} must return 200`)
+    assert(
+      response.contentType.includes('text/html'),
+      `${name} must return HTML`,
+    )
+    assert(
+      response.body.includes(`href="${response.canonical}"`),
+      `${name} canonical URL is wrong`,
+    )
+    assert(
+      new RegExp(`<h1\\b[^>]*>${escapeRegExp(response.h1)}</h1>`).test(
+        response.body,
+      ),
+      `${name} H1 is wrong`,
     )
   }
   for (const [name, response] of Object.entries(result.prototypes)) {
@@ -95,6 +116,14 @@ async function inspectSpaRoute(url) {
   }
 }
 
+async function inspectSeoRoute(url, h1) {
+  return {
+    ...(await inspect(url)),
+    canonical: productionCanonical(url),
+    h1,
+  }
+}
+
 export function buildRouteTargets(baseUrl, apiBaseUrl, assetPath) {
   const base = new URL(baseUrl)
   const apiBase = new URL(apiBaseUrl)
@@ -107,6 +136,8 @@ export function buildRouteTargets(baseUrl, apiBaseUrl, assetPath) {
     api: new URL('/api/v1/billing/plans', apiBase).href,
     privacy: new URL('/privacy', base).href,
     listing: new URL('/marketplace/listings/qa-probe', base).href,
+    partsInventory: new URL('/oblik-avtozapchastyn', base).href,
+    partsSales: new URL('/oblik-prodazhiv-avtozapchastyn', base).href,
     screens: new URL('/screens', base).href,
     header: new URL('/screens/header', base).href,
   }
@@ -150,6 +181,16 @@ export async function checkProductionRoutes(baseUrl, apiBaseUrl) {
     spaRoutes: {
       privacy: await inspectSpaRoute(targets.privacy),
       listing: await inspectSpaRoute(targets.listing),
+    },
+    seoRoutes: {
+      partsInventory: await inspectSeoRoute(
+        targets.partsInventory,
+        'Облік автозапчастин для авторозбірки без таблиць і хаосу',
+      ),
+      partsSales: await inspectSeoRoute(
+        targets.partsSales,
+        'Облік продажів автозапчастин: від замовлення до оплати',
+      ),
     },
     prototypes: {
       screens: await inspect(targets.screens),

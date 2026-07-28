@@ -35,6 +35,21 @@ const documents = await Promise.all(
   }),
 )
 
+const sitemap = await readFile(resolve('dist/sitemap.xml'), 'utf8')
+for (const seo of prerenderManifest.filter((entry) => entry.includeInSitemap)) {
+  if (!sitemap.includes(`<loc>${seo.canonical}</loc>`)) {
+    throw new Error(`Sitemap is missing ${seo.canonical}`)
+  }
+}
+for (const canonical of [
+  'https://rozbirka.pro/privacy',
+  'https://rozbirka.pro/marketplace',
+]) {
+  if (!sitemap.includes(`<loc>${canonical}</loc>`)) {
+    throw new Error(`Sitemap is missing ${canonical}`)
+  }
+}
+
 for (const field of ['title', 'description', 'canonical']) {
   const values = documents.map(({ html }) => readMetadata(html)[field])
   if (new Set(values).size !== documents.length) {

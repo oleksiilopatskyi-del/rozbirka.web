@@ -17,6 +17,12 @@ const spaPaths = [
 const prototypePath = /^\/screens(?:\/|$)/
 const staticPath =
   /^\/(?:robots\.txt|sitemap\.xml|favicon\.svg|og-cover\.webp|fonts\/[^/]+\.(?:woff2|css))$/
+const productDocumentPath: Record<string, string> = {
+  '/': '/index.html',
+  '/oblik-avtozapchastyn': '/oblik-avtozapchastyn/index.html',
+  '/oblik-prodazhiv-avtozapchastyn':
+    '/oblik-prodazhiv-avtozapchastyn/index.html',
+}
 
 function withHeaders(response: Response, headers: Record<string, string>) {
   const next = new Headers(response.headers)
@@ -100,6 +106,20 @@ export async function handleRequest(request: Request, env: EdgeEnv) {
 
   if (staticPath.test(url.pathname)) {
     const response = await env.ASSETS.fetch(request)
+    if (response.status === 404) return notFound(request, env)
+    return withHeaders(response, {
+      'Cache-Control': 'max-age=0, must-revalidate',
+      ...(shouldNoindex(url) ? { 'X-Robots-Tag': 'noindex' } : {}),
+    })
+  }
+
+  const normalizedProductPath =
+    url.pathname.length > 1 && url.pathname.endsWith('/')
+      ? url.pathname.slice(0, -1)
+      : url.pathname
+  const documentPath = productDocumentPath[normalizedProductPath]
+  if (documentPath) {
+    const response = await env.ASSETS.fetch(assetRequest(request, documentPath))
     if (response.status === 404) return notFound(request, env)
     return withHeaders(response, {
       'Cache-Control': 'max-age=0, must-revalidate',
