@@ -40,7 +40,7 @@ function validResponses() {
       partsInventory: {
         status: 200,
         contentType: 'text/html',
-        body: '<link data-product-seo rel="canonical" href="https://rozbirka.pro/oblik-avtozapchastyn"><h1 class="hero">Облік автозапчастин для авторозбірки без таблиць і хаосу</h1>',
+        body: '<link href="https://rozbirka.pro/oblik-avtozapchastyn" data-product-seo rel="alternate canonical"><h1 class="hero">Облік автозапчастин для авторозбірки без таблиць і хаосу</h1>',
         canonical: 'https://rozbirka.pro/oblik-avtozapchastyn',
         h1: 'Облік автозапчастин для авторозбірки без таблиць і хаосу',
       },
@@ -174,6 +174,20 @@ describe('production route validation', () => {
       (value: ReturnType<typeof validResponses>) => {
         value.seoRoutes.partsInventory.body =
           '<link data-product-seo rel="canonical" href="https://rozbirka.pro/">'
+      },
+    ],
+    [
+      'product canonical link with an unrelated expected anchor',
+      (value: ReturnType<typeof validResponses>) => {
+        value.seoRoutes.partsInventory.body =
+          '<link rel="canonical" href="https://rozbirka.pro/"><a href="https://rozbirka.pro/oblik-avtozapchastyn">Expected URL</a><h1>Облік автозапчастин для авторозбірки без таблиць і хаосу</h1>'
+      },
+    ],
+    [
+      'product canonical link with a non-exact URL',
+      (value: ReturnType<typeof validResponses>) => {
+        value.seoRoutes.partsInventory.body =
+          '<link rel="canonical" href="https://rozbirka.pro/oblik-avtozapchastyn?source=wrong"><h1>Облік автозапчастин для авторозбірки без таблиць і хаосу</h1>'
       },
     ],
     [

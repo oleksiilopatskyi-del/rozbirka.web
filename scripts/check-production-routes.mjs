@@ -8,6 +8,24 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+function attributeValue(tag, attribute) {
+  const match = tag.match(
+    new RegExp(`\\s${attribute}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i'),
+  )
+  return match?.[1] ?? match?.[2]
+}
+
+function hasCanonicalLink(html, canonical) {
+  return [...html.matchAll(/<link\b[^>]*>/gi)].some((match) => {
+    const rel = attributeValue(match[0], 'rel')
+    const href = attributeValue(match[0], 'href')
+    return (
+      href === canonical &&
+      rel?.split(/\s+/).some((token) => token.toLowerCase() === 'canonical')
+    )
+  })
+}
+
 export function validateProductionResponses(result) {
   assert(result.home.status === 200, 'home must return 200')
   assert(result.home.contentType.includes('text/html'), 'home must be HTML')
@@ -52,7 +70,7 @@ export function validateProductionResponses(result) {
       `${name} must return HTML`,
     )
     assert(
-      response.body.includes(`href="${response.canonical}"`),
+      hasCanonicalLink(response.body, response.canonical),
       `${name} canonical URL is wrong`,
     )
     assert(

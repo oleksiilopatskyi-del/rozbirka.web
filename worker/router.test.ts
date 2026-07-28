@@ -30,7 +30,7 @@ function env({ missingProductDocument = false } = {}): EdgeEnv {
           path === '/oblik-prodazhiv-avtozapchastyn/index.html'
         ) {
           if (missingProductDocument)
-            return new Response('missing', { status: 404 })
+            return new Response('nested document missing', { status: 404 })
           const canonical = `https://rozbirka.pro${path.replace('/index.html', '')}`
           return new Response(
             `<html><head><link data-product-seo rel="canonical" href="${canonical}" /></head><body>product</body></html>`,
@@ -43,7 +43,7 @@ function env({ missingProductDocument = false } = {}): EdgeEnv {
           )
         }
         if (path === '/404.html') {
-          return new Response('<html>missing</html>', {
+          return new Response('<html>branded 404</html>', {
             headers: { 'content-type': 'text/html' },
           })
         }
@@ -139,7 +139,9 @@ describe('edge routing', () => {
     )
 
     expect(response.status).toBe(404)
-    expect(await response.text()).toContain('missing')
+    const body = await response.text()
+    expect(body).toContain('branded 404')
+    expect(body).not.toContain('nested document missing')
   })
 
   it.each([
@@ -236,7 +238,7 @@ describe('edge routing', () => {
         env(),
       )
       expect(response.status).toBe(404)
-      expect(await response.text()).toContain('missing')
+      expect(await response.text()).toContain('branded 404')
     },
   )
 })
