@@ -1,6 +1,7 @@
 // @vitest-environment node
 /// <reference types="node" />
 import { readFile } from 'node:fs/promises'
+import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
 import { productSeoEntries } from './product-seo'
 
@@ -19,6 +20,21 @@ describe('SEO surface', () => {
     )
     expect(favicon.readUInt32BE(16)).toBe(1024)
     expect(favicon.readUInt32BE(20)).toBe(1024)
+
+    const { data, info } = await sharp(favicon)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const alphaAt = (x: number, y: number) =>
+      data[(y * info.width + x) * info.channels + 3]
+
+    expect(info.width).toBe(1024)
+    expect(info.height).toBe(1024)
+    expect(alphaAt(0, 0)).toBe(0)
+    expect(alphaAt(1023, 0)).toBe(0)
+    expect(alphaAt(0, 1023)).toBe(0)
+    expect(alphaAt(1023, 1023)).toBe(0)
+    expect(alphaAt(512, 512)).toBe(255)
   })
 
   it('publishes canonical social and structured metadata', async () => {
