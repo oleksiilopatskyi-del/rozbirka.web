@@ -48,7 +48,7 @@ export function Hero() {
         <div className="grid grid-cols-1 items-end gap-10 lg:grid-cols-[minmax(0,720px)_1fr] lg:gap-12">
           <div className="flex flex-col gap-6 lg:self-start lg:pl-16">
             <h1
-              className="text-[52px] leading-[1] font-light tracking-[-0.035em] sm:text-[76px] lg:text-[108px]"
+              className="text-[44px] leading-[1] font-light tracking-[-0.035em] sm:text-[64px] lg:text-[88px]"
               style={{ fontFamily: '"Visuelt Hero", system-ui, sans-serif' }}
             >
               <span className="sr-only">

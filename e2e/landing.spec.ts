@@ -137,6 +137,58 @@ test('direct SPA deep links mount one matching page without hydration warnings',
 })
 
 test.describe('responsive matrix', () => {
+  for (const { width, expectedFontSize } of [
+    { width: 375, expectedFontSize: '44px' },
+    { width: 768, expectedFontSize: '64px' },
+    { width: 1440, expectedFontSize: '88px' },
+  ]) {
+    test(`uses compact hero typography at ${width}px`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.setViewportSize({ width, height: 1000 })
+      await page.goto('/')
+
+      await expect(page.getByRole('heading', { level: 1 })).toHaveCSS(
+        'font-size',
+        expectedFontSize,
+      )
+    })
+  }
+
+  for (const width of [375, 768, 1440]) {
+    test(`shows the complete shared footer wordmark at ${width}px`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.setViewportSize({ width, height: 1000 })
+
+      for (const path of [
+        '/',
+        '/oblik-avtozapchastyn',
+        '/oblik-prodazhiv-avtozapchastyn',
+      ]) {
+        await page.goto(path)
+
+        const footer = page.locator('footer')
+        const wordmark = footer.locator('p').filter({ hasText: /^rozbirka$/ })
+        await expect(wordmark).toBeVisible()
+        await wordmark.scrollIntoViewIfNeeded()
+
+        const isFullyVisible = await wordmark.evaluate((element) => {
+          const wordmarkRect = element.getBoundingClientRect()
+          const containerRect = element.parentElement?.getBoundingClientRect()
+
+          return (
+            containerRect !== undefined &&
+            wordmarkRect.top >= containerRect.top &&
+            wordmarkRect.bottom <= containerRect.bottom
+          )
+        })
+
+        expect(isFullyVisible, `${path} at ${width}px`).toBe(true)
+      }
+    })
+  }
+
   for (const width of [320, 375, 768, 1024, 1440]) {
     test(`has no horizontal overflow at ${width}px`, async ({
       page,

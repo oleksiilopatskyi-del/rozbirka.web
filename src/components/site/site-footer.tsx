@@ -70,7 +70,7 @@ export function SiteFooter() {
       </PageContainer>
 
       <div className="mt-16 overflow-hidden" aria-hidden>
-        <p className="text-brand translate-y-[12%] text-center text-[clamp(80px,22vw,420px)] leading-[0.9] font-bold tracking-tight whitespace-nowrap select-none">
+        <p className="text-brand text-center text-[clamp(80px,22vw,420px)] leading-[0.9] font-bold tracking-tight whitespace-nowrap select-none">
           rozbirka
         </p>
       </div>
