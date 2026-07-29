@@ -14,7 +14,7 @@ is fully visible everywhere.
   - `деталь і де`
   - `твої гроші`
 - Restore the original supporting paragraph:
-  `Застосунок, який об’єднує фінанси, функції та управління в одному
+  `Застосунок, який об'єднує фінанси, функції та управління в одному
   інтерфейсі.`
 - Reduce the hero heading's responsive font sizes from `52 / 76 / 108 px` to
   `44 / 64 / 88 px` at the existing base, `sm`, and `lg` breakpoints.

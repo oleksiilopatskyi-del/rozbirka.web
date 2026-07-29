@@ -69,13 +69,12 @@ test('hero content is immediately visible with reduced motion', async ({
   await page.goto('/')
 
   const animatedHeroNodes = [
-    page.getByText('Програма для', { exact: true }),
-    page.getByText('авторозбірки,', { exact: true }),
-    page.getByText('де кожна деталь', { exact: true }),
-    page.getByText('і кожна оплата', { exact: true }),
-    page.getByText('під контролем', { exact: true }),
+    page.getByText('Знаєш', { exact: true }),
+    page.getByText('де кожна', { exact: true }),
+    page.getByText('деталь і де', { exact: true }),
+    page.getByText('твої гроші', { exact: true }),
     page.getByText(
-      'Облік авто, запчастин, замовлень, кас і команди в одному застосунку.',
+      "Застосунок, який об'єднує фінанси, функції та управління в одному інтерфейсі.",
     ),
     page.getByRole('link', { name: 'Спробувати безкоштовно' }).locator('..'),
   ]
@@ -94,13 +93,13 @@ test('hero LCP line is visible from initial paint while later lines stagger', as
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-  const firstHeroLine = page.getByText('Програма для', { exact: true })
+  const firstHeroLine = page.getByText('Знаєш', { exact: true })
   await expect(firstHeroLine).toBeVisible()
   await expect(firstHeroLine).toHaveCSS('opacity', '1')
   await expect(firstHeroLine).toHaveCSS('transform', 'none')
   await expect(firstHeroLine).toHaveCSS('animation-name', 'none')
 
-  await expect(page.getByText('авторозбірки,', { exact: true })).toHaveCSS(
+  await expect(page.getByText('де кожна', { exact: true })).toHaveCSS(
     'animation-name',
     'fade-up',
   )

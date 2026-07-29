@@ -13,7 +13,7 @@
 - Restore the original four hero lines: `Знаєш`, `де кожна`,
   `деталь і де`, and `твої гроші`.
 - Restore the supporting paragraph to
-  `Застосунок, який об’єднує фінанси, функції та управління в одному інтерфейсі.`
+  `Застосунок, який об'єднує фінанси, функції та управління в одному інтерфейсі.`
 - Use hero heading sizes `44 / 64 / 88 px` at the existing base, `sm`, and `lg` breakpoints.
 - Keep the footer wordmark's current responsive `clamp()` size, centering, weight, color, and decorative `aria-hidden` treatment.
 - The complete footer `rozbirka` wordmark must be visible on every route that renders `SiteFooter`, at every supported viewport width.
@@ -234,7 +234,7 @@ git commit -m "fix(web): show complete footer wordmark"
 Update `src/components/site/hero.test.tsx` to require the accessible heading
 `Знаєш де кожна деталь і де твої гроші`, the four visible lines, and the
 supporting paragraph
-`Застосунок, який об’єднує фінанси, функції та управління в одному інтерфейсі.`
+`Застосунок, який об'єднує фінанси, функції та управління в одному інтерфейсі.`
 Keep the first line immediately visible, followed by `100ms`, `200ms`, and
 `300ms` delays. Keep the paragraph and CTA delays at `520ms` and `680ms`.
 

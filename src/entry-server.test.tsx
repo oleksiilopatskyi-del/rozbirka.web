@@ -17,10 +17,7 @@ describe('server product routes', () => {
   })
 
   it.each([
-    [
-      '/',
-      'Програма для авторозбірки, де кожна деталь і кожна оплата під контролем',
-    ],
+    ['/', 'Знаєш де кожна деталь і де твої гроші'],
     ['/oblik-avtozapchastyn', 'Облік автозапчастин для авторозбірки'],
     [
       '/oblik-prodazhiv-avtozapchastyn',
@@ -40,6 +37,9 @@ describe('server product routes', () => {
   })
 
   it('provides the expected visible H1 for each product route', () => {
+    expect(expectedH1ForRoute('/')).toBe(
+      'Знаєш де кожна деталь і де твої гроші',
+    )
     expect(expectedH1ForRoute('/oblik-avtozapchastyn')).toBe(
       'Облік автозапчастин для авторозбірки без таблиць і хаосу',
     )

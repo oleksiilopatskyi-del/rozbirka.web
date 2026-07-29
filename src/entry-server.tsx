@@ -35,7 +35,7 @@ export function expectedH1ForRoute(pathname: string): string {
   const seo = getProductSeo(pathname)
   if (!seo) throw new Error(`Missing product SEO for ${pathname}`)
   return pathname === '/'
-    ? 'Програма для авторозбірки, де кожна деталь і кожна оплата під контролем'
+    ? 'Знаєш де кожна деталь і де твої гроші'
     : getUseCasePage(seo.path as Exclude<ProductSeoPath, '/'>).h1
 }
 
