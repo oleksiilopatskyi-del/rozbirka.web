@@ -2,19 +2,20 @@
 
 ## Goal
 
-Restore the landing page's visual balance after the longer hero copy was
-introduced, and ensure the oversized `rozbirka` wordmark in the shared footer is
-fully visible everywhere.
+Restore the landing page's original hero message with compact responsive
+typography, and ensure the oversized `rozbirka` wordmark in the shared footer
+is fully visible everywhere.
 
 ## Scope
 
-- Keep the current hero wording and its five intentional lines:
-  - `Програма для`
-  - `авторозбірки,`
-  - `де кожна деталь`
-  - `і кожна оплата`
-  - `під контролем`
-- Keep the supporting paragraph unchanged.
+- Restore the original hero wording and its four intentional lines:
+  - `Знаєш`
+  - `де кожна`
+  - `деталь і де`
+  - `твої гроші`
+- Restore the original supporting paragraph:
+  `Застосунок, який об’єднує фінанси, функції та управління в одному
+  інтерфейсі.`
 - Reduce the hero heading's responsive font sizes from `52 / 76 / 108 px` to
   `44 / 64 / 88 px` at the existing base, `sm`, and `lg` breakpoints.
 - Remove the downward translation from the oversized footer wordmark so the
@@ -24,9 +25,10 @@ fully visible everywhere.
 
 ## Implementation Design
 
-The hero remains structurally and semantically unchanged. Only its responsive
-font-size utility classes change, preserving the existing line height, tracking,
-animation, accessible full heading, and fixed visual line breaks.
+The hero keeps its current structure, responsive `44 / 64 / 88 px` scale,
+line height, tracking, animation behavior, accessible full heading, and fixed
+visual line breaks. Its visible and accessible heading copy and supporting
+paragraph return to the original wording.
 
 The footer remains a shared component. The visual wordmark keeps its current
 responsive `clamp()` size, centering, weight, color, and decorative
@@ -36,8 +38,9 @@ footer overrides will be added.
 
 ## Verification
 
-- Add or update component tests that assert the intended responsive typography
-  classes and the absence of the footer's downward-translation class.
+- Add or update component tests that assert the restored accessible heading,
+  four visible lines, supporting paragraph, and intended responsive
+  typography.
 - Run formatting, linting, type checking, and the relevant unit tests.
 - Visually verify the homepage and both SEO use-case routes at mobile, tablet,
   and desktop widths.
@@ -46,7 +49,6 @@ footer overrides will be added.
 
 ## Out of Scope
 
-- Copy changes.
 - Hero animation changes.
 - Footer navigation, spacing, colors, or wordmark sizing changes.
 - Changes to pages that do not render `SiteFooter`.
