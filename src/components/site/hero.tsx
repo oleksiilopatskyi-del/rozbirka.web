@@ -14,11 +14,10 @@ interface HeroLine {
 }
 
 const heroLines: HeroLine[] = [
-  { text: 'Програма для', visibleFromStart: true },
-  { text: 'авторозбірки,', delay: '100ms' },
-  { text: 'де кожна деталь', delay: '200ms' },
-  { text: 'і кожна оплата', delay: '300ms' },
-  { text: 'під контролем', className: 'text-brand', delay: '400ms' },
+  { text: 'Знаєш', visibleFromStart: true },
+  { text: 'де кожна', delay: '100ms' },
+  { text: 'деталь і де', delay: '200ms' },
+  { text: 'твої гроші', className: 'text-brand', delay: '300ms' },
 ]
 
 function AnimatedHeading({ lines }: { lines: HeroLine[] }) {
@@ -48,12 +47,11 @@ export function Hero() {
         <div className="grid grid-cols-1 items-end gap-10 lg:grid-cols-[minmax(0,720px)_1fr] lg:gap-12">
           <div className="flex flex-col gap-6 lg:self-start lg:pl-16">
             <h1
-              className="text-[52px] leading-[1] font-light tracking-[-0.035em] sm:text-[76px] lg:text-[108px]"
+              className="text-[44px] leading-[1] font-light tracking-[-0.035em] sm:text-[64px] lg:text-[88px]"
               style={{ fontFamily: '"Visuelt Hero", system-ui, sans-serif' }}
             >
               <span className="sr-only">
-                Програма для авторозбірки, де кожна деталь і кожна оплата під
-                контролем
+                Знаєш де кожна деталь і де твої гроші
               </span>
               <span aria-hidden>
                 <AnimatedHeading lines={heroLines} />
@@ -64,8 +62,8 @@ export function Hero() {
               className="anim-fade-up max-w-[400px] text-[17px] leading-[1.5] font-normal text-neutral-400"
               style={{ animationDelay: '520ms' }}
             >
-              Облік авто, запчастин, замовлень, кас і команди в одному
-              застосунку.
+              Застосунок, який об&apos;єднує фінанси, функції та управління в
+              одному інтерфейсі.
             </p>
 
             <div

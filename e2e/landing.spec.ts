@@ -69,13 +69,12 @@ test('hero content is immediately visible with reduced motion', async ({
   await page.goto('/')
 
   const animatedHeroNodes = [
-    page.getByText('Програма для', { exact: true }),
-    page.getByText('авторозбірки,', { exact: true }),
-    page.getByText('де кожна деталь', { exact: true }),
-    page.getByText('і кожна оплата', { exact: true }),
-    page.getByText('під контролем', { exact: true }),
+    page.getByText('Знаєш', { exact: true }),
+    page.getByText('де кожна', { exact: true }),
+    page.getByText('деталь і де', { exact: true }),
+    page.getByText('твої гроші', { exact: true }),
     page.getByText(
-      'Облік авто, запчастин, замовлень, кас і команди в одному застосунку.',
+      "Застосунок, який об'єднує фінанси, функції та управління в одному інтерфейсі.",
     ),
     page.getByRole('link', { name: 'Спробувати безкоштовно' }).locator('..'),
   ]
@@ -94,13 +93,13 @@ test('hero LCP line is visible from initial paint while later lines stagger', as
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-  const firstHeroLine = page.getByText('Програма для', { exact: true })
+  const firstHeroLine = page.getByText('Знаєш', { exact: true })
   await expect(firstHeroLine).toBeVisible()
   await expect(firstHeroLine).toHaveCSS('opacity', '1')
   await expect(firstHeroLine).toHaveCSS('transform', 'none')
   await expect(firstHeroLine).toHaveCSS('animation-name', 'none')
 
-  await expect(page.getByText('авторозбірки,', { exact: true })).toHaveCSS(
+  await expect(page.getByText('де кожна', { exact: true })).toHaveCSS(
     'animation-name',
     'fade-up',
   )
@@ -137,6 +136,87 @@ test('direct SPA deep links mount one matching page without hydration warnings',
 })
 
 test.describe('responsive matrix', () => {
+  test('uses identical footer typography on landing and SEO routes', async ({
+    page,
+  }) => {
+    let landingFontFamily = ''
+
+    for (const path of [
+      '/',
+      '/oblik-avtozapchastyn',
+      '/oblik-prodazhiv-avtozapchastyn',
+    ]) {
+      await page.goto(path)
+      await page.evaluate(() => document.fonts.ready)
+
+      const wordmark = page
+        .locator('footer p')
+        .filter({ hasText: /^rozbirka$/ })
+      const fontFamily = await wordmark.evaluate(
+        (element) => getComputedStyle(element).fontFamily,
+      )
+
+      if (path === '/') {
+        landingFontFamily = fontFamily
+        expect(fontFamily).toContain('Visuelt Pro')
+      } else {
+        expect(fontFamily, path).toBe(landingFontFamily)
+      }
+    }
+  })
+
+  for (const { width, expectedFontSize } of [
+    { width: 375, expectedFontSize: '44px' },
+    { width: 768, expectedFontSize: '64px' },
+    { width: 1440, expectedFontSize: '88px' },
+  ]) {
+    test(`uses compact hero typography at ${width}px`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.setViewportSize({ width, height: 1000 })
+      await page.goto('/')
+
+      await expect(page.getByRole('heading', { level: 1 })).toHaveCSS(
+        'font-size',
+        expectedFontSize,
+      )
+    })
+  }
+
+  for (const width of [375, 768, 1440]) {
+    test(`shows the complete shared footer wordmark at ${width}px`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.setViewportSize({ width, height: 1000 })
+
+      for (const path of [
+        '/',
+        '/oblik-avtozapchastyn',
+        '/oblik-prodazhiv-avtozapchastyn',
+      ]) {
+        await page.goto(path)
+
+        const footer = page.locator('footer')
+        const wordmark = footer.locator('p').filter({ hasText: /^rozbirka$/ })
+        await expect(wordmark).toBeVisible()
+        await wordmark.scrollIntoViewIfNeeded()
+
+        const isFullyVisible = await wordmark.evaluate((element) => {
+          const wordmarkRect = element.getBoundingClientRect()
+          const containerRect = element.parentElement?.getBoundingClientRect()
+
+          return (
+            containerRect !== undefined &&
+            wordmarkRect.top >= containerRect.top &&
+            wordmarkRect.bottom <= containerRect.bottom
+          )
+        })
+
+        expect(isFullyVisible, `${path} at ${width}px`).toBe(true)
+      }
+    })
+  }
+
   for (const width of [320, 375, 768, 1024, 1440]) {
     test(`has no horizontal overflow at ${width}px`, async ({
       page,

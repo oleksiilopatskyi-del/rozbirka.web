@@ -5,6 +5,22 @@ import { describe, expect, it } from 'vitest'
 import { productSeoEntries } from './product-seo'
 
 describe('SEO surface', () => {
+  it('publishes the Rozbirka PNG favicon', async () => {
+    const [html, favicon] = await Promise.all([
+      readFile('index.html', 'utf8'),
+      readFile('public/favicon.png'),
+    ])
+
+    expect(html).toContain(
+      '<link rel="icon" type="image/png" href="/favicon.png" />',
+    )
+    expect(favicon.subarray(0, 8)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    )
+    expect(favicon.readUInt32BE(16)).toBe(1024)
+    expect(favicon.readUInt32BE(20)).toBe(1024)
+  })
+
   it('publishes canonical social and structured metadata', async () => {
     const html = await readFile('index.html', 'utf8')
     expect(html).toContain(

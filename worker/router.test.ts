@@ -60,6 +60,11 @@ function env({ missingProductDocument = false } = {}): EdgeEnv {
             headers: { 'content-type': 'text/css' },
           })
         }
+        if (path === '/favicon.png') {
+          return new Response('favicon', {
+            headers: { 'content-type': 'image/png', etag: '"favicon"' },
+          })
+        }
         return new Response('missing', { status: 404 })
       }),
     },
@@ -257,6 +262,20 @@ describe('edge routing', () => {
     expect(response.headers.get('cache-control')).toBe(
       'max-age=0, must-revalidate',
     )
+  })
+
+  it('serves the PNG favicon as a revalidated static asset', async () => {
+    const response = await handleRequest(
+      new Request('https://rozbirka.pro/favicon.png'),
+      env(),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('image/png')
+    expect(response.headers.get('cache-control')).toBe(
+      'max-age=0, must-revalidate',
+    )
+    expect(response.headers.get('etag')).toBe('"favicon"')
   })
 
   it('adds noindex to private and QA SPA responses', async () => {
