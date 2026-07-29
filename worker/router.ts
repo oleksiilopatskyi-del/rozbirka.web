@@ -16,7 +16,7 @@ const spaPaths = [
 
 const prototypePath = /^\/screens(?:\/|$)/
 const staticPath =
-  /^\/(?:robots\.txt|sitemap\.xml|favicon\.svg|og-cover\.webp|fonts\/[^/]+\.(?:woff2|css))$/
+  /^\/(?:robots\.txt|sitemap\.xml|favicon\.png|og-cover\.webp|fonts\/[^/]+\.(?:woff2|css))$/
 const productDocumentPath: Record<string, string> = {
   '/': '/index.html',
   '/oblik-avtozapchastyn': '/oblik-avtozapchastyn/index.html',
