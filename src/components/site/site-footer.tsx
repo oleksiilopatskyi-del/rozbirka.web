@@ -33,7 +33,7 @@ export function SiteFooter() {
   }
 
   return (
-    <footer className="bg-background px-6 pt-12 pb-0">
+    <footer className="font-visuelt bg-background px-6 pt-12 pb-0">
       <PageContainer>
         <nav
           aria-label="Footer"

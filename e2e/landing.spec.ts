@@ -137,6 +137,35 @@ test('direct SPA deep links mount one matching page without hydration warnings',
 })
 
 test.describe('responsive matrix', () => {
+  test('uses identical footer typography on landing and SEO routes', async ({
+    page,
+  }) => {
+    let landingFontFamily = ''
+
+    for (const path of [
+      '/',
+      '/oblik-avtozapchastyn',
+      '/oblik-prodazhiv-avtozapchastyn',
+    ]) {
+      await page.goto(path)
+      await page.evaluate(() => document.fonts.ready)
+
+      const wordmark = page
+        .locator('footer p')
+        .filter({ hasText: /^rozbirka$/ })
+      const fontFamily = await wordmark.evaluate(
+        (element) => getComputedStyle(element).fontFamily,
+      )
+
+      if (path === '/') {
+        landingFontFamily = fontFamily
+        expect(fontFamily).toContain('Visuelt Pro')
+      } else {
+        expect(fontFamily, path).toBe(landingFontFamily)
+      }
+    }
+  })
+
   for (const { width, expectedFontSize } of [
     { width: 375, expectedFontSize: '44px' },
     { width: 768, expectedFontSize: '64px' },
