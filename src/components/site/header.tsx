@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { LogIn, Menu, User as UserIcon, X } from 'lucide-react'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { PageContainer } from '@/components/layout/page-container'
 import { BrandLogo } from '@/components/site/brand-logo'
 import { NavLinks } from '@/components/site/nav-links'
@@ -9,7 +9,9 @@ import { useAuth } from '@/auth/AuthContext'
 
 export function SiteHeader() {
   const { status, user } = useAuth()
+  const { pathname } = useLocation()
   const isAuthed = status === 'authenticated'
+  const activeNavProps = pathname === '/' ? { activeHref: '#top' } : {}
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -33,7 +35,7 @@ export function SiteHeader() {
         >
           <div className="flex items-center gap-6">
             <BrandLogo />
-            <NavLinks activeHref="#top" className="hidden lg:flex" />
+            <NavLinks {...activeNavProps} className="hidden lg:flex" />
           </div>
 
           <div className="hidden items-center gap-2 lg:flex">

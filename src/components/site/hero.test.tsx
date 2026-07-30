@@ -29,20 +29,26 @@ describe('Hero conversion', () => {
       </MemoryRouter>,
     )
 
-    const expectedLines = [
-      ['Знаєш', '0ms'],
+    const expectedAnimatedLines = [
       ['де кожна', '100ms'],
       ['деталь і де', '200ms'],
       ['твої гроші', '300ms'],
     ] as const
 
-    expectedLines.forEach(([text, delay]) => {
+    const firstLine = screen.getByText('Знаєш')
+    expect(firstLine).toHaveClass('anim-fade-up-visible')
+    expect(firstLine).not.toHaveClass('anim-fade-up')
+    expect(firstLine).not.toHaveAttribute('style')
+
+    expectedAnimatedLines.forEach(([text, delay]) => {
       const line = screen.getByText(text)
       expect(line).toHaveClass('anim-fade-up')
       expect(line).toHaveStyle({ animationDelay: delay })
     })
 
-    const copy = screen.getByText(/Застосунок, який об'єднує фінанси/)
+    const copy = screen.getByText(
+      "Застосунок, який об'єднує фінанси, функції та управління в одному інтерфейсі.",
+    )
     expect(copy).toHaveClass('anim-fade-up')
     expect(copy).toHaveStyle({ animationDelay: '520ms' })
 

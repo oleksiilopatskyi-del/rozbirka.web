@@ -1,11 +1,37 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
+test('retired SEO use-case URLs return the branded 404 page', async ({
+  page,
+}) => {
+  for (const path of [
+    '/oblik-avtozapchastyn',
+    '/oblik-avtozapchastyn/',
+    '/oblik-prodazhiv-avtozapchastyn',
+    '/oblik-prodazhiv-avtozapchastyn/',
+  ]) {
+    const response = await page.goto(path)
+
+    expect(response?.status(), path).toBe(404)
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Сторінку не знайдено' }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: 'На головну' }),
+    ).toHaveAttribute('href', '/')
+  }
+})
+
 test('landing interactions work without serious accessibility violations', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/')
+  await expect(
+    page.getByRole('heading', {
+      name: 'Усе для щоденної роботи авторозбірки',
+    }),
+  ).toHaveCount(0)
   const results = await new AxeBuilder({ page }).analyze()
   expect(
     results.violations.filter((violation) =>
@@ -49,6 +75,24 @@ test('hero content is immediately visible with reduced motion', async ({
   }
 })
 
+test('hero LCP line is visible from initial paint while later lines stagger', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  const firstHeroLine = page.getByText('Знаєш', { exact: true })
+  await expect(firstHeroLine).toBeVisible()
+  await expect(firstHeroLine).toHaveCSS('opacity', '1')
+  await expect(firstHeroLine).toHaveCSS('transform', 'none')
+  await expect(firstHeroLine).toHaveCSS('animation-name', 'none')
+
+  await expect(page.getByText('де кожна', { exact: true })).toHaveCSS(
+    'animation-name',
+    'fade-up',
+  )
+})
+
 test('direct SPA deep links mount one matching page without hydration warnings', async ({
   page,
 }) => {
@@ -80,6 +124,65 @@ test('direct SPA deep links mount one matching page without hydration warnings',
 })
 
 test.describe('responsive matrix', () => {
+  test('uses the Visuelt Pro footer typography on the landing page', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await page.evaluate(() => document.fonts.ready)
+
+    const wordmark = page.locator('footer p').filter({ hasText: /^rozbirka$/ })
+    const fontFamily = await wordmark.evaluate(
+      (element) => getComputedStyle(element).fontFamily,
+    )
+
+    expect(fontFamily).toContain('Visuelt Pro')
+  })
+
+  for (const { width, expectedFontSize } of [
+    { width: 375, expectedFontSize: '44px' },
+    { width: 768, expectedFontSize: '64px' },
+    { width: 1440, expectedFontSize: '88px' },
+  ]) {
+    test(`uses compact hero typography at ${width}px`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.setViewportSize({ width, height: 1000 })
+      await page.goto('/')
+
+      await expect(page.getByRole('heading', { level: 1 })).toHaveCSS(
+        'font-size',
+        expectedFontSize,
+      )
+    })
+  }
+
+  for (const width of [375, 768, 1440]) {
+    test(`shows the complete shared footer wordmark at ${width}px`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await page.setViewportSize({ width, height: 1000 })
+      await page.goto('/')
+
+      const footer = page.locator('footer')
+      const wordmark = footer.locator('p').filter({ hasText: /^rozbirka$/ })
+      await expect(wordmark).toBeVisible()
+      await wordmark.scrollIntoViewIfNeeded()
+
+      const isFullyVisible = await wordmark.evaluate((element) => {
+        const wordmarkRect = element.getBoundingClientRect()
+        const containerRect = element.parentElement?.getBoundingClientRect()
+
+        return (
+          containerRect !== undefined &&
+          wordmarkRect.top >= containerRect.top &&
+          wordmarkRect.bottom <= containerRect.bottom
+        )
+      })
+
+      expect(isFullyVisible, `homepage at ${width}px`).toBe(true)
+    })
+  }
+
   for (const width of [320, 375, 768, 1024, 1440]) {
     test(`has no horizontal overflow at ${width}px`, async ({
       page,

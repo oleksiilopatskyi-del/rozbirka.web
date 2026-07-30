@@ -39,3 +39,4 @@ test-results
 .claude/settings.local.json
 .playwright-mcp/
 .superpowers/
+.worktrees/

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { ArrowUp } from 'lucide-react'
+import { useLocation } from 'react-router'
 import { PageContainer } from '@/components/layout/page-container'
 import { BrandLogo } from '@/components/site/brand-logo'
 import { NavLinks } from '@/components/site/nav-links'
@@ -9,7 +10,9 @@ const secondaryLinks = [
 ]
 
 export function SiteFooter() {
+  const { pathname } = useLocation()
   const reducedMotion = useRef(false)
+  const activeNavProps = pathname === '/' ? { activeHref: '#top' } : {}
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
@@ -30,7 +33,7 @@ export function SiteFooter() {
   }
 
   return (
-    <footer className="bg-background px-6 pt-12 pb-0">
+    <footer className="font-visuelt bg-background px-6 pt-12 pb-0">
       <PageContainer>
         <nav
           aria-label="Footer"
@@ -38,7 +41,7 @@ export function SiteFooter() {
         >
           <div className="flex flex-wrap items-center gap-6">
             <BrandLogo />
-            <NavLinks activeHref="#top" />
+            <NavLinks {...activeNavProps} />
           </div>
 
           <div className="flex flex-wrap items-center gap-6">
@@ -67,7 +70,7 @@ export function SiteFooter() {
       </PageContainer>
 
       <div className="mt-16 overflow-hidden" aria-hidden>
-        <p className="text-brand translate-y-[12%] text-center text-[clamp(80px,22vw,420px)] leading-[0.9] font-bold tracking-tight whitespace-nowrap select-none">
+        <p className="text-brand text-center text-[clamp(80px,22vw,420px)] leading-[0.9] font-bold tracking-tight whitespace-nowrap select-none">
           rozbirka
         </p>
       </div>

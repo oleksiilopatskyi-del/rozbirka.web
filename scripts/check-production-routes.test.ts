@@ -26,14 +26,26 @@ function validResponses() {
       privacy: {
         status: 200,
         contentType: 'text/html',
-        body: '<link rel="canonical" href="https://rozbirka.pro/privacy">',
+        body: '<link href="https://rozbirka.pro/privacy" data-product-seo rel="alternate canonical">',
         canonical: 'https://rozbirka.pro/privacy',
       },
       listing: {
         status: 200,
         contentType: 'text/html',
-        body: '<link rel="canonical" href="https://rozbirka.pro/marketplace/listings/qa-probe">',
+        body: '<link data-product-seo href="https://rozbirka.pro/marketplace/listings/qa-probe" media="all" rel="canonical">',
         canonical: 'https://rozbirka.pro/marketplace/listings/qa-probe',
+      },
+    },
+    retiredRoutes: {
+      inventory: {
+        status: 404,
+        contentType: 'text/html',
+        xRobotsTag: 'noindex',
+      },
+      sales: {
+        status: 404,
+        contentType: 'text/html',
+        xRobotsTag: 'noindex',
       },
     },
     prototypes: {
@@ -65,6 +77,8 @@ describe('production route validation', () => {
       home: 'https://rozbirka.pro/',
       api: 'https://api.rozbirka.pro/api/v1/billing/plans',
       asset: 'https://rozbirka.pro/assets/app.js',
+      retiredInventory: 'https://rozbirka.pro/oblik-avtozapchastyn',
+      retiredSales: 'https://rozbirka.pro/oblik-prodazhiv-avtozapchastyn',
     })
   })
 
@@ -142,6 +156,18 @@ describe('production route validation', () => {
       (value: ReturnType<typeof validResponses>) => {
         value.spaRoutes.privacy.body =
           '<link rel="canonical" href="https://rozbirka.pro/">'
+      },
+    ],
+    [
+      'retired route returns 200',
+      (value: ReturnType<typeof validResponses>) => {
+        value.retiredRoutes.inventory.status = 200
+      },
+    ],
+    [
+      'retired route is indexable',
+      (value: ReturnType<typeof validResponses>) => {
+        value.retiredRoutes.inventory.xRobotsTag = ''
       },
     ],
     [

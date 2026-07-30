@@ -13,4 +13,14 @@ describe('production route boundary', () => {
     expect(paths).toContain('/screens')
     expect(paths).toContain('/screens/header')
   })
+
+  it('omits retired ROZ-13 product routes in production and development', () => {
+    for (const includePrototypeRoutes of [false, true]) {
+      const paths = createAppRoutes(includePrototypeRoutes).map(
+        (route) => route.path,
+      )
+      expect(paths).not.toContain('/oblik-avtozapchastyn')
+      expect(paths).not.toContain('/oblik-prodazhiv-avtozapchastyn')
+    }
+  })
 })
