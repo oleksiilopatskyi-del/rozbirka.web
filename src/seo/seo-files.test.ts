@@ -60,6 +60,8 @@ describe('SEO surface', () => {
     expect(sitemap).toContain('<loc>https://rozbirka.pro/</loc>')
     expect(sitemap).toContain('<loc>https://rozbirka.pro/privacy</loc>')
     expect(sitemap).toContain('<loc>https://rozbirka.pro/marketplace</loc>')
+    expect(sitemap).not.toContain('/oblik-avtozapchastyn')
+    expect(sitemap).not.toContain('/oblik-prodazhiv-avtozapchastyn')
     for (const seo of productSeoEntries.filter(
       (entry) => entry.includeInSitemap,
     )) {

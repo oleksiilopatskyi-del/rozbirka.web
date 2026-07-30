@@ -4,10 +4,6 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 function attributeValue(tag, attribute) {
   const match = tag.match(
     new RegExp(`\\s${attribute}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i'),
@@ -61,21 +57,15 @@ export function validateProductionResponses(result) {
       `${name} canonical URL is wrong`,
     )
   }
-  for (const [name, response] of Object.entries(result.seoRoutes)) {
-    assert(response.status === 200, `${name} must return 200`)
+  for (const [name, response] of Object.entries(result.retiredRoutes)) {
+    assert(response.status === 404, `${name} must return 404`)
     assert(
       response.contentType.includes('text/html'),
       `${name} must return HTML`,
     )
     assert(
-      hasCanonicalLink(response.body, response.canonical),
-      `${name} canonical URL is wrong`,
-    )
-    assert(
-      new RegExp(`<h1\\b[^>]*>${escapeRegExp(response.h1)}</h1>`).test(
-        response.body,
-      ),
-      `${name} H1 is wrong`,
+      response.xRobotsTag === 'noindex',
+      `${name} must return X-Robots-Tag: noindex`,
     )
   }
   for (const [name, response] of Object.entries(result.prototypes)) {
@@ -116,6 +106,7 @@ async function inspect(url, redirect = 'follow') {
     status: response.status,
     contentType: response.headers.get('content-type') ?? '',
     cacheControl: response.headers.get('cache-control') ?? '',
+    xRobotsTag: response.headers.get('x-robots-tag') ?? '',
     location: response.headers.get('location') ?? '',
     body: await response.text(),
   }
@@ -132,14 +123,6 @@ async function inspectSpaRoute(url) {
   }
 }
 
-async function inspectSeoRoute(url, h1) {
-  return {
-    ...(await inspect(url)),
-    canonical: productionCanonical(url),
-    h1,
-  }
-}
-
 export function buildRouteTargets(baseUrl, apiBaseUrl, assetPath) {
   const base = new URL(baseUrl)
   const apiBase = new URL(apiBaseUrl)
@@ -152,8 +135,8 @@ export function buildRouteTargets(baseUrl, apiBaseUrl, assetPath) {
     api: new URL('/api/v1/billing/plans', apiBase).href,
     privacy: new URL('/privacy', base).href,
     listing: new URL('/marketplace/listings/qa-probe', base).href,
-    partsInventory: new URL('/oblik-avtozapchastyn', base).href,
-    partsSales: new URL('/oblik-prodazhiv-avtozapchastyn', base).href,
+    retiredInventory: new URL('/oblik-avtozapchastyn', base).href,
+    retiredSales: new URL('/oblik-prodazhiv-avtozapchastyn', base).href,
     screens: new URL('/screens', base).href,
     header: new URL('/screens/header', base).href,
   }
@@ -198,15 +181,9 @@ export async function checkProductionRoutes(baseUrl, apiBaseUrl) {
       privacy: await inspectSpaRoute(targets.privacy),
       listing: await inspectSpaRoute(targets.listing),
     },
-    seoRoutes: {
-      partsInventory: await inspectSeoRoute(
-        targets.partsInventory,
-        'Облік автозапчастин для авторозбірки без таблиць і хаосу',
-      ),
-      partsSales: await inspectSeoRoute(
-        targets.partsSales,
-        'Облік продажів автозапчастин: від замовлення до оплати',
-      ),
+    retiredRoutes: {
+      inventory: await inspect(targets.retiredInventory),
+      sales: await inspect(targets.retiredSales),
     },
     prototypes: {
       screens: await inspect(targets.screens),

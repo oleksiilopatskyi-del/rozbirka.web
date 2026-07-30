@@ -36,20 +36,16 @@ function validResponses() {
         canonical: 'https://rozbirka.pro/marketplace/listings/qa-probe',
       },
     },
-    seoRoutes: {
-      partsInventory: {
-        status: 200,
+    retiredRoutes: {
+      inventory: {
+        status: 404,
         contentType: 'text/html',
-        body: '<link href="https://rozbirka.pro/oblik-avtozapchastyn" data-product-seo rel="alternate canonical"><h1 class="hero">Облік автозапчастин для авторозбірки без таблиць і хаосу</h1>',
-        canonical: 'https://rozbirka.pro/oblik-avtozapchastyn',
-        h1: 'Облік автозапчастин для авторозбірки без таблиць і хаосу',
+        xRobotsTag: 'noindex',
       },
-      partsSales: {
-        status: 200,
+      sales: {
+        status: 404,
         contentType: 'text/html',
-        body: '<link data-product-seo rel="canonical" href="https://rozbirka.pro/oblik-prodazhiv-avtozapchastyn"><h1 class="hero">Облік продажів автозапчастин: від замовлення до оплати</h1>',
-        canonical: 'https://rozbirka.pro/oblik-prodazhiv-avtozapchastyn',
-        h1: 'Облік продажів автозапчастин: від замовлення до оплати',
+        xRobotsTag: 'noindex',
       },
     },
     prototypes: {
@@ -81,8 +77,8 @@ describe('production route validation', () => {
       home: 'https://rozbirka.pro/',
       api: 'https://api.rozbirka.pro/api/v1/billing/plans',
       asset: 'https://rozbirka.pro/assets/app.js',
-      partsInventory: 'https://rozbirka.pro/oblik-avtozapchastyn',
-      partsSales: 'https://rozbirka.pro/oblik-prodazhiv-avtozapchastyn',
+      retiredInventory: 'https://rozbirka.pro/oblik-avtozapchastyn',
+      retiredSales: 'https://rozbirka.pro/oblik-prodazhiv-avtozapchastyn',
     })
   })
 
@@ -163,31 +159,15 @@ describe('production route validation', () => {
       },
     ],
     [
-      'missing product route H1',
+      'retired route returns 200',
       (value: ReturnType<typeof validResponses>) => {
-        value.seoRoutes.partsInventory.body =
-          '<link data-product-seo rel="canonical" href="https://rozbirka.pro/oblik-avtozapchastyn">'
+        value.retiredRoutes.inventory.status = 200
       },
     ],
     [
-      'wrong product route canonical',
+      'retired route is indexable',
       (value: ReturnType<typeof validResponses>) => {
-        value.seoRoutes.partsInventory.body =
-          '<link data-product-seo rel="canonical" href="https://rozbirka.pro/">'
-      },
-    ],
-    [
-      'product canonical link with an unrelated expected anchor',
-      (value: ReturnType<typeof validResponses>) => {
-        value.seoRoutes.partsInventory.body =
-          '<link rel="canonical" href="https://rozbirka.pro/"><a href="https://rozbirka.pro/oblik-avtozapchastyn">Expected URL</a><h1>Облік автозапчастин для авторозбірки без таблиць і хаосу</h1>'
-      },
-    ],
-    [
-      'product canonical link with a non-exact URL',
-      (value: ReturnType<typeof validResponses>) => {
-        value.seoRoutes.partsInventory.body =
-          '<link rel="canonical" href="https://rozbirka.pro/oblik-avtozapchastyn?source=wrong"><h1>Облік автозапчастин для авторозбірки без таблиць і хаосу</h1>'
+        value.retiredRoutes.inventory.xRobotsTag = ''
       },
     ],
     [

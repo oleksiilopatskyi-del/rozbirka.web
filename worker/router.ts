@@ -19,9 +19,6 @@ const staticPath =
   /^\/(?:robots\.txt|sitemap\.xml|favicon\.png|og-cover\.webp|fonts\/[^/]+\.(?:woff2|css))$/
 const productDocumentPath: Record<string, string> = {
   '/': '/index.html',
-  '/oblik-avtozapchastyn': '/oblik-avtozapchastyn/index.html',
-  '/oblik-prodazhiv-avtozapchastyn':
-    '/oblik-prodazhiv-avtozapchastyn/index.html',
 }
 
 const appShellMetadata = {

@@ -1,41 +1,24 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
-const seoUseCaseRoutes = [
-  {
-    path: '/oblik-avtozapchastyn',
-    canonical: 'https://rozbirka.pro/oblik-avtozapchastyn',
-    h1: 'Облік автозапчастин для авторозбірки без таблиць і хаосу',
-  },
-  {
-    path: '/oblik-prodazhiv-avtozapchastyn',
-    canonical: 'https://rozbirka.pro/oblik-prodazhiv-avtozapchastyn',
-    h1: 'Облік продажів автозапчастин: від замовлення до оплати',
-  },
-] as const
-
-test('SEO use-case pages expose one semantic conversion contract', async ({
+test('retired SEO use-case URLs return the branded 404 page', async ({
   page,
 }) => {
-  for (const route of seoUseCaseRoutes) {
-    await page.goto(route.path)
+  for (const path of [
+    '/oblik-avtozapchastyn',
+    '/oblik-avtozapchastyn/',
+    '/oblik-prodazhiv-avtozapchastyn',
+    '/oblik-prodazhiv-avtozapchastyn/',
+  ]) {
+    const response = await page.goto(path)
 
-    await expect(page.locator('h1')).toHaveCount(1)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(route.h1)
-    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
-      'href',
-      route.canonical,
-    )
-    await expect(page.locator('script[data-product-json-ld]')).toHaveCount(1)
+    expect(response?.status(), path).toBe(404)
     await expect(
-      page.getByRole('link', { name: 'Спробувати rozbirka' }),
-    ).toHaveAttribute('href', '/login')
-    const finalCta = page.getByRole('region', {
-      name: 'Готові впорядкувати роботу авторозбірки?',
-    })
+      page.getByRole('heading', { level: 1, name: 'Сторінку не знайдено' }),
+    ).toBeVisible()
     await expect(
-      finalCta.getByRole('link', { name: 'Зареєструватися в rozbirka' }),
-    ).toHaveAttribute('href', '/login')
+      page.getByRole('link', { name: 'На головну' }),
+    ).toHaveAttribute('href', '/')
   }
 })
 
