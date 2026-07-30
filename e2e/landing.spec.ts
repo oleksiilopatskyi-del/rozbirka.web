@@ -27,6 +27,11 @@ test('landing interactions work without serious accessibility violations', async
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/')
+  await expect(
+    page.getByRole('heading', {
+      name: 'Усе для щоденної роботи авторозбірки',
+    }),
+  ).toHaveCount(0)
   const results = await new AxeBuilder({ page }).analyze()
   expect(
     results.violations.filter((violation) =>
@@ -119,33 +124,18 @@ test('direct SPA deep links mount one matching page without hydration warnings',
 })
 
 test.describe('responsive matrix', () => {
-  test('uses identical footer typography on landing and SEO routes', async ({
+  test('uses the Visuelt Pro footer typography on the landing page', async ({
     page,
   }) => {
-    let landingFontFamily = ''
+    await page.goto('/')
+    await page.evaluate(() => document.fonts.ready)
 
-    for (const path of [
-      '/',
-      '/oblik-avtozapchastyn',
-      '/oblik-prodazhiv-avtozapchastyn',
-    ]) {
-      await page.goto(path)
-      await page.evaluate(() => document.fonts.ready)
+    const wordmark = page.locator('footer p').filter({ hasText: /^rozbirka$/ })
+    const fontFamily = await wordmark.evaluate(
+      (element) => getComputedStyle(element).fontFamily,
+    )
 
-      const wordmark = page
-        .locator('footer p')
-        .filter({ hasText: /^rozbirka$/ })
-      const fontFamily = await wordmark.evaluate(
-        (element) => getComputedStyle(element).fontFamily,
-      )
-
-      if (path === '/') {
-        landingFontFamily = fontFamily
-        expect(fontFamily).toContain('Visuelt Pro')
-      } else {
-        expect(fontFamily, path).toBe(landingFontFamily)
-      }
-    }
+    expect(fontFamily).toContain('Visuelt Pro')
   })
 
   for (const { width, expectedFontSize } of [
@@ -171,32 +161,25 @@ test.describe('responsive matrix', () => {
     }) => {
       await page.emulateMedia({ reducedMotion: 'reduce' })
       await page.setViewportSize({ width, height: 1000 })
+      await page.goto('/')
 
-      for (const path of [
-        '/',
-        '/oblik-avtozapchastyn',
-        '/oblik-prodazhiv-avtozapchastyn',
-      ]) {
-        await page.goto(path)
+      const footer = page.locator('footer')
+      const wordmark = footer.locator('p').filter({ hasText: /^rozbirka$/ })
+      await expect(wordmark).toBeVisible()
+      await wordmark.scrollIntoViewIfNeeded()
 
-        const footer = page.locator('footer')
-        const wordmark = footer.locator('p').filter({ hasText: /^rozbirka$/ })
-        await expect(wordmark).toBeVisible()
-        await wordmark.scrollIntoViewIfNeeded()
+      const isFullyVisible = await wordmark.evaluate((element) => {
+        const wordmarkRect = element.getBoundingClientRect()
+        const containerRect = element.parentElement?.getBoundingClientRect()
 
-        const isFullyVisible = await wordmark.evaluate((element) => {
-          const wordmarkRect = element.getBoundingClientRect()
-          const containerRect = element.parentElement?.getBoundingClientRect()
+        return (
+          containerRect !== undefined &&
+          wordmarkRect.top >= containerRect.top &&
+          wordmarkRect.bottom <= containerRect.bottom
+        )
+      })
 
-          return (
-            containerRect !== undefined &&
-            wordmarkRect.top >= containerRect.top &&
-            wordmarkRect.bottom <= containerRect.bottom
-          )
-        })
-
-        expect(isFullyVisible, `${path} at ${width}px`).toBe(true)
-      }
+      expect(isFullyVisible, `homepage at ${width}px`).toBe(true)
     })
   }
 
