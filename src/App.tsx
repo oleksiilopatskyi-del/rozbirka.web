@@ -1,7 +1,6 @@
 import { SiteHeader } from '@/components/site/header'
 import { Hero } from '@/components/site/hero'
 import { Features } from '@/components/site/features'
-import { UseCaseLinks } from '@/components/site/use-case-links'
 import { Pricing } from '@/components/site/pricing'
 import { FAQ, homepageFaqEntries } from '@/components/site/faq'
 import { CtaBanner } from '@/components/site/cta-banner'
@@ -25,7 +24,6 @@ function App() {
           <Hero />
           <div className="font-visuelt">
             <Features />
-            <UseCaseLinks />
             <Pricing />
             <FAQ />
             <CtaBanner />

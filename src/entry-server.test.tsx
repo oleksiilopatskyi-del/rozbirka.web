@@ -50,4 +50,12 @@ describe('server product routes', () => {
       'Missing product SEO for /privacy',
     )
   })
+
+  it('omits the retired use-case section and links from the homepage', () => {
+    const html = renderRoute('/')
+
+    expect(html).not.toContain('Усе для щоденної роботи авторозбірки')
+    expect(html).not.toContain('/oblik-avtozapchastyn')
+    expect(html).not.toContain('/oblik-prodazhiv-avtozapchastyn')
+  })
 })
