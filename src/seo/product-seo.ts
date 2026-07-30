@@ -1,7 +1,4 @@
-export type ProductSeoPath =
-  | '/'
-  | '/oblik-avtozapchastyn'
-  | '/oblik-prodazhiv-avtozapchastyn'
+export type ProductSeoPath = '/'
 
 export interface SeoBaseline {
   status: 'pending-external-tools'
@@ -13,11 +10,6 @@ export interface SeoBaseline {
   position: null
 }
 
-export interface SeoBreadcrumb {
-  name: string
-  path: ProductSeoPath
-}
-
 export interface ProductSeoEntry {
   path: ProductSeoPath
   canonical: string
@@ -25,9 +17,8 @@ export interface ProductSeoEntry {
   description: string
   primaryQuery: string
   supportingQueries: readonly string[]
-  intent: 'commercial-category' | 'commercial-use-case'
+  intent: 'commercial-category'
   ogImage: 'https://rozbirka.pro/og-cover.webp'
-  breadcrumbs: readonly SeoBreadcrumb[]
   faqSchema: boolean
   indexable: true
   includeInSitemap: true
@@ -55,54 +46,6 @@ export const productSeoEntries: readonly ProductSeoEntry[] = [
     supportingQueries: ['CRM для авторозбірки', 'програма для розборки авто'],
     intent: 'commercial-category',
     ogImage: 'https://rozbirka.pro/og-cover.webp',
-    breadcrumbs: [],
-    faqSchema: true,
-    indexable: true,
-    includeInSitemap: true,
-    baseline: pendingBaseline,
-  },
-  {
-    path: '/oblik-avtozapchastyn',
-    canonical: 'https://rozbirka.pro/oblik-avtozapchastyn',
-    title: 'Облік автозапчастин для авторозбірки | rozbirka',
-    description:
-      'Ведіть складський облік автозапчастин: картки деталей, фото, місця зберігання, залишки, резерви, пошук і QR-стікери в rozbirka.',
-    primaryQuery: 'облік автозапчастин',
-    supportingQueries: [
-      'програма для складу автозапчастин',
-      'складський облік автозапчастин',
-    ],
-    intent: 'commercial-use-case',
-    ogImage: 'https://rozbirka.pro/og-cover.webp',
-    breadcrumbs: [
-      { name: 'Головна', path: '/' },
-      { name: 'Облік автозапчастин', path: '/oblik-avtozapchastyn' },
-    ],
-    faqSchema: true,
-    indexable: true,
-    includeInSitemap: true,
-    baseline: pendingBaseline,
-  },
-  {
-    path: '/oblik-prodazhiv-avtozapchastyn',
-    canonical: 'https://rozbirka.pro/oblik-prodazhiv-avtozapchastyn',
-    title: 'Облік продажів автозапчастин і замовлень | rozbirka',
-    description:
-      'Керуйте продажами автозапчастин: замовленнями, клієнтами, оплатами, касами та звітами в одному мобільному застосунку rozbirka.',
-    primaryQuery: 'облік продажів автозапчастин',
-    supportingQueries: [
-      'програма для магазину автозапчастин',
-      'облік замовлень автозапчастин',
-    ],
-    intent: 'commercial-use-case',
-    ogImage: 'https://rozbirka.pro/og-cover.webp',
-    breadcrumbs: [
-      { name: 'Головна', path: '/' },
-      {
-        name: 'Облік продажів автозапчастин',
-        path: '/oblik-prodazhiv-avtozapchastyn',
-      },
-    ],
     faqSchema: true,
     indexable: true,
     includeInSitemap: true,

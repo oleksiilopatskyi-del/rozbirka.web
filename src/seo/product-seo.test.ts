@@ -6,25 +6,17 @@ import {
 } from './product-seo'
 
 describe('product SEO registry', () => {
-  it('owns exactly three unique product routes and primary clusters', () => {
-    expect(productSeoPaths).toEqual([
-      '/',
-      '/oblik-avtozapchastyn',
-      '/oblik-prodazhiv-avtozapchastyn',
-    ])
-    expect(new Set(productSeoEntries.map((entry) => entry.path)).size).toBe(3)
-    expect(
-      new Set(productSeoEntries.map((entry) => entry.primaryQuery)).size,
-    ).toBe(3)
+  it('owns only the homepage product route', () => {
+    expect(productSeoPaths).toEqual(['/'])
+    expect(productSeoEntries).toHaveLength(1)
+    expect(getProductSeo('/')).toBe(productSeoEntries[0])
+    expect(getProductSeo('/oblik-avtozapchastyn')).toBeUndefined()
+    expect(getProductSeo('/oblik-prodazhiv-avtozapchastyn')).toBeUndefined()
   })
 
   it('provides complete canonical and social metadata', () => {
     for (const entry of productSeoEntries) {
-      expect(entry.canonical).toBe(
-        entry.path === '/'
-          ? 'https://rozbirka.pro/'
-          : `https://rozbirka.pro${entry.path}`,
-      )
+      expect(entry.canonical).toBe('https://rozbirka.pro/')
       expect(entry.title.length).toBeGreaterThan(20)
       expect(entry.description.length).toBeGreaterThan(80)
       expect(entry.ogImage).toBe('https://rozbirka.pro/og-cover.webp')
@@ -34,9 +26,7 @@ describe('product SEO registry', () => {
   })
 
   it('normalizes trailing slashes and keeps external metrics unmeasured', () => {
-    expect(getProductSeo('/oblik-avtozapchastyn/')).toBe(
-      getProductSeo('/oblik-avtozapchastyn'),
-    )
+    expect(getProductSeo('/oblik-avtozapchastyn/')).toBeUndefined()
     for (const entry of productSeoEntries) {
       expect(entry.baseline).toEqual({
         status: 'pending-external-tools',

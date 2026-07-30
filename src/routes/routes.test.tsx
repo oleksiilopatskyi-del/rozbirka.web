@@ -14,23 +14,13 @@ describe('production route boundary', () => {
     expect(paths).toContain('/screens/header')
   })
 
-  it('publishes both ROZ-13 product routes in production', () => {
-    const paths = createAppRoutes(false).map((route) => route.path)
-    expect(paths).toContain('/oblik-avtozapchastyn')
-    expect(paths).toContain('/oblik-prodazhiv-avtozapchastyn')
-  })
-
-  it('provides prerendered product route elements without a hydration fallback', () => {
-    const routes = createAppRoutes(false)
-
-    for (const path of [
-      '/oblik-avtozapchastyn',
-      '/oblik-prodazhiv-avtozapchastyn',
-    ]) {
-      const route = routes.find((candidate) => candidate.path === path)
-      expect(route?.element).toBeDefined()
-      expect(route?.lazy).toBeUndefined()
-      expect(route?.hydrateFallbackElement).toBeUndefined()
+  it('omits retired ROZ-13 product routes in production and development', () => {
+    for (const includePrototypeRoutes of [false, true]) {
+      const paths = createAppRoutes(includePrototypeRoutes).map(
+        (route) => route.path,
+      )
+      expect(paths).not.toContain('/oblik-avtozapchastyn')
+      expect(paths).not.toContain('/oblik-prodazhiv-avtozapchastyn')
     }
   })
 })

@@ -7,14 +7,14 @@ import {
 } from './prerender-helpers.mjs'
 
 const seo = {
-  path: '/oblik-avtozapchastyn',
-  title: 'Облік & "запчастин" <rozbirka>',
-  description: 'Склад & "резерви" <деталей>',
-  canonical: 'https://rozbirka.pro/oblik-avtozapchastyn?ref=a&b=c',
+  path: '/example-product',
+  title: 'Приклад & "продукту" <rozbirka>',
+  description: 'Опис & "можливості" <продукту>',
+  canonical: 'https://rozbirka.pro/example-product?ref=a&b=c',
   ogImage: 'https://rozbirka.pro/og-cover.webp',
   breadcrumbs: [
     { name: 'Головна', path: '/' },
-    { name: 'Облік автозапчастин', path: '/oblik-avtozapchastyn' },
+    { name: 'Приклад продукту', path: '/example-product' },
   ],
 }
 
@@ -74,14 +74,14 @@ describe('documentPathForRoute', () => {
   })
 
   it('maps a product route to its nested document', () => {
-    expect(documentPathForRoute('/oblik-avtozapchastyn')).toBe(
-      'dist/oblik-avtozapchastyn/index.html',
+    expect(documentPathForRoute('/example-product')).toBe(
+      'dist/example-product/index.html',
     )
   })
 
   it('strips leading and trailing route slashes', () => {
-    expect(documentPathForRoute('/oblik-avtozapchastyn/')).toBe(
-      'dist/oblik-avtozapchastyn/index.html',
+    expect(documentPathForRoute('/example-product/')).toBe(
+      'dist/example-product/index.html',
     )
   })
 })
@@ -96,19 +96,19 @@ describe('injectProductDocument', () => {
     })
 
     expect(html).toContain(
-      '<title data-product-seo>Облік &amp; "запчастин" &lt;rozbirka&gt;</title>',
+      '<title data-product-seo>Приклад &amp; "продукту" &lt;rozbirka&gt;</title>',
     )
     expect(html).toContain(
-      'name="description" content="Склад &amp; &quot;резерви&quot; &lt;деталей&gt;"',
+      'name="description" content="Опис &amp; &quot;можливості&quot; &lt;продукту&gt;"',
     )
     expect(html).toContain(
-      'rel="canonical" href="https://rozbirka.pro/oblik-avtozapchastyn?ref=a&amp;b=c"',
+      'rel="canonical" href="https://rozbirka.pro/example-product?ref=a&amp;b=c"',
     )
     expect(html).toContain(
-      'property="og:title" content="Облік &amp; &quot;запчастин&quot; &lt;rozbirka&gt;"',
+      'property="og:title" content="Приклад &amp; &quot;продукту&quot; &lt;rozbirka&gt;"',
     )
     expect(html).toContain(
-      'property="og:url" content="https://rozbirka.pro/oblik-avtozapchastyn?ref=a&amp;b=c"',
+      'property="og:url" content="https://rozbirka.pro/example-product?ref=a&amp;b=c"',
     )
     expect(html).toContain('name="twitter:card" content="summary_large_image"')
     expect(html).toContain(
@@ -133,7 +133,7 @@ describe('injectProductDocument', () => {
     })
 
     expect(html).toContain(
-      'name="description" content="Склад &amp; &quot;резерви&quot; &lt;деталей&gt;"',
+      'name="description" content="Опис &amp; &quot;можливості&quot; &lt;продукту&gt;"',
     )
   })
 })
@@ -203,7 +203,7 @@ describe('assertProductDocument', () => {
     expect(() =>
       assertProductDocument({
         html: validHtml.replace(
-          'Облік &amp; "запчастин" &lt;rozbirka&gt;',
+          'Приклад &amp; "продукту" &lt;rozbirka&gt;',
           'Інший унікальний title',
         ),
         seo,
@@ -216,7 +216,7 @@ describe('assertProductDocument', () => {
     expect(() =>
       assertProductDocument({
         html: validHtml.replace(
-          'Склад &amp; &quot;резерви&quot; &lt;деталей&gt;',
+          'Опис &amp; &quot;можливості&quot; &lt;продукту&gt;',
           'Інший унікальний description',
         ),
         seo,
@@ -228,7 +228,7 @@ describe('assertProductDocument', () => {
   it.each([
     [
       'OG title',
-      'property="og:title" content="Облік &amp; &quot;запчастин&quot; &lt;rozbirka&gt;"',
+      'property="og:title" content="Приклад &amp; &quot;продукту&quot; &lt;rozbirka&gt;"',
       'property="og:title" content="Застарілий OG title"',
     ],
     [

@@ -9,39 +9,26 @@ import {
 
 describe('server product routes', () => {
   it('exports all product SEO entries for prerendering', () => {
-    expect(prerenderManifest.map((entry) => entry.path)).toEqual([
-      '/',
-      '/oblik-avtozapchastyn',
-      '/oblik-prodazhiv-avtozapchastyn',
-    ])
+    expect(prerenderManifest.map((entry) => entry.path)).toEqual(['/'])
   })
 
-  it.each([
-    ['/', 'Знаєш де кожна деталь і де твої гроші'],
-    ['/oblik-avtozapchastyn', 'Облік автозапчастин для авторозбірки'],
-    [
-      '/oblik-prodazhiv-avtozapchastyn',
-      'Облік продажів автозапчастин: від замовлення до оплати',
-    ],
-  ])('renders the product route %s', (pathname, expectedH1) => {
+  it('renders the homepage product route', () => {
+    const pathname = '/'
+    const expectedH1 = 'Знаєш де кожна деталь і де твої гроші'
+
     expect(renderRoute(pathname)).toContain(`<h1`)
     expect(renderRoute(pathname)).toContain(expectedH1)
   })
 
-  it('builds route-specific structured data from its SEO record', () => {
-    const structuredData = structuredDataForRoute('/oblik-avtozapchastyn')
+  it('builds homepage structured data from its SEO record', () => {
+    const structuredData = structuredDataForRoute('/')
 
-    expect(JSON.stringify(structuredData)).toContain(
-      'https://rozbirka.pro/oblik-avtozapchastyn',
-    )
+    expect(JSON.stringify(structuredData)).toContain('https://rozbirka.pro/')
   })
 
-  it('provides the expected visible H1 for each product route', () => {
+  it('provides the expected visible H1 for the homepage', () => {
     expect(expectedH1ForRoute('/')).toBe(
       'Знаєш де кожна деталь і де твої гроші',
-    )
-    expect(expectedH1ForRoute('/oblik-avtozapchastyn')).toBe(
-      'Облік автозапчастин для авторозбірки без таблиць і хаосу',
     )
   })
 

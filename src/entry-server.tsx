@@ -2,12 +2,7 @@ import { renderToString } from 'react-dom/server'
 import { MemoryRouter, useRoutes } from 'react-router'
 import { AuthProvider } from '@/auth/AuthContext'
 import { homepageFaqEntries } from '@/components/site/faq'
-import { getUseCasePage } from '@/content/use-case-pages'
-import {
-  getProductSeo,
-  productSeoEntries,
-  type ProductSeoPath,
-} from '@/seo/product-seo'
+import { getProductSeo, productSeoEntries } from '@/seo/product-seo'
 import { buildStructuredData } from '@/seo/structured-data'
 import { serializeStructuredData } from '@/seo/structured-data'
 import { createAppRoutes } from '@/routes/routes'
@@ -34,17 +29,11 @@ export { serializeStructuredData }
 export function expectedH1ForRoute(pathname: string): string {
   const seo = getProductSeo(pathname)
   if (!seo) throw new Error(`Missing product SEO for ${pathname}`)
-  return pathname === '/'
-    ? 'Знаєш де кожна деталь і де твої гроші'
-    : getUseCasePage(seo.path as Exclude<ProductSeoPath, '/'>).h1
+  return 'Знаєш де кожна деталь і де твої гроші'
 }
 
 export function structuredDataForRoute(pathname: string) {
   const seo = getProductSeo(pathname)
   if (!seo) throw new Error(`Missing product SEO for ${pathname}`)
-  const faq =
-    pathname === '/'
-      ? homepageFaqEntries
-      : getUseCasePage(seo.path as Exclude<ProductSeoPath, '/'>).faq
-  return buildStructuredData(seo, faq)
+  return buildStructuredData(seo, homepageFaqEntries)
 }

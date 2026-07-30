@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest'
 import { NavLinks } from './nav-links'
 
 describe('NavLinks', () => {
-  it('uses homepage destinations from a use-case route', () => {
+  it('uses homepage destinations from a non-home route', () => {
     render(
-      <MemoryRouter initialEntries={['/oblik-avtozapchastyn']}>
+      <MemoryRouter initialEntries={['/privacy']}>
         <NavLinks />
       </MemoryRouter>,
     )

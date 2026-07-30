@@ -28,53 +28,27 @@ export function buildStructuredData(
 ): Record<string, unknown> {
   const faqPage = buildFaqPage(entry.canonical, faq)
 
-  if (entry.path === '/') {
-    return {
-      '@context': 'https://schema.org',
-      '@graph': [
-        {
-          '@type': 'Organization',
-          '@id': `${origin}/#organization`,
-          name: 'rozbirka',
-          url: `${origin}/`,
-        },
-        {
-          '@type': 'WebSite',
-          '@id': `${origin}/#website`,
-          name: 'rozbirka',
-          url: `${origin}/`,
-        },
-        {
-          '@type': 'SoftwareApplication',
-          '@id': `${origin}/#software`,
-          name: 'rozbirka',
-          url: entry.canonical,
-          description: entry.description,
-        },
-        faqPage,
-      ],
-    }
-  }
-
   return {
     '@context': 'https://schema.org',
     '@graph': [
       {
-        '@type': 'WebPage',
-        '@id': `${entry.canonical}#webpage`,
-        url: entry.canonical,
-        name: entry.title,
-        description: entry.description,
+        '@type': 'Organization',
+        '@id': `${origin}/#organization`,
+        name: 'rozbirka',
+        url: `${origin}/`,
       },
       {
-        '@type': 'BreadcrumbList',
-        '@id': `${entry.canonical}#breadcrumbs`,
-        itemListElement: entry.breadcrumbs.map((breadcrumb, index) => ({
-          '@type': 'ListItem',
-          position: index + 1,
-          name: breadcrumb.name,
-          item: `${origin}${breadcrumb.path}`,
-        })),
+        '@type': 'WebSite',
+        '@id': `${origin}/#website`,
+        name: 'rozbirka',
+        url: `${origin}/`,
+      },
+      {
+        '@type': 'SoftwareApplication',
+        '@id': `${origin}/#software`,
+        name: 'rozbirka',
+        url: entry.canonical,
+        description: entry.description,
       },
       faqPage,
     ],

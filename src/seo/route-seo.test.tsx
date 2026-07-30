@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { getUseCasePage } from '@/content/use-case-pages'
+import { homepageFaqEntries } from '@/components/site/faq'
 import { getProductSeo } from './product-seo'
 import { RouteSeo } from './route-seo'
 
@@ -13,24 +13,19 @@ describe('RouteSeo', () => {
       .forEach((script) => script.remove())
   })
 
-  it('synchronizes inventory metadata and structured data into the browser head', () => {
-    render(
-      <RouteSeo
-        entry={getProductSeo('/oblik-avtozapchastyn')!}
-        faq={getUseCasePage('/oblik-avtozapchastyn').faq}
-      />,
-    )
+  it('synchronizes homepage metadata and structured data into the browser head', () => {
+    render(<RouteSeo entry={getProductSeo('/')!} faq={homepageFaqEntries} />)
 
     expect(document.title).toBe(
-      'Облік автозапчастин для авторозбірки | rozbirka',
+      'Програма для авторозбірки — облік запчастин і продажів | rozbirka',
     )
     expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute(
       'href',
-      'https://rozbirka.pro/oblik-avtozapchastyn',
+      'https://rozbirka.pro/',
     )
     expect(document.querySelector('meta[name="description"]')).toHaveAttribute(
       'content',
-      expect.stringContaining('складський облік автозапчастин'),
+      expect.stringContaining('програма для авторозбірки'),
     )
     expect(
       document.querySelector('script[data-product-json-ld]'),
@@ -38,8 +33,8 @@ describe('RouteSeo', () => {
   })
 
   it('updates existing head nodes instead of appending duplicates', () => {
-    const entry = getProductSeo('/oblik-avtozapchastyn')!
-    const faq = getUseCasePage('/oblik-avtozapchastyn').faq
+    const entry = getProductSeo('/')!
+    const faq = homepageFaqEntries
     const { rerender } = render(<RouteSeo entry={entry} faq={faq} />)
 
     rerender(<RouteSeo entry={entry} faq={faq} />)
@@ -65,12 +60,7 @@ describe('RouteSeo', () => {
     unrelatedScript.textContent = '{"unrelated":true}'
     document.head.append(unrelatedScript)
 
-    render(
-      <RouteSeo
-        entry={getProductSeo('/oblik-avtozapchastyn')!}
-        faq={getUseCasePage('/oblik-avtozapchastyn').faq}
-      />,
-    )
+    render(<RouteSeo entry={getProductSeo('/')!} faq={homepageFaqEntries} />)
 
     const scripts = document.head.querySelectorAll(
       'script[type="application/ld+json"]',
@@ -81,9 +71,7 @@ describe('RouteSeo', () => {
 
     expect(scripts).toHaveLength(2)
     expect(routeScript).not.toBe(unrelatedScript)
-    expect(routeScript).toHaveTextContent(
-      'https://rozbirka.pro/oblik-avtozapchastyn',
-    )
+    expect(routeScript).toHaveTextContent('https://rozbirka.pro/')
     expect(unrelatedScript).toHaveTextContent('{"unrelated":true}')
     expect(unrelatedScript).not.toHaveAttribute('data-product-json-ld')
   })
