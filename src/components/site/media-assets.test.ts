@@ -1,12 +1,20 @@
 // @vitest-environment node
 /// <reference types="node" />
 import { readFile, readdir, stat } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
 
 describe('production media contract', () => {
+  it('uses the approved anonymized CTA phone artwork', async () => {
+    const artwork = await readFile(path.join(root, 'src/assets/cta-phones.png'))
+    expect(createHash('sha256').update(artwork).digest('hex')).toBe(
+      '488e7ff94e33d8bf8e89cfb551977206fcca0a608125812d1d98ff2dc5bd49bd',
+    )
+  })
+
   it('does not import legacy heavy media from production components', async () => {
     const files = [
       'src/components/site/hero.tsx',
