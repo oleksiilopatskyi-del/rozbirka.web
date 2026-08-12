@@ -4,15 +4,7 @@ export interface EdgeEnv {
   }
 }
 
-const spaPaths = [
-  /^\/$/,
-  /^\/privacy\/?$/,
-  /^\/login\/?$/,
-  /^\/account\/?$/,
-  /^\/marketplace\/?$/,
-  /^\/marketplace\/listings\/[^/]+\/?$/,
-  /^\/marketplace\/shops\/[^/]+\/?$/,
-]
+const spaPaths = [/^\/$/, /^\/privacy\/?$/, /^\/login\/?$/, /^\/account\/?$/]
 
 const prototypePath = /^\/screens(?:\/|$)/
 const staticPath =
@@ -26,11 +18,6 @@ const appShellMetadata = {
     title: 'Політика конфіденційності | rozbirka',
     description:
       'Дізнайтеся, які дані збирає rozbirka, як використовує та захищає їх, а також які права мають користувачі сервісу.',
-  },
-  marketplace: {
-    title: 'Автозапчастини з авторозбірок — каталог | Rozbirka Маркет',
-    description:
-      'Знаходьте автозапчастини з авторозбірок за назвою, OEM-кодом, маркою та моделлю автомобіля у каталозі Rozbirka Маркет.',
   },
 } as const
 
@@ -50,11 +37,7 @@ async function withCanonicalMetadata(response: Response, url: URL) {
     '',
   )
   const routeMetadata =
-    url.pathname === '/privacy'
-      ? appShellMetadata.privacy
-      : url.pathname === '/marketplace'
-        ? appShellMetadata.marketplace
-        : undefined
+    url.pathname === '/privacy' ? appShellMetadata.privacy : undefined
   const html = (await response.text())
     .replace(/<title\b[^>]*>[\s\S]*?<\/title>/i, (tag) =>
       routeMetadata

@@ -23,4 +23,15 @@ describe('production route boundary', () => {
       expect(paths).not.toContain('/oblik-prodazhiv-avtozapchastyn')
     }
   })
+
+  it('omits retired marketplace routes in production and development', () => {
+    for (const includePrototypeRoutes of [false, true]) {
+      const paths = createAppRoutes(includePrototypeRoutes).map(
+        (route) => route.path,
+      )
+      expect(paths).not.toContain('/marketplace')
+      expect(paths).not.toContain('/marketplace/listings/:slugOrId')
+      expect(paths).not.toContain('/marketplace/shops/:slug')
+    }
+  })
 })

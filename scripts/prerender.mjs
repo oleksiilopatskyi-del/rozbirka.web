@@ -113,7 +113,6 @@ const sitemapEntries = [
     .filter((seo) => seo.includeInSitemap)
     .map((seo) => seo.canonical),
   'https://rozbirka.pro/privacy',
-  'https://rozbirka.pro/marketplace',
 ]
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemapEntries
   .map((canonical) => `  <url><loc>${canonical}</loc></url>`)

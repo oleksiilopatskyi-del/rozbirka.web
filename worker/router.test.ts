@@ -66,12 +66,12 @@ describe('edge routing', () => {
     )
 
     const http = await handleRequest(
-      new Request('http://rozbirka.pro/marketplace?q=part'),
+      new Request('http://rozbirka.pro/privacy?source=http'),
       env(),
     )
     expect(http.status).toBe(308)
     expect(http.headers.get('location')).toBe(
-      'https://rozbirka.pro/marketplace?q=part',
+      'https://rozbirka.pro/privacy?source=http',
     )
   })
 
@@ -97,6 +97,10 @@ describe('edge routing', () => {
     '/oblik-avtozapchastyn/',
     '/oblik-prodazhiv-avtozapchastyn',
     '/oblik-prodazhiv-avtozapchastyn/',
+    '/marketplace',
+    '/marketplace/',
+    '/marketplace/listings/fara-1',
+    '/marketplace/shops/demo',
   ])('returns the branded noindex 404 for retired route %s', async (path) => {
     const response = await handleRequest(
       new Request(`https://rozbirka.pro${path}`),
@@ -108,80 +112,63 @@ describe('edge routing', () => {
     expect(await response.text()).toContain('branded 404')
   })
 
-  it.each([
-    '/privacy',
-    '/login',
-    '/account',
-    '/marketplace',
-    '/marketplace/listings/fara-1',
-    '/marketplace/shops/demo',
-  ])('serves the SPA shell for %s', async (path) => {
-    const response = await handleRequest(
-      new Request(`https://rozbirka.pro${path}`),
-      env(),
-    )
-    expect(response.status).toBe(200)
-    expect(await response.text()).toContain('shell')
-  })
-
-  it.each(['/privacy', '/marketplace'])(
-    'rewrites current app shell canonical and OG URL metadata for %s',
+  it.each(['/privacy', '/login', '/account'])(
+    'serves the SPA shell for %s',
     async (path) => {
-      const response = await handleRequest(
-        new Request(`https://rozbirka.pro${path}?source=test`),
-        env(),
-      )
-      const html = await response.text()
-
-      expect(html).toContain(
-        `<link data-product-seo rel="canonical" href="https://rozbirka.pro${path}" />`,
-      )
-      expect(html).toContain(
-        `<meta data-product-seo property="og:url" content="https://rozbirka.pro${path}" />`,
-      )
-      expect(response.headers.get('etag')).toBeNull()
-      expect(response.headers.get('content-length')).toBeNull()
-    },
-  )
-
-  it.each([
-    [
-      '/privacy',
-      'Політика конфіденційності | rozbirka',
-      'Дізнайтеся, які дані збирає rozbirka, як використовує та захищає їх, а також які права мають користувачі сервісу.',
-    ],
-    [
-      '/marketplace',
-      'Автозапчастини з авторозбірок — каталог | Rozbirka Маркет',
-      'Знаходьте автозапчастини з авторозбірок за назвою, OEM-кодом, маркою та моделлю автомобіля у каталозі Rozbirka Маркет.',
-    ],
-  ])(
-    'rewrites route identity metadata for %s',
-    async (path, title, description) => {
       const response = await handleRequest(
         new Request(`https://rozbirka.pro${path}`),
         env(),
       )
-      const html = await response.text()
-
-      expect(html).toContain(`<title data-product-seo>${title}</title>`)
-      expect(html).toContain(
-        `<meta data-product-seo name="description" content="${description}" />`,
-      )
-      expect(html).toContain(
-        `<meta data-product-seo property="og:title" content="${title}" />`,
-      )
-      expect(html).toContain(
-        `<meta data-product-seo property="og:description" content="${description}" />`,
-      )
-      expect(html).toContain(
-        `<meta data-product-seo name="twitter:title" content="${title}" />`,
-      )
-      expect(html).toContain(
-        `<meta data-product-seo name="twitter:description" content="${description}" />`,
-      )
+      expect(response.status).toBe(200)
+      expect(await response.text()).toContain('shell')
     },
   )
+
+  it('rewrites current app shell canonical and OG URL metadata for privacy', async () => {
+    const response = await handleRequest(
+      new Request('https://rozbirka.pro/privacy?source=test'),
+      env(),
+    )
+    const html = await response.text()
+
+    expect(html).toContain(
+      '<link data-product-seo rel="canonical" href="https://rozbirka.pro/privacy" />',
+    )
+    expect(html).toContain(
+      '<meta data-product-seo property="og:url" content="https://rozbirka.pro/privacy" />',
+    )
+    expect(response.headers.get('etag')).toBeNull()
+    expect(response.headers.get('content-length')).toBeNull()
+  })
+
+  it('rewrites route identity metadata for privacy', async () => {
+    const path = '/privacy'
+    const title = 'Політика конфіденційності | rozbirka'
+    const description =
+      'Дізнайтеся, які дані збирає rozbirka, як використовує та захищає їх, а також які права мають користувачі сервісу.'
+    const response = await handleRequest(
+      new Request(`https://rozbirka.pro${path}`),
+      env(),
+    )
+    const html = await response.text()
+
+    expect(html).toContain(`<title data-product-seo>${title}</title>`)
+    expect(html).toContain(
+      `<meta data-product-seo name="description" content="${description}" />`,
+    )
+    expect(html).toContain(
+      `<meta data-product-seo property="og:title" content="${title}" />`,
+    )
+    expect(html).toContain(
+      `<meta data-product-seo property="og:description" content="${description}" />`,
+    )
+    expect(html).toContain(
+      `<meta data-product-seo name="twitter:title" content="${title}" />`,
+    )
+    expect(html).toContain(
+      `<meta data-product-seo name="twitter:description" content="${description}" />`,
+    )
+  })
 
   it('returns immutable assets without losing MIME or ETag', async () => {
     const response = await handleRequest(
