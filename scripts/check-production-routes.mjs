@@ -134,7 +134,7 @@ export function buildRouteTargets(baseUrl, apiBaseUrl, assetPath) {
     asset: new URL(assetPath, base).href,
     api: new URL('/api/v1/billing/plans', apiBase).href,
     privacy: new URL('/privacy', base).href,
-    listing: new URL('/marketplace/listings/qa-probe', base).href,
+    retiredMarketplace: new URL('/marketplace', base).href,
     retiredInventory: new URL('/oblik-avtozapchastyn', base).href,
     retiredSales: new URL('/oblik-prodazhiv-avtozapchastyn', base).href,
     screens: new URL('/screens', base).href,
@@ -179,9 +179,9 @@ export async function checkProductionRoutes(baseUrl, apiBaseUrl) {
     api: await inspect(targets.api),
     spaRoutes: {
       privacy: await inspectSpaRoute(targets.privacy),
-      listing: await inspectSpaRoute(targets.listing),
     },
     retiredRoutes: {
+      marketplace: await inspect(targets.retiredMarketplace),
       inventory: await inspect(targets.retiredInventory),
       sales: await inspect(targets.retiredSales),
     },

@@ -128,6 +128,17 @@ describe('AccountScreen subscription state', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('does not expose the marketplace seller tab', async () => {
+    getSubscription.mockResolvedValue(subscription)
+
+    renderAccount()
+
+    expect(await screen.findByText('Pro')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Магазин' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('routes a legacy activatable tenant to paid plans', async () => {
     getSubscription.mockResolvedValue({
       ...subscription,
