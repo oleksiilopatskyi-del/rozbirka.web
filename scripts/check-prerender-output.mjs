@@ -41,10 +41,7 @@ for (const seo of prerenderManifest.filter((entry) => entry.includeInSitemap)) {
     throw new Error(`Sitemap is missing ${seo.canonical}`)
   }
 }
-for (const canonical of [
-  'https://rozbirka.pro/privacy',
-  'https://rozbirka.pro/marketplace',
-]) {
+for (const canonical of ['https://rozbirka.pro/privacy']) {
   if (!sitemap.includes(`<loc>${canonical}</loc>`)) {
     throw new Error(`Sitemap is missing ${canonical}`)
   }

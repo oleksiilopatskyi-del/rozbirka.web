@@ -28,7 +28,7 @@ export const apiClient: AxiosInstance = axios.create({
   timeout: TIMEOUT,
 })
 
-// Public client — /api/v1, no auth or tenant headers (marketplace public routes)
+// Public client — /api/v1, no auth or tenant headers (for example, billing plans)
 export const publicApiClient: AxiosInstance = axios.create({
   baseURL: `${API_URL}/api/v1`,
   headers: { 'Content-Type': 'application/json' },
