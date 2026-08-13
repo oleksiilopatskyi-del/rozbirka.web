@@ -677,7 +677,8 @@ git commit -m "feat(web): restore secure sessions in auth provider"
 - Produces: `invitationsApi.info(code, options?)`, `.accept(code)`.
 - Produces React route `/invite/:code`.
 - Preserves `/scan/:qrCode` as a protected post-login destination owned visually by ROZ-45.
-- Consumes `RequireAuth`, `useAuth`, `apiClient`, and `tenantPreference`.
+- Consumes `RequireAuth`, `useAuth`, `publicApiClient` for invitation info,
+  `apiClient` for invitation acceptance, and `tenantPreference`.
 
 - [ ] **Step 1: Write failing invitation API and screen tests**
 
@@ -722,7 +723,13 @@ Expected: FAIL because the invitation facade/screen/routes do not exist.
 
 - [ ] **Step 4: Implement the invitation flow and route boundaries**
 
-Invitation info is public; acceptance is authenticated. After acceptance, set `tenantPreference` to the returned tenant, call `auth.hydrate()`, and replace navigation with `/account`. Guest acceptance links to `/login?invite=${encodeURIComponent(code)}`. The scan route is registered as a lazy protected boundary that redirects unauthenticated users to login while preserving its path; its actual scanner component is deferred to ROZ-45.
+Invitation info uses `publicApiClient`; acceptance uses authenticated
+`apiClient`. After acceptance, set `tenantPreference` to the returned tenant,
+call `auth.hydrate()`, and replace navigation with `/account`. Guest acceptance
+links to `/login?invite=${encodeURIComponent(code)}`. The scan route is
+registered as a lazy protected boundary that redirects unauthenticated users to
+login while preserving its path; its actual scanner component is deferred to
+ROZ-45.
 
 `ScanResumeScreen` validates the route parameter again and replaces navigation
 with `/account?scan=<encoded qrCode>`. This retains the authenticated handoff in
