@@ -1,4 +1,6 @@
-export interface EdgeEnv {
+import { handleSessionRequest, type SessionEnv } from './session'
+
+export interface EdgeEnv extends SessionEnv {
   ASSETS: {
     fetch(request: Request): Promise<Response>
   }
@@ -119,6 +121,9 @@ async function notFound(request: Request, env: EdgeEnv) {
 }
 
 export async function handleRequest(request: Request, env: EdgeEnv) {
+  const sessionResponse = await handleSessionRequest(request, env)
+  if (sessionResponse) return sessionResponse
+
   const url = new URL(request.url)
 
   const requestHostname = request.headers.get('host')?.split(':')[0] ?? ''
