@@ -34,4 +34,8 @@ describe('plan selection', () => {
     )
     expect(postAuthPath('?plan=unknown', '/account')).toBe('/account')
   })
+
+  it('falls back to account instead of an unsafe post-auth destination', () => {
+    expect(postAuthPath('', 'https://evil.example/x')).toBe('/account')
+  })
 })
