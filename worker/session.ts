@@ -210,10 +210,5 @@ export async function handleSessionRequest(
   if (!response.ok) {
     return withCookie(identityFailure(response.status), expiredCookie)
   }
-
-  const data = await upstreamData(response)
-  if (data === undefined) {
-    return withCookie(identityFailure(), expiredCookie)
-  }
-  return withCookie(json(data), expiredCookie)
+  return withCookie(new Response(null, { status: 204 }), expiredCookie)
 }

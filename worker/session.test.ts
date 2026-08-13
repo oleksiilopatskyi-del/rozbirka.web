@@ -173,13 +173,13 @@ describe('session BFF', () => {
     expect(upstreamFetch).not.toHaveBeenCalled()
   })
 
-  it('passes Authorization access token to the protected logout endpoint', async () => {
+  it('passes Authorization and accepts the protected logout 204 response', async () => {
     let upstreamRequest: Request | undefined
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         upstreamRequest = new Request(input, init)
-        return Promise.resolve(Response.json({ data: null }))
+        return Promise.resolve(new Response(null, { status: 204 }))
       }),
     )
 
@@ -194,7 +194,8 @@ describe('session BFF', () => {
       env,
     )
 
-    expect(response!.status).toBe(200)
+    expect(response!.status).toBe(204)
+    expect(response!.headers.get('cache-control')).toBe('no-store')
     expect(upstreamRequest?.url).toBe('https://identity.example/auth/logout')
     expect(upstreamRequest?.headers.get('authorization')).toBe(
       'Bearer access-token',
