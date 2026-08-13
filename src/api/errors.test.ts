@@ -56,6 +56,27 @@ describe('normalizeApiProblem', () => {
     ).toMatchObject({ kind: 'session-expired', retryAfterSeconds: 30 })
   })
 
+  it('maps missing resources to not-found', () => {
+    expect(normalizeApiProblem(axiosFailure(404, {}))).toMatchObject({
+      kind: 'not-found',
+      status: 404,
+    })
+  })
+
+  it('maps conflicting requests to conflict', () => {
+    expect(normalizeApiProblem(axiosFailure(409, {}))).toMatchObject({
+      kind: 'conflict',
+      status: 409,
+    })
+  })
+
+  it('maps server response failures to server', () => {
+    expect(normalizeApiProblem(axiosFailure(503, {}))).toMatchObject({
+      kind: 'server',
+      status: 503,
+    })
+  })
+
   it('distinguishes cancellation, timeout, and offline failures', () => {
     expect(normalizeApiProblem(new axios.CanceledError())).toMatchObject({
       kind: 'cancelled',
