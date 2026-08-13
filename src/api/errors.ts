@@ -1,7 +1,7 @@
 import axios from 'axios'
 import type { ApiProblem, ApiProblemKind } from './contracts'
 
-type ErrorBody = {
+interface ErrorBody {
   error?: string | { code?: string; message?: string }
   message?: string
   errors?: Record<string, unknown>
