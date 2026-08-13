@@ -33,12 +33,17 @@ const kindForStatus = (status: number | undefined): ApiProblemKind => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
-const readFieldErrors = (value: unknown): Record<string, string[]> | undefined => {
+const readFieldErrors = (
+  value: unknown,
+): Record<string, string[]> | undefined => {
   if (!isRecord(value)) return undefined
 
   const fieldErrors = Object.fromEntries(
     Object.entries(value).flatMap(([field, messages]) => {
-      if (!Array.isArray(messages) || !messages.every((message) => typeof message === 'string')) {
+      if (
+        !Array.isArray(messages) ||
+        !messages.every((message) => typeof message === 'string')
+      ) {
         return []
       }
       return [[field, messages]]
@@ -61,7 +66,11 @@ const readRetryAfter = (headers: unknown) => {
 
 export const normalizeApiProblem = (error: unknown): ApiProblem => {
   if (axios.isCancel(error)) {
-    return { kind: 'cancelled', message: fallbackMessages.cancelled, cause: error }
+    return {
+      kind: 'cancelled',
+      message: fallbackMessages.cancelled,
+      cause: error,
+    }
   }
 
   if (!axios.isAxiosError(error)) {

@@ -85,7 +85,8 @@ describe('normalizeApiProblem', () => {
       normalizeApiProblem(new AxiosError('timeout', 'ECONNABORTED')),
     ).toMatchObject({ kind: 'timeout' })
     expect(
-      normalizeApiProblem(new AxiosError('network', 'ERR_NETWORK'))).toMatchObject({
+      normalizeApiProblem(new AxiosError('network', 'ERR_NETWORK')),
+    ).toMatchObject({
       kind: 'network',
     })
   })
