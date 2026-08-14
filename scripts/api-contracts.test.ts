@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { execFile } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { createServer, type RequestListener, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -14,6 +15,7 @@ const generateScript = join(
 )
 const checkScript = join(repositoryRoot, 'scripts/check-api-contracts.mjs')
 const temporaryDirectories: string[] = []
+const servers: Server[] = []
 
 async function makeTemporaryDirectory() {
   const directory = await mkdtemp(join(tmpdir(), 'rozbirka-contract-test-'))
@@ -74,7 +76,29 @@ async function runScriptFailure(script: string, args: string[]) {
   throw new Error('Expected the script to fail')
 }
 
+async function serve(handler: RequestListener): Promise<string> {
+  const server = createServer(handler)
+  servers.push(server)
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', resolve)
+  })
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected a loopback TCP address')
+  }
+  return `http://127.0.0.1:${address.port}`
+}
+
 afterEach(async () => {
+  await Promise.all(
+    servers.splice(0).map(
+      (server) =>
+        new Promise<void>((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()))
+        }),
+    ),
+  )
   await Promise.all(
     temporaryDirectories
       .splice(0)
@@ -94,15 +118,42 @@ describe('OpenAPI contract CLIs', () => {
     )
   })
 
-  it('rejects runtime Swagger URLs without an immutable version or digest', async () => {
+  it.each([
+    '/contracts/core.json',
+    '/latest/v1.2.3/core.json',
+    '/runtime/v1.2.3/core.json',
+    '/swagger/v1/swagger.json',
+    '/swagger.json',
+    '/openapi.json',
+    '/sw%61gger/swagger.json?sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    '/swagger%2Fswagger.json?sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  ])('rejects non-immutable or encoded HTTP input %s', async (path) => {
+    const { identity } = await fixtures()
     expect(
       await runScriptFailure(generateScript, [
         '--core',
-        'https://api.example.test/swagger/v1/swagger.json',
+        `https://api.example.test${path}`,
         '--identity',
-        'https://identity.example.test/swagger/swagger.json',
+        identity,
       ]),
-    ).toContain('immutable version or digest')
+    ).toContain('immutable')
+  })
+
+  it('rejects redirects instead of following a versioned URL to mutable content', async () => {
+    const { identity } = await fixtures()
+    const origin = await serve((_request, response) => {
+      response.writeHead(302, { location: '/openapi.json' })
+      response.end()
+    })
+
+    expect(
+      await runScriptFailure(generateScript, [
+        '--core',
+        `${origin}/v1.2.3/core.json`,
+        '--identity',
+        identity,
+      ]),
+    ).toContain('redirects are not allowed')
   })
 
   it('generates deterministic Core and Identity contracts into an exact output directory', async () => {

@@ -55,31 +55,35 @@ export function parseArguments(argumentsToParse, commandUsage = usage()) {
   }
 }
 
-function isImmutableSwaggerUrl(url) {
-  const immutablePathPart =
-    /(?:^|\/)(?:v?\d+\.\d+(?:\.\d+)?|\d{4}-\d{2}-\d{2}|[a-f\d]{7,64})(?:\/|$)/i
-  if (immutablePathPart.test(url.pathname)) return true
+const semanticVersion = /^v?\d+\.\d+\.\d+(?:-[0-9a-z]+(?:\.[0-9a-z]+)*)?$/i
+const commitDigest = /^(?:[a-f\d]{40}|[a-f\d]{64})$/i
+const sha256Digest = /^[a-f\d]{64}$/i
 
-  for (const key of [
-    'version',
-    'v',
-    'digest',
-    'sha',
-    'sha256',
-    'commit',
-    'revision',
-    'ref',
-  ]) {
-    const value = url.searchParams.get(key)
-    if (
-      value &&
-      /^(?:v?\d+\.\d+(?:\.\d+)?|\d{4}-\d{2}-\d{2}|[a-f\d]{7,64})$/i.test(value)
-    ) {
-      return true
-    }
+function hasImmutableIdentifier(url) {
+  const pathSegments = url.pathname.split('/').filter(Boolean)
+  if (
+    pathSegments.some((segment) =>
+      /^(?:current|latest|nightly|runtime|snapshot)$/i.test(segment),
+    )
+  ) {
+    return false
   }
 
-  return false
+  const pathHasIdentifier = pathSegments.some(
+    (segment) => semanticVersion.test(segment) || commitDigest.test(segment),
+  )
+  if (pathHasIdentifier) return true
+
+  const rules = {
+    commit: commitDigest,
+    digest: /^(?:sha256:)?[a-f\d]{64}$/i,
+    sha256: sha256Digest,
+    version: semanticVersion,
+  }
+  return Object.entries(rules).some(([key, pattern]) => {
+    const values = url.searchParams.getAll(key)
+    return values.length === 1 && pattern.test(values[0])
+  })
 }
 
 export function validateInput(input, label) {
@@ -100,9 +104,19 @@ export function validateInput(input, label) {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new Error(`${label} input must be an explicit file or HTTP(S) URL`)
   }
-  if (/\/swagger(?:\/|$)/i.test(url.pathname) && !isImmutableSwaggerUrl(url)) {
+  if (
+    url.username ||
+    url.password ||
+    url.hash ||
+    /%[a-f\d]{2}/i.test(url.pathname)
+  ) {
     throw new Error(
-      `${label} Swagger URL must contain an immutable version or digest`,
+      `${label} HTTP(S) input must use an unencoded path and an immutable identifier`,
+    )
+  }
+  if (!hasImmutableIdentifier(url)) {
+    throw new Error(
+      `${label} HTTP(S) input must contain an immutable semantic version, commit, or SHA-256 digest`,
     )
   }
 
@@ -111,22 +125,29 @@ export function validateInput(input, label) {
 
 async function loadInput(input, label, workingDirectory) {
   const validated = validateInput(input, label)
+  const snapshotPath = join(
+    workingDirectory,
+    `${label.toLowerCase()}-input.yaml`,
+  )
 
   if (validated.kind === 'file') {
     const contents = await readFile(validated.value)
-    return { contents, generatorInput: validated.value }
+    await writeFile(snapshotPath, contents)
+    return { contents, generatorInput: snapshotPath }
   }
 
-  const response = await fetch(validated.value)
+  const response = await fetch(validated.value, { redirect: 'manual' })
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(`${label} input redirects are not allowed`)
+  }
   if (!response.ok) {
     throw new Error(
       `${label} input request failed with HTTP ${response.status}`,
     )
   }
   const contents = Buffer.from(await response.arrayBuffer())
-  const downloadedPath = join(workingDirectory, `${label.toLowerCase()}-input`)
-  await writeFile(downloadedPath, contents)
-  return { contents, generatorInput: downloadedPath }
+  await writeFile(snapshotPath, contents)
+  return { contents, generatorInput: snapshotPath }
 }
 
 function provenanceHeader(label, contents) {
