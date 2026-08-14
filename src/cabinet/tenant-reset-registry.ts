@@ -16,11 +16,24 @@ class TenantResetRegistry {
   }
 
   async clear(scope: TenantResetScope) {
-    await Promise.all(
+    const results = await Promise.allSettled(
       [...this.#resets].map((reset) =>
         Promise.resolve().then(() => reset(scope)),
       ),
     )
+    const failures: unknown[] = []
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        failures.push(result.reason as unknown)
+      }
+    }
+
+    if (failures.length === 1) {
+      throw failures[0]
+    }
+    if (failures.length > 1) {
+      throw new AggregateError(failures, 'Tenant cleanup failed')
+    }
   }
 }
 

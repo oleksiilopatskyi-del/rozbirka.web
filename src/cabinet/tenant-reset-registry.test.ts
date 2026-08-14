@@ -56,3 +56,42 @@ it('snapshots reset callbacks and supports unregistering them', async () => {
   removeFirst()
   removeLate()
 })
+
+it('waits for remaining cleanup before propagating a cleanup failure', async () => {
+  const failure = new Error('cache cleanup failed')
+  let release!: () => void
+  let settled = false
+  let propagated: unknown
+  const removeFailure = tenantResetRegistry.register(() =>
+    Promise.reject(failure),
+  )
+  const removeDelayed = tenantResetRegistry.register(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve
+      }),
+  )
+
+  const clearing = tenantResetRegistry
+    .clear({ userId: 'u1', tenantId: 'a' })
+    .then(
+      () => {
+        settled = true
+      },
+      (error: unknown) => {
+        settled = true
+        propagated = error
+      },
+    )
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const settledBeforeRelease = settled
+
+  release()
+  await clearing
+  removeFailure()
+  removeDelayed()
+
+  expect(settledBeforeRelease).toBe(false)
+  expect(propagated).toBe(failure)
+})
