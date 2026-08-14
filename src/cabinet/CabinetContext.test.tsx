@@ -13,6 +13,7 @@ import type { Tenant, User } from '@/api/types'
 import { AuthProvider, useAuth } from '@/auth/AuthContext'
 import { accessApi } from './access-api'
 import type { MePermissionsDto } from './access-types'
+import { tenantRequestScope } from './tenant-request-scope'
 import {
   CabinetProvider,
   useCabinet,
@@ -78,6 +79,7 @@ function CabinetProbe() {
   return (
     <div>
       <span>{`tenant:${auth.tenant?.id ?? 'none'} access:${value.snapshot?.tenantId ?? 'none'}`}</span>
+      <span>{`snapshot-user:${value.snapshot?.userId ?? 'none'}`}</span>
       {auth.tenants.map((candidate) => (
         <button
           key={candidate.id}
@@ -112,11 +114,23 @@ function SignOutButton() {
   )
 }
 
+function ReauthenticateButton() {
+  const auth = useAuth()
+  return (
+    <button type="button" onClick={() => void auth.hydrate('reauth-access')}>
+      reauthenticate cabinet
+    </button>
+  )
+}
+
 function CabinetRoute() {
   return (
     <>
       <RouteChangeButton slug="c" />
+      <RouteChangeButton slug="missing" />
+      <RouteChangeButton slug="inactive" />
       <SignOutButton />
+      <ReauthenticateButton />
       <CabinetProvider>
         <CabinetProbe />
       </CabinetProvider>
@@ -307,4 +321,101 @@ it('invalidates in-flight tenant work on sign-out', async () => {
   expect(accessSignal?.aborted).toBe(true)
   accessB.resolve(access('b'))
   await act(async () => accessB.promise)
+})
+
+it('reloads access after a different user signs in to the same tenant', async () => {
+  const secondUser: User = { ...user, id: 'user-2', displayName: 'Майстер' }
+  const secondAccess = deferred<MePermissionsDto>()
+  vi.mocked(authApi.me)
+    .mockResolvedValueOnce(user)
+    .mockResolvedValueOnce(secondUser)
+  vi.mocked(accessApi.get)
+    .mockResolvedValueOnce(access('a'))
+    .mockReturnValueOnce(secondAccess.promise)
+  const userEventApi = userEvent.setup()
+
+  renderCabinet('/app/a/dashboard')
+  expect(await screen.findByText('snapshot-user:user-1')).toBeVisible()
+
+  await userEventApi.click(
+    screen.getByRole('button', { name: 'sign out cabinet' }),
+  )
+  expect(screen.queryByText('snapshot-user:user-1')).not.toBeInTheDocument()
+
+  await userEventApi.click(
+    screen.getByRole('button', { name: 'reauthenticate cabinet' }),
+  )
+  await waitFor(() => expect(accessApi.get).toHaveBeenCalledTimes(2))
+
+  expect(screen.queryByText('snapshot-user:user-1')).not.toBeInTheDocument()
+  expect(screen.getByText('Завантажуємо розбірку…')).toBeVisible()
+
+  await act(async () => {
+    secondAccess.resolve(access('a'))
+    await secondAccess.promise
+  })
+  expect(await screen.findByText('snapshot-user:user-2')).toBeVisible()
+})
+
+it('aborts the shared tenant request scope on unmount', async () => {
+  const rendered = renderCabinet('/app/a/dashboard')
+  expect(await screen.findByText('tenant:a access:a')).toBeVisible()
+  const sharedSignal = tenantRequestScope.signal
+
+  rendered.unmount()
+
+  expect(sharedSignal.aborted).toBe(true)
+})
+
+it('aborts the shared tenant request scope on sign-out', async () => {
+  const userEventApi = userEvent.setup()
+  renderCabinet('/app/a/dashboard')
+  expect(await screen.findByText('tenant:a access:a')).toBeVisible()
+  const sharedSignal = tenantRequestScope.signal
+
+  await userEventApi.click(
+    screen.getByRole('button', { name: 'sign out cabinet' }),
+  )
+
+  expect(sharedSignal.aborted).toBe(true)
+})
+
+it.each([
+  ['/app/missing/dashboard', 'Розбірку не знайдено'],
+  ['/app/inactive/dashboard', 'Розбірка неактивна'],
+])('aborts the shared tenant request scope at %s', async (path, message) => {
+  const sharedSignal = tenantRequestScope.signal
+
+  renderCabinet(path)
+
+  expect(await screen.findByText(message)).toBeVisible()
+  expect(sharedSignal.aborted).toBe(true)
+})
+
+it('rotates the shared scope between distinct invalid route boundaries', async () => {
+  const userEventApi = userEvent.setup()
+  renderCabinet('/app/missing/dashboard')
+  expect(await screen.findByText('Розбірку не знайдено')).toBeVisible()
+  const unknownScopeSignal = tenantRequestScope.signal
+
+  await userEventApi.click(
+    screen.getByRole('button', { name: 'route inactive' }),
+  )
+
+  expect(await screen.findByText('Розбірка неактивна')).toBeVisible()
+  expect(unknownScopeSignal.aborted).toBe(true)
+})
+
+it('keeps an already-ready tenant mounted without starting a transition', async () => {
+  const userEventApi = userEvent.setup()
+  renderCabinet('/app/a/dashboard')
+  expect(await screen.findByText('tenant:a access:a')).toBeVisible()
+  const sharedSignal = tenantRequestScope.signal
+
+  await userEventApi.click(screen.getByRole('button', { name: 'Розбірка A' }))
+
+  expect(screen.getByText('tenant:a access:a')).toBeVisible()
+  expect(screen.queryByText('Перемикаємо розбірку…')).not.toBeInTheDocument()
+  expect(accessApi.get).toHaveBeenCalledOnce()
+  expect(sharedSignal.aborted).toBe(false)
 })

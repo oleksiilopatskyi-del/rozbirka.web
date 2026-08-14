@@ -10,7 +10,6 @@ import {
 } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
 import { billingApi } from '../api/billing'
-import { credentials } from '../api/credentials'
 import { tenantPreference } from '../api/tenant-preference'
 import type { Tenant } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
@@ -59,6 +58,7 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<CabinetState>(initialState)
   const stateRef = useRef(state)
   const authRef = useRef(auth)
+  const invalidatedBoundaryRef = useRef<string | null>(null)
   const transitionRef = useRef<ReturnType<
     typeof createTenantTransition
   > | null>(null)
@@ -67,6 +67,17 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
     stateRef.current = next
     setState(next)
   }, [])
+
+  const invalidateBoundary = useCallback(
+    (boundary: string) => {
+      if (invalidatedBoundaryRef.current === boundary) return
+      invalidatedBoundaryRef.current = boundary
+      transitionRef.current?.invalidate()
+      tenantRequestScope.rotate()
+      publish(initialState)
+    },
+    [publish],
+  )
 
   useEffect(() => {
     authRef.current = auth
@@ -79,6 +90,7 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
         tenantId: authRef.current.tenant?.id ?? null,
       }),
       begin: (target) => {
+        invalidatedBoundaryRef.current = null
         publish({
           status:
             stateRef.current.snapshot === null &&
@@ -121,12 +133,9 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
     })
     transitionRef.current = transition
 
-    const unsubscribeCredentials = credentials.onCleared(() =>
-      transition.invalidate(),
-    )
     return () => {
-      unsubscribeCredentials()
       transition.invalidate()
+      tenantRequestScope.rotate()
       if (transitionRef.current === transition) {
         transitionRef.current = null
       }
@@ -140,8 +149,17 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
   )
 
   useEffect(() => {
+    if (auth.status === 'loading') {
+      if (
+        stateRef.current.targetTenant !== null ||
+        stateRef.current.snapshot !== null
+      ) {
+        invalidateBoundary('auth:loading')
+      }
+      return
+    }
     if (auth.status !== 'authenticated' || auth.user === null) {
-      transitionRef.current?.invalidate()
+      invalidateBoundary(`auth:${auth.status}`)
       return
     }
 
@@ -149,17 +167,18 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
       (candidate) => candidate.slug === tenantSlug,
     )
     if (!target) {
-      transitionRef.current?.invalidate()
+      invalidateBoundary(`route:${tenantSlug ?? ''}:not-found`)
       return
     }
     if (!target.isActive) {
-      transitionRef.current?.invalidate()
+      invalidateBoundary(`route:${target.slug}:inactive`)
       return
     }
 
     if (
       stateRef.current.status === 'ready' &&
       stateRef.current.snapshot?.tenantId === target.id &&
+      stateRef.current.snapshot.userId === auth.user.id &&
       auth.tenant?.id === target.id
     ) {
       return
@@ -171,6 +190,7 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
     auth.user,
     auth.tenant,
     auth.tenants,
+    invalidateBoundary,
     tenantSlug,
     transitionTo,
   ])
@@ -186,13 +206,23 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
         (candidate) => candidate.id === tenantId,
       )
       if (!target) {
-        transitionRef.current?.invalidate()
+        invalidateBoundary(`selection:${tenantId}:not-found`)
         publish({
           status: 'not-found',
           targetTenant: null,
           snapshot: null,
           error: null,
         })
+        return
+      }
+
+      if (
+        stateRef.current.status === 'ready' &&
+        stateRef.current.snapshot?.tenantId === target.id &&
+        stateRef.current.snapshot.userId === authRef.current.user?.id &&
+        authRef.current.tenant?.id === target.id &&
+        target.slug === tenantSlug
+      ) {
         return
       }
 
@@ -206,13 +236,7 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
       )
 
       if (!target.isActive) {
-        transitionRef.current?.invalidate()
-        publish({
-          status: 'inactive',
-          targetTenant: target,
-          snapshot: null,
-          error: null,
-        })
+        invalidateBoundary(`route:${target.slug}:inactive`)
         return
       }
 
@@ -222,8 +246,10 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
       location.hash,
       location.pathname,
       location.search,
+      invalidateBoundary,
       navigate,
       publish,
+      tenantSlug,
       transitionTo,
     ],
   )
@@ -254,6 +280,14 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
         error: null,
       }
     }
+    if (state.snapshot !== null && state.snapshot.userId !== auth.user.id) {
+      return {
+        status: 'loading',
+        targetTenant: routeTarget,
+        snapshot: null,
+        error: null,
+      }
+    }
     if (
       state.status !== 'switching' &&
       state.targetTenant?.id !== routeTarget.id
@@ -277,7 +311,8 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
   switch (viewState.status) {
     case 'ready':
       content =
-        auth.tenant?.id === viewState.snapshot?.tenantId
+        auth.tenant?.id === viewState.snapshot?.tenantId &&
+        auth.user?.id === viewState.snapshot?.userId
           ? children
           : loadingState
       break
