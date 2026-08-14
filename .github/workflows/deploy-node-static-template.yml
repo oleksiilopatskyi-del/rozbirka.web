@@ -73,6 +73,7 @@ jobs:
           else
             npm run check
             npm run build:qa
+            npm run check:artifact:qa
             npm run budget:assets
             npm run test:e2e
             npx wrangler deploy --dry-run --env qa
@@ -134,7 +135,10 @@ jobs:
           fi
 
           if [ "$wrangler_env" = "production" ]; then
+            npm run check:artifact:prod
             npm run check:routes -- https://qa.rozbirka.pro https://qaapi.rozbirka.pro
+          else
+            npm run check:artifact:qa
           fi
 
           npx wrangler deploy --env "$wrangler_env"

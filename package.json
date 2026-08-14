@@ -22,6 +22,8 @@
     "assets:feature-screens": "node scripts/feature-screen-composer.mjs",
     "assets:optimize": "npm run assets:feature-screens && node scripts/optimize-assets.mjs",
     "budget:assets": "node scripts/check-asset-budget.mjs",
+    "check:artifact:qa": "node scripts/check-deploy-artifact.mjs qa",
+    "check:artifact:prod": "node scripts/check-deploy-artifact.mjs production",
     "audit:lhci": "lhci autorun",
     "test:e2e": "playwright test",
     "check:routes": "node scripts/check-production-routes.mjs",
@@ -29,7 +31,8 @@
     "contracts:generate": "node scripts/generate-api-contracts.mjs",
     "contracts:check": "node scripts/check-api-contracts.mjs",
     "deps:check": "node scripts/check-dependency-health.mjs",
-    "verify:prod": "npm run check && npm run build:prod && npm run budget:assets && npm run test:e2e && npm run audit:lhci && wrangler deploy --dry-run --env production",
+    "verify:prod": "npm run check && npm run build:prod && npm run check:artifact:prod && npm run budget:assets && npm run test:e2e && npm run audit:lhci && wrangler deploy --dry-run --env production",
+    "deploy:qa": "npm run check && npm run build:qa && npm run check:artifact:qa && npm run budget:assets && wrangler deploy --dry-run --env qa && wrangler deploy --env qa",
     "check": "npm run deps:check && npm run typecheck && npm run lint && npm run format:check && npm run test"
   },
   "dependencies": {
