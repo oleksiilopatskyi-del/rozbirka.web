@@ -6,7 +6,10 @@ import {
   type CabinetModuleKey,
 } from './module-registry'
 import { evaluateModuleAccess, type ModuleAccessDecision } from './policy'
-import { ModuleUnavailableScreen } from './screens/module-unavailable'
+import {
+  FeatureUnavailableScreen,
+  ModuleUnavailableScreen,
+} from './screens/module-unavailable'
 import type { TenantAccessState } from './access-types'
 
 export interface CabinetModuleScreenProps {
@@ -73,8 +76,9 @@ function decisionScreen(
 ) {
   switch (decision.kind) {
     case 'unreleased':
-    case 'feature-unavailable':
       return <ModuleUnavailableScreen definition={definition} />
+    case 'feature-unavailable':
+      return <FeatureUnavailableScreen definition={definition} />
     case 'permission-denied':
       return (
         <BoundaryStateScreen

@@ -5,10 +5,29 @@ import type { SubscriptionDto } from '../api/types'
 import type { CabinetContextValue } from './CabinetContext'
 import { useCabinet } from './CabinetContext'
 import { ModuleBoundary, type CabinetModuleScreenProps } from './ModuleBoundary'
+import type {
+  CabinetModuleDefinition,
+  CabinetModuleKey,
+} from './module-registry'
+
+interface ModuleRegistryExports {
+  cabinetModules: Readonly<Record<CabinetModuleKey, CabinetModuleDefinition>>
+}
 
 vi.mock('./CabinetContext', () => ({
   useCabinet: vi.fn(),
 }))
+
+vi.mock('./module-registry', async (importOriginal) => {
+  const actual = await importOriginal<ModuleRegistryExports>()
+  return {
+    ...actual,
+    cabinetModules: {
+      ...actual.cabinetModules,
+      reports: { ...actual.cabinetModules.reports, released: true },
+    },
+  }
+})
 
 const mockedUseCabinet = vi.mocked(useCabinet)
 
@@ -125,6 +144,32 @@ describe('ModuleBoundary', () => {
       screen.getByRole('heading', { name: 'Недостатньо прав' }),
     ).toBeVisible()
     expect(screen.queryByText('Billing module code')).not.toBeInTheDocument()
+    expect(load).not.toHaveBeenCalled()
+  })
+
+  it('shows a truthful plan state for a released feature-gated module without loading its code', () => {
+    mockedUseCabinet.mockReturnValue(cabinet(['reports.view']))
+    const load = vi.fn(() =>
+      Promise.resolve({
+        default: (_props: CabinetModuleScreenProps) => (
+          <p>Reports module code</p>
+        ),
+      }),
+    )
+    const Screen = lazy(load)
+
+    render(<ModuleBoundary module="reports" screen={Screen} />)
+
+    expect(
+      screen.getByRole('heading', {
+        name: 'Функція недоступна на вашому тарифі',
+      }),
+    ).toBeVisible()
+    expect(screen.getByText(/поточн.*тариф/i)).toBeVisible()
+    expect(
+      screen.queryByRole('heading', { name: 'Модуль готується до запуску' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Reports module code')).not.toBeInTheDocument()
     expect(load).not.toHaveBeenCalled()
   })
 })
