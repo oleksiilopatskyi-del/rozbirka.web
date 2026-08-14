@@ -10,6 +10,7 @@ const upstreamOrigin = 'http://127.0.0.1:4174'
 const appOrigin = 'http://127.0.0.1:4173'
 const phone = '501112233'
 const otp = '123456'
+const fixtureRefreshSecret = 'refresh-1'
 
 const namedUser = {
   id: 'user-1',
@@ -81,6 +82,28 @@ interface RouteOptions {
 interface RouteState {
   protectedAttempts: Record<string, number>
   invitationAccepted: boolean
+}
+
+function containsRefreshCredential(value: unknown): boolean {
+  const refreshTokenMarker = /refresh[\s._-]*token/i
+  const fixtureSecret = fixtureRefreshSecret.toLowerCase()
+
+  if (Array.isArray(value)) {
+    return value.some((entry) => containsRefreshCredential(entry))
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value).some(
+      ([key, entry]) =>
+        refreshTokenMarker.test(key) || containsRefreshCredential(entry),
+    )
+  }
+
+  const serialized = (
+    typeof value === 'string' ? value : (JSON.stringify(value) ?? '')
+  ).toLowerCase()
+  return (
+    refreshTokenMarker.test(serialized) || serialized.includes(fixtureSecret)
+  )
 }
 
 async function fulfillData(route: Route, data: unknown, status = 200) {
@@ -226,9 +249,30 @@ test.beforeEach(async ({ request }) => {
 test('OTP login stores refresh only in HttpOnly cookie and no credentials in storage @auth-smoke', async ({
   context,
   page,
+  request,
 }) => {
   await installApiBoundary(page)
+  const verifyResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return (
+      url.origin === appOrigin &&
+      url.pathname === '/session/otp/verify' &&
+      response.request().method() === 'POST'
+    )
+  })
   await loginFrom(page)
+
+  const verifyResponse = await verifyResponsePromise
+  const verifyUrl = new URL(verifyResponse.url())
+  expect(verifyUrl.origin).toBe(appOrigin)
+  expect(verifyUrl.pathname).toBe('/session/otp/verify')
+  expect(verifyResponse.request().method()).toBe('POST')
+  expect(verifyResponse.status()).toBe(200)
+  expect(verifyResponse.headers()['content-type']).toContain('application/json')
+  const verifyPayload: unknown = await verifyResponse.json()
+  expect(verifyPayload).toMatchObject({ accessToken: 'access-1' })
+  expect(containsRefreshCredential(verifyPayload)).toBe(false)
+  expect((await upstreamStats(request)).verifyRequests).toBe(1)
 
   const cookies = await context.cookies(`${appOrigin}/session/refresh`)
   const refreshCookie = cookies.find(
@@ -240,7 +284,7 @@ test('OTP login stores refresh only in HttpOnly cookie and no credentials in sto
     path: '/session',
     secure: false,
   })
-  expect(refreshCookie?.value).not.toBe('')
+  expect(refreshCookie?.value).toBe(fixtureRefreshSecret)
 
   const storageEntries = await page.evaluate(() => ({
     local: Object.entries(localStorage),
