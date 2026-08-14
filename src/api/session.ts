@@ -28,8 +28,17 @@ export const createSessionApi = (
     withCredentials: true,
   })
   let sessionGeneration = 0
-  let logoutInProgress = false
+  let sessionMutationDepth = 0
   const activeRefreshes = new Set<ActiveRefresh>()
+
+  const invalidateRefreshes = async () => {
+    sessionGeneration += 1
+    credentials.clear()
+    const refreshes = [...activeRefreshes]
+    refreshes.forEach(({ controller }) => controller.abort())
+    await Promise.all(refreshes.map(({ settled }) => settled))
+    credentials.clear()
+  }
 
   return {
     async verify(req: VerifyOtpRequest): Promise<SessionVerifyResponse> {
@@ -55,7 +64,7 @@ export const createSessionApi = (
     },
 
     async refresh(): Promise<SessionRefreshResponse> {
-      if (logoutInProgress) {
+      if (sessionMutationDepth > 0) {
         throw problemError(normalizeApiProblem(new axios.CanceledError()))
       }
 
@@ -94,16 +103,22 @@ export const createSessionApi = (
       }
     },
 
+    async invalidate(): Promise<void> {
+      sessionMutationDepth += 1
+      try {
+        await invalidateRefreshes()
+      } finally {
+        credentials.clear()
+        sessionMutationDepth -= 1
+      }
+    },
+
     async logout(): Promise<void> {
       const accessToken = credentials.getAccess()
-      sessionGeneration += 1
-      logoutInProgress = true
-      credentials.clear()
-      const refreshes = [...activeRefreshes]
-      refreshes.forEach(({ controller }) => controller.abort())
-      await Promise.all(refreshes.map(({ settled }) => settled))
+      sessionMutationDepth += 1
 
       try {
+        await invalidateRefreshes()
         await client.post(
           '/session/logout',
           undefined,
@@ -115,7 +130,7 @@ export const createSessionApi = (
         throw problemError(normalizeApiProblem(error))
       } finally {
         credentials.clear()
-        logoutInProgress = false
+        sessionMutationDepth -= 1
       }
     },
   }

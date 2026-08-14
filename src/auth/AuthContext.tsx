@@ -186,12 +186,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback<AuthContextValue['signOut']>(
     async ({ silent } = {}) => {
       invalidateAuth()
-      if (!silent) {
-        try {
+      try {
+        if (silent) {
+          await sessionApi.invalidate()
+        } else {
           await authApi.logout()
-        } catch {
-          // ignore — server may be offline; we still want to drop local state
         }
+      } catch {
+        // ignore — server may be offline; we still want to drop local state
       }
       credentials.clear()
       reset()

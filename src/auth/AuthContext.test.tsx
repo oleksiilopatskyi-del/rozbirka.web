@@ -54,9 +54,11 @@ function deferred<T>() {
 function AuthProbe({
   onStatus,
   onHydrate,
+  onSignOut,
 }: {
   onStatus?: (status: string) => void
   onHydrate?: (completion: Promise<void>) => void
+  onSignOut?: (completion: Promise<void>) => void
 }) {
   const auth = useAuth()
 
@@ -83,6 +85,16 @@ function AuthProbe({
       <button type="button" onClick={() => void auth.signOut()}>
         sign out
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          const completion = auth.signOut({ silent: true })
+          onSignOut?.(completion)
+          void completion
+        }}
+      >
+        sign out silently
+      </button>
     </div>
   )
 }
@@ -99,6 +111,7 @@ beforeEach(() => {
   vi.spyOn(authApi, 'me').mockResolvedValue(user)
   vi.spyOn(authApi, 'logout').mockResolvedValue(undefined)
   vi.spyOn(tenantsApi, 'list').mockResolvedValue([firstTenant, secondTenant])
+  vi.spyOn(sessionApi, 'invalidate').mockResolvedValue(undefined)
   vi.spyOn(sessionApi, 'refresh').mockImplementation(() => {
     credentials.setAccess('refreshed-access')
     return Promise.resolve({ accessToken: 'refreshed-access', expiresIn: 900 })
@@ -348,5 +361,55 @@ it('signs out locally even when Worker logout fails', async () => {
 
   expect(screen.getByTestId('status')).toHaveTextContent('guest')
   expect(screen.getByTestId('user')).toHaveTextContent('none')
+  expect(credentials.getAccess()).toBeNull()
+})
+
+it('awaits session invalidation before silent sign-out can resolve', async () => {
+  const refresh = deferred<{ accessToken: string; expiresIn: number }>()
+  vi.mocked(sessionApi.refresh).mockImplementation(async () => {
+    const response = await refresh.promise
+    credentials.setAccess(response.accessToken)
+    return response
+  })
+  const invalidation = deferred<void>()
+  vi.mocked(sessionApi.invalidate).mockImplementation(async () => {
+    await invalidation.promise
+    credentials.clear()
+  })
+  const signOutCompletions: Promise<void>[] = []
+  const userEventApi = userEvent.setup()
+
+  render(
+    <AuthProvider>
+      <AuthProbe
+        onSignOut={(completion) => signOutCompletions.push(completion)}
+      />
+    </AuthProvider>,
+  )
+  await waitFor(() => expect(sessionApi.refresh).toHaveBeenCalledOnce())
+
+  await userEventApi.click(
+    screen.getByRole('button', { name: 'sign out silently' }),
+  )
+
+  expect(sessionApi.invalidate).toHaveBeenCalledOnce()
+  expect(authApi.logout).not.toHaveBeenCalled()
+  await expectStatus('guest')
+
+  let signOutSettled = false
+  void signOutCompletions[0]?.then(() => {
+    signOutSettled = true
+  })
+  refresh.resolve({ accessToken: 'late-access', expiresIn: 900 })
+  await act(async () => refresh.promise)
+  expect(credentials.getAccess()).toBe('late-access')
+  expect(signOutSettled).toBe(false)
+
+  invalidation.resolve()
+  await act(async () => invalidation.promise)
+  await signOutCompletions[0]
+
+  expect(signOutSettled).toBe(true)
+  expect(screen.getByTestId('status')).toHaveTextContent('guest')
   expect(credentials.getAccess()).toBeNull()
 })
