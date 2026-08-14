@@ -33,6 +33,16 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+it('delegates OTP sending to the browser session facade', async () => {
+  const payload = { cooldownSeconds: 60, retryAfterSeconds: 300 }
+  const send = vi.spyOn(sessionApi, 'send').mockResolvedValue(payload)
+
+  await expect(authApi.otpSend({ phone: '+380501112233' })).resolves.toEqual(
+    payload,
+  )
+  expect(send).toHaveBeenCalledWith({ phone: '+380501112233' })
+})
+
 it('delegates OTP verification to the browser session facade', async () => {
   const payload = {
     accessToken: 'access',

@@ -83,6 +83,47 @@ beforeEach(() => {
   vi.restoreAllMocks()
 })
 
+it('posts OTP send to the same-origin session route and narrows the response', async () => {
+  const harness = sessionHarness((config) =>
+    Promise.resolve(
+      response(config, {
+        cooldownSeconds: 60,
+        retryAfterSeconds: 300,
+        internalSecret: 'must-not-escape',
+      }),
+    ),
+  )
+
+  const result = await harness.session.send({ phone: '+380501234567' })
+
+  expect(result).toEqual({ cooldownSeconds: 60, retryAfterSeconds: 300 })
+  expect(result).not.toHaveProperty('internalSecret')
+  expect(harness.requests[0]).toMatchObject({
+    url: '/session/otp/send',
+    method: 'post',
+  })
+  expect(JSON.parse(harness.requests[0]?.data as string)).toEqual({
+    phone: '+380501234567',
+  })
+})
+
+it('normalizes OTP send facade failures', async () => {
+  const harness = sessionHarness((config) =>
+    Promise.reject(
+      failure(config, 429, {
+        error: { code: 'OTP_RATE_LIMITED', message: 'OTP send failed' },
+      }),
+    ),
+  )
+
+  await expect(
+    harness.session.send({ phone: '+380501234567' }),
+  ).rejects.toMatchObject({
+    status: 429,
+    code: 'OTP_RATE_LIMITED',
+  })
+})
+
 it('posts verify to the same-origin session route and stores only access in memory', async () => {
   const localSet = vi.spyOn(Storage.prototype, 'setItem')
   const sessionSet = vi.spyOn(sessionStorage, 'setItem')

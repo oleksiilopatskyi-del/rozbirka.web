@@ -7,6 +7,7 @@ const validOtp = '123456'
 
 let newUser = false
 let tokenSequence = 0
+let sendRequests = 0
 let verifyRequests = 0
 let refreshRequests = 0
 let logoutRequests = 0
@@ -15,6 +16,7 @@ const refreshTokens = new Set()
 function reset(options = {}) {
   newUser = options.newUser === true
   tokenSequence = 0
+  sendRequests = 0
   verifyRequests = 0
   refreshRequests = 0
   logoutRequests = 0
@@ -80,9 +82,27 @@ const server = createServer(async (request, response) => {
 
     if (request.method === 'GET' && url.pathname === '/_test/stats') {
       sendJson(response, 200, {
+        sendRequests,
         verifyRequests,
         refreshRequests,
         logoutRequests,
+      })
+      return
+    }
+
+    if (request.method === 'POST' && url.pathname === '/auth/phone') {
+      const body = await readJson(request)
+      if (!isObject(body) || typeof body.phone !== 'string') {
+        sendProblem(response, 400, 'INVALID_SEND', 'Invalid send payload')
+        return
+      }
+      sendRequests += 1
+      sendJson(response, 200, {
+        data: {
+          cooldownSeconds: 0,
+          retryAfterSeconds: 0,
+          internalSecret: 'identity-send-internal-secret',
+        },
       })
       return
     }

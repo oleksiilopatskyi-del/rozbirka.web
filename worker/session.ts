@@ -1,6 +1,7 @@
 const COOKIE_NAME = 'rozbirka_refresh'
 const REFRESH_MAX_AGE = 90 * 24 * 60 * 60
 const SESSION_PATHS = new Set([
+  '/session/otp/send',
   '/session/otp/verify',
   '/session/refresh',
   '/session/logout',
@@ -11,6 +12,11 @@ export interface SessionEnv {
 }
 
 type JsonRecord = Record<string, unknown>
+
+interface SendBrowserDto {
+  cooldownSeconds: number
+  retryAfterSeconds: number
+}
 
 interface VerifyBrowserDto {
   accessToken: string
@@ -34,6 +40,7 @@ const SAFE_OTP_ERROR_CODES = new Set([
   'OTP_EXPIRED',
   'OTP_MAX_ATTEMPTS',
 ])
+const SAFE_OTP_SEND_ERROR_CODES = new Set(['OTP_COOLDOWN', 'OTP_RATE_LIMITED'])
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -120,6 +127,25 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0
 }
 
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+function sendBrowserData(data: unknown): SendBrowserDto | null {
+  if (
+    !isRecord(data) ||
+    !isNonNegativeSafeInteger(data.cooldownSeconds) ||
+    !isNonNegativeSafeInteger(data.retryAfterSeconds)
+  ) {
+    return null
+  }
+
+  return {
+    cooldownSeconds: data.cooldownSeconds,
+    retryAfterSeconds: data.retryAfterSeconds,
+  }
+}
+
 function verifyBrowserData(data: unknown): {
   browser: VerifyBrowserDto
   refreshToken: string
@@ -179,15 +205,24 @@ function safeRetryAfter(response: Response) {
 }
 
 async function otpFailure(response: Response) {
+  return safeOtpFailure(
+    response,
+    SAFE_OTP_ERROR_CODES,
+    'OTP verification failed',
+  )
+}
+
+async function safeOtpFailure(
+  response: Response,
+  safeCodes: ReadonlySet<string>,
+  message: string,
+) {
   let code: string | undefined
   try {
     const payload: unknown = await response.json()
     if (isRecord(payload) && isRecord(payload.error)) {
       const candidate = payload.error.code
-      if (
-        typeof candidate === 'string' &&
-        SAFE_OTP_ERROR_CODES.has(candidate)
-      ) {
+      if (typeof candidate === 'string' && safeCodes.has(candidate)) {
         code = candidate
       }
     }
@@ -200,7 +235,7 @@ async function otpFailure(response: Response) {
   return jsonProblem(
     response.status,
     code,
-    'OTP verification failed',
+    message,
     retryAfter === undefined ? undefined : { 'Retry-After': retryAfter },
   )
 }
@@ -261,6 +296,29 @@ export async function handleSessionRequest(
     return jsonProblem(405, 'METHOD_NOT_ALLOWED', 'Method not allowed', {
       Allow: 'POST',
     })
+  }
+
+  if (url.pathname === '/session/otp/send') {
+    const body = await requestBody(request)
+    if (!body || !isNonEmptyString(body.phone)) {
+      return jsonProblem(400, 'INVALID_REQUEST', 'Invalid request')
+    }
+
+    const response = await callIdentity(`${env.IDENTITY_ORIGIN}/auth/phone`, {
+      phone: body.phone,
+    })
+    if (!response) return identityFailure()
+    if (!response.ok) {
+      return safeOtpFailure(
+        response,
+        SAFE_OTP_SEND_ERROR_CODES,
+        'OTP send failed',
+      )
+    }
+
+    const data = await upstreamData(response)
+    const validated = sendBrowserData(data)
+    return validated ? json(validated) : identityFailure()
   }
 
   if (url.pathname === '/session/otp/verify') {

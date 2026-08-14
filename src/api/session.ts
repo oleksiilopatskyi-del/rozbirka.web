@@ -3,6 +3,8 @@ import type { ApiProblem } from './contracts'
 import { credentials } from './credentials'
 import { normalizeApiProblem } from './errors'
 import type {
+  SendOtpRequest,
+  SendOtpResponse,
   SessionRefreshResponse,
   SessionVerifyResponse,
   VerifyOtpRequest,
@@ -41,6 +43,21 @@ export const createSessionApi = (
   }
 
   return {
+    async send(req: SendOtpRequest): Promise<SendOtpResponse> {
+      try {
+        const response = await client.post<SendOtpResponse>(
+          '/session/otp/send',
+          req,
+        )
+        return {
+          cooldownSeconds: response.data.cooldownSeconds,
+          retryAfterSeconds: response.data.retryAfterSeconds,
+        }
+      } catch (error) {
+        throw problemError(normalizeApiProblem(error))
+      }
+    },
+
     async verify(req: VerifyOtpRequest): Promise<SessionVerifyResponse> {
       try {
         const response = await client.post<SessionVerifyResponse>(

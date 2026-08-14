@@ -16,6 +16,175 @@ afterEach(() => {
 })
 
 describe('session BFF', () => {
+  it('sends OTP through Identity and returns only bounded cooldown data', async () => {
+    let upstreamRequest: Request | undefined
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        upstreamRequest = new Request(input, init)
+        return Promise.resolve(
+          Response.json({
+            data: {
+              cooldownSeconds: 60,
+              retryAfterSeconds: 300,
+              internalSecret: 'identity-internal-secret',
+            },
+          }),
+        )
+      }),
+    )
+
+    const response = await handleSessionRequest(
+      new Request('https://rozbirka.pro/session/otp/send', {
+        method: 'POST',
+        headers: {
+          origin: 'https://rozbirka.pro',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone: '+380501112233',
+          ignored: 'browser-secret',
+        }),
+      }),
+      env,
+    )
+
+    expect(response).not.toBeNull()
+    if (!response) return
+    const text = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(JSON.parse(text)).toEqual({
+      cooldownSeconds: 60,
+      retryAfterSeconds: 300,
+    })
+    expect(text).not.toContain('identity-internal-secret')
+    expect(upstreamRequest?.url).toBe('https://identity.example/auth/phone')
+    expect(upstreamRequest?.method).toBe('POST')
+    expect(await upstreamRequest?.json()).toEqual({
+      phone: '+380501112233',
+    })
+  })
+
+  it.each([
+    { cooldownSeconds: 60 },
+    { cooldownSeconds: -1, retryAfterSeconds: 300 },
+    { cooldownSeconds: 60, retryAfterSeconds: '300' },
+  ])('rejects malformed OTP send success data %#', async (data) => {
+    identityResponse({ data })
+
+    const response = await handleSessionRequest(
+      new Request('https://rozbirka.pro/session/otp/send', {
+        method: 'POST',
+        body: JSON.stringify({ phone: '+380501112233' }),
+      }),
+      env,
+    )
+
+    expect(response).not.toBeNull()
+    if (!response) return
+    expect(response.status).toBe(502)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'IDENTITY_REQUEST_FAILED' },
+    })
+  })
+
+  it.each(['OTP_COOLDOWN', 'OTP_RATE_LIMITED'])(
+    'preserves the allowlisted OTP send code %s without upstream details',
+    async (code) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve(
+            Response.json(
+              {
+                data: null,
+                error: {
+                  code,
+                  message: 'identity-internal-secret',
+                  details: { token: 'identity-internal-secret' },
+                },
+              },
+              { status: 429, headers: { 'Retry-After': '17' } },
+            ),
+          ),
+        ),
+      )
+
+      const response = await handleSessionRequest(
+        new Request('https://rozbirka.pro/session/otp/send', {
+          method: 'POST',
+          body: JSON.stringify({ phone: '+380501112233' }),
+        }),
+        env,
+      )
+
+      expect(response).not.toBeNull()
+      if (!response) return
+      const text = await response.text()
+      expect(response.status).toBe(429)
+      expect(response.headers.get('retry-after')).toBe('17')
+      expect(JSON.parse(text)).toEqual({
+        error: { code, message: 'OTP send failed' },
+      })
+      expect(text).not.toContain('identity-internal-secret')
+      expect(text).not.toContain('details')
+    },
+  )
+
+  it.each([{}, { phone: '' }, { phone: 380501112233 }])(
+    'rejects malformed OTP send input without calling Identity %#',
+    async (body) => {
+      const upstreamFetch = vi.fn()
+      vi.stubGlobal('fetch', upstreamFetch)
+
+      const response = await handleSessionRequest(
+        new Request('https://rozbirka.pro/session/otp/send', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+        env,
+      )
+
+      expect(response?.status).toBe(400)
+      expect(await response?.json()).toMatchObject({
+        error: { code: 'INVALID_REQUEST' },
+      })
+      expect(upstreamFetch).not.toHaveBeenCalled()
+    },
+  )
+
+  it('collapses a verify-only OTP error code on the send route', async () => {
+    identityResponse(
+      {
+        error: {
+          code: 'OTP_INVALID',
+          message: 'identity-internal-secret',
+        },
+      },
+      { status: 400 },
+    )
+
+    const response = await handleSessionRequest(
+      new Request('https://rozbirka.pro/session/otp/send', {
+        method: 'POST',
+        body: JSON.stringify({ phone: '+380501112233' }),
+      }),
+      env,
+    )
+
+    const text = await response!.text()
+    expect(response?.status).toBe(400)
+    expect(JSON.parse(text)).toEqual({
+      error: {
+        code: 'IDENTITY_REQUEST_FAILED',
+        message: 'Identity service request failed',
+      },
+    })
+    expect(text).not.toContain('identity-internal-secret')
+  })
+
   it('stores refresh in an HttpOnly cookie and returns no refresh credential', async () => {
     let upstreamRequest: Request | undefined
     vi.stubGlobal(

@@ -13,8 +13,7 @@ import type {
 
 export const authApi = {
   async otpSend(req: SendOtpRequest): Promise<SendOtpResponse> {
-    const resp = await identityClient.post<SendOtpResponse>('/auth/phone', req)
-    return resp.data
+    return sessionApi.send(req)
   },
 
   async otpVerify(req: VerifyOtpRequest): Promise<SessionVerifyResponse> {
