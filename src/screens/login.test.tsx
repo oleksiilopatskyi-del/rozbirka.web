@@ -86,7 +86,7 @@ beforeEach(() => {
     tenant: null,
     tenants: [],
     hydrate: vi.fn().mockResolvedValue(undefined),
-    switchTenant: vi.fn(),
+    commitTenant: vi.fn(),
     signOut: vi.fn(),
   }
   vi.mocked(useAuth).mockReturnValue(auth)

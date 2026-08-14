@@ -25,8 +25,8 @@ export interface AuthContextValue {
   tenants: Tenant[]
   /** Called after a successful OTP verify; bootstraps user + tenants from the server. */
   hydrate: (accessToken?: string) => Promise<void>
-  /** Switch the active розбірка. Updates X-Tenant-Id used by the core API client. */
-  switchTenant: (tenantId: string) => void
+  /** Commit a tenant whose cabinet access snapshot is ready. */
+  commitTenant: (tenantId: string) => void
   /** POST /session/logout and reset state. Pass `silent` to skip the network call. */
   signOut: (opts?: { silent?: boolean }) => Promise<void>
 }
@@ -172,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [bootstrap],
   )
 
-  const switchTenant = useCallback((tenantId: string) => {
+  const commitTenant = useCallback((tenantId: string) => {
     setTenants((list) => {
       const next = list.find((t) => t.id === tenantId)
       if (next) {
@@ -207,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tenant,
     tenants,
     hydrate,
-    switchTenant,
+    commitTenant,
     signOut,
   }
 

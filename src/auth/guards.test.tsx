@@ -22,7 +22,7 @@ const authValue = (status: 'loading' | 'authenticated' | 'guest') => ({
   tenant: null,
   tenants: [],
   hydrate: vi.fn(),
-  switchTenant: vi.fn(),
+  commitTenant: vi.fn(),
   signOut: vi.fn(),
 })
 

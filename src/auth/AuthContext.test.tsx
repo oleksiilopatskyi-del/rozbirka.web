@@ -82,6 +82,9 @@ function AuthProbe({
       >
         hydrate
       </button>
+      <button type="button" onClick={() => auth.commitTenant(secondTenant.id)}>
+        commit second tenant
+      </button>
       <button type="button" onClick={() => void auth.signOut()}>
         sign out
       </button>
@@ -212,6 +215,25 @@ it('clears invalid tenant preference when the user has no matching tenant', asyn
     expect(screen.getByTestId('tenant')).toHaveTextContent(firstTenant.id)
   })
   expect(tenantPreference.get()).toBe(firstTenant.id)
+})
+
+it('commits an authenticated tenant synchronously after access is ready', async () => {
+  credentials.setAccess('current-access')
+  const userEventApi = userEvent.setup()
+
+  render(
+    <AuthProvider>
+      <AuthProbe />
+    </AuthProvider>,
+  )
+
+  await expectStatus('authenticated')
+  await userEventApi.click(
+    screen.getByRole('button', { name: 'commit second tenant' }),
+  )
+
+  expect(screen.getByTestId('tenant')).toHaveTextContent(secondTenant.id)
+  expect(tenantPreference.get()).toBe(secondTenant.id)
 })
 
 it('resets React auth state once when a mid-session refresh fails', async () => {

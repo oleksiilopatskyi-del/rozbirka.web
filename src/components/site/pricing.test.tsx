@@ -84,7 +84,7 @@ describe('Pricing destinations', () => {
       tenant: null,
       tenants: [],
       hydrate: vi.fn(),
-      switchTenant: vi.fn(),
+      commitTenant: vi.fn(),
       signOut: vi.fn(),
     })
   })
@@ -111,7 +111,7 @@ describe('Pricing destinations', () => {
       tenant: null,
       tenants: [],
       hydrate: vi.fn(),
-      switchTenant: vi.fn(),
+      commitTenant: vi.fn(),
       signOut: vi.fn(),
     })
     render(

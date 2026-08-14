@@ -91,6 +91,11 @@ export function AccountScreen() {
     await auth.signOut()
   }
 
+  const handleTenantSwitch = (tenantId: string) => {
+    tenantPreference.set(tenantId)
+    void auth.hydrate()
+  }
+
   const refreshSubscription = async () => {
     const sub = await billingApi.getSubscription().catch(() => null)
     setSubscription(sub)
@@ -127,7 +132,7 @@ export function AccountScreen() {
         user={auth.user}
         tenant={auth.tenant}
         tenants={auth.tenants}
-        onSwitchTenant={auth.switchTenant}
+        onSwitchTenant={handleTenantSwitch}
         onLogout={() => void handleLogout()}
       />
 

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { billingApi } from '@/api/billing'
+import { tenantPreference } from '@/api/tenant-preference'
 import type { SubscriptionDto } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { AccountScreen } from './account'
@@ -72,6 +73,7 @@ function renderAccount() {
 describe('AccountScreen subscription state', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    tenantPreference.clear()
     signOut.mockResolvedValue()
     mockedUseAuth.mockReturnValue({
       status: 'authenticated',
@@ -110,7 +112,7 @@ describe('AccountScreen subscription state', () => {
         },
       ],
       hydrate: vi.fn(),
-      switchTenant: vi.fn(),
+      commitTenant: vi.fn(),
       signOut,
     })
     getPayments.mockResolvedValue({
@@ -224,5 +226,29 @@ describe('AccountScreen subscription state', () => {
       screen.getByRole('status', { name: 'Поточний маршрут' }),
     ).toHaveTextContent(/^\/$/)
     finishLogout()
+  })
+
+  it('preserves the selected tenant through authenticated hydration', async () => {
+    getSubscription.mockResolvedValue(subscription)
+    const currentAuth = mockedUseAuth()
+    mockedUseAuth.mockReturnValue({
+      ...currentAuth,
+      tenants: [
+        ...currentAuth.tenants,
+        {
+          ...currentAuth.tenants[0]!,
+          id: 'tenant-2',
+          name: 'Second',
+          slug: 'second',
+        },
+      ],
+    })
+
+    renderAccount()
+    await screen.findByText('Pro')
+    await userEvent.click(screen.getByRole('button', { name: /Test/ }))
+    await userEvent.click(screen.getByRole('option', { name: 'Second' }))
+
+    expect(tenantPreference.get()).toBe('tenant-2')
   })
 })

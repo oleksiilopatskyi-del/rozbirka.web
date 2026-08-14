@@ -14,7 +14,7 @@ describe('accessApi', () => {
     const signal = new AbortController().signal
     const get = vi
       .spyOn(apiClient, 'get')
-      .mockResolvedValue({ data: accessDto } as never)
+      .mockResolvedValue({ data: accessDto })
 
     await expect(accessApi.get({ signal })).resolves.toEqual(accessDto)
     expect(get).toHaveBeenCalledWith('/me/permissions', { signal })
