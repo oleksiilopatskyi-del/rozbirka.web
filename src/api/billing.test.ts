@@ -34,9 +34,9 @@ describe('billingApi', () => {
 
   it('forwards AbortSignal through every request config', async () => {
     const controller = new AbortController()
-    const observed: unknown[] = []
+    const observed: AbortSignal[] = []
     const adapter = (config: InternalAxiosRequestConfig) => {
-      observed.push(config.signal)
+      observed.push(config.signal as AbortSignal)
       return Promise.resolve(response(config))
     }
     apiClient.defaults.adapter = adapter
@@ -49,6 +49,11 @@ describe('billingApi', () => {
     await billingApi.getPayments(1, 20, { signal: controller.signal })
     await billingApi.cancelPayment('payment-1', { signal: controller.signal })
 
-    expect(observed).toEqual(Array(6).fill(controller.signal))
+    expect(observed).toHaveLength(6)
+    expect(observed.every((signal) => !signal.aborted)).toBe(true)
+
+    controller.abort()
+
+    expect(observed.every((signal) => signal.aborted)).toBe(true)
   })
 })

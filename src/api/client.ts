@@ -6,6 +6,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios'
 import type { ApiProblem, IdempotentMutation } from './contracts'
+import { tenantRequestScope } from '../cabinet/tenant-request-scope'
 import { credentials } from './credentials'
 import { normalizeApiProblem } from './errors'
 import {
@@ -81,6 +82,10 @@ apiClient.interceptors.request.use((config) => {
   if (tenant) {
     config.headers.set('X-Tenant-Id', tenant)
   }
+  config.signal = AbortSignal.any([
+    ...(config.signal ? [config.signal as AbortSignal] : []),
+    tenantRequestScope.signal,
+  ])
   return config
 })
 
