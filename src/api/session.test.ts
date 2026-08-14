@@ -1,0 +1,196 @@
+import axios, {
+  AxiosError,
+  AxiosHeaders,
+  type AxiosAdapter,
+  type AxiosResponse,
+  type CreateAxiosDefaults,
+  type InternalAxiosRequestConfig,
+} from 'axios'
+import { beforeEach, expect, it, vi } from 'vitest'
+import { credentials } from './credentials'
+import { normalizeApiProblem } from './errors'
+import { createSessionApi } from './session'
+
+const verifyPayload = {
+  accessToken: 'access-token',
+  user: {
+    id: 'user-1',
+    phone: '+380501234567',
+    displayName: 'Олена',
+  },
+  isNewUser: true,
+}
+
+function response<T>(
+  config: InternalAxiosRequestConfig,
+  data: T,
+): AxiosResponse<T> {
+  return {
+    data,
+    status: 200,
+    statusText: 'OK',
+    headers: new AxiosHeaders(),
+    config,
+  }
+}
+
+function failure(
+  config: InternalAxiosRequestConfig,
+  status: number,
+  data: unknown = {},
+) {
+  return new AxiosError(
+    'request failed',
+    'ERR_BAD_RESPONSE',
+    config,
+    undefined,
+    {
+      data,
+      status,
+      statusText: 'Error',
+      headers: new AxiosHeaders(),
+      config,
+    },
+  )
+}
+
+function sessionHarness(adapter: AxiosAdapter) {
+  let defaults: CreateAxiosDefaults | undefined
+  const requests: InternalAxiosRequestConfig[] = []
+  const session = createSessionApi((config) => {
+    defaults = config
+    return axios.create({
+      ...config,
+      adapter: async (request) => {
+        requests.push(request)
+        return adapter(request)
+      },
+    })
+  })
+
+  return {
+    session,
+    requests,
+    get defaults() {
+      return defaults
+    },
+  }
+}
+
+beforeEach(() => {
+  credentials.clear()
+  vi.restoreAllMocks()
+})
+
+it('posts verify to the same-origin session route and stores only access in memory', async () => {
+  const localSet = vi.spyOn(Storage.prototype, 'setItem')
+  const sessionSet = vi.spyOn(sessionStorage, 'setItem')
+  const harness = sessionHarness((config) =>
+    Promise.resolve(response(config, verifyPayload)),
+  )
+
+  const result = await harness.session.verify({
+    phone: '+380501234567',
+    code: '123456',
+  })
+
+  expect(result).toEqual(verifyPayload)
+  expect(result).not.toHaveProperty('refreshToken')
+  expect(harness.requests[0]).toMatchObject({
+    url: '/session/otp/verify',
+    method: 'post',
+  })
+  expect(JSON.parse(harness.requests[0]?.data as string)).toEqual({
+    phone: '+380501234567',
+    code: '123456',
+  })
+  expect(credentials.getAccess()).toBe('access-token')
+  expect(localSet).not.toHaveBeenCalled()
+  expect(sessionSet).not.toHaveBeenCalled()
+})
+
+it('uses credentials: include semantics through withCredentials', async () => {
+  const harness = sessionHarness((config) =>
+    Promise.resolve(
+      response(config, { accessToken: 'fresh-token', expiresIn: 900 }),
+    ),
+  )
+
+  await harness.session.refresh()
+
+  expect(harness.defaults).toMatchObject({
+    baseURL: '',
+    timeout: 15000,
+    withCredentials: true,
+  })
+  expect(harness.requests[0]?.withCredentials).toBe(true)
+  expect(credentials.getAccess()).toBe('fresh-token')
+})
+
+it('maps an absent refresh cookie to session-expired', async () => {
+  const harness = sessionHarness((config) =>
+    Promise.reject(failure(config, 401)),
+  )
+
+  await expect(harness.session.refresh()).rejects.toMatchObject({
+    kind: 'session-expired',
+    status: 401,
+  })
+})
+
+it('keeps normalized facade problems stable across API boundaries', async () => {
+  const harness = sessionHarness((config) =>
+    Promise.reject(
+      failure(config, 422, {
+        error: { code: 'INVALID_CODE', message: 'Code is invalid' },
+        errors: { code: ['Try another code'] },
+      }),
+    ),
+  )
+
+  const problem = await harness.session
+    .verify({ phone: '+380501234567', code: '000000' })
+    .then(
+      () => undefined,
+      (error: unknown) => normalizeApiProblem(error),
+    )
+
+  expect(problem).toMatchObject({
+    kind: 'validation',
+    status: 422,
+    code: 'INVALID_CODE',
+    message: 'Code is invalid',
+    fieldErrors: { code: ['Try another code'] },
+  })
+})
+
+it('logout clears access even when the request fails', async () => {
+  credentials.setAccess('current-token')
+  const harness = sessionHarness((config) =>
+    Promise.reject(failure(config, 503)),
+  )
+
+  await expect(harness.session.logout()).rejects.toMatchObject({
+    kind: 'server',
+    status: 503,
+  })
+
+  expect(harness.requests[0]).toMatchObject({
+    url: '/session/logout',
+    method: 'post',
+  })
+  expect(harness.requests[0]?.headers.get('Authorization')).toBe(
+    'Bearer current-token',
+  )
+  expect(credentials.getAccess()).toBeNull()
+})
+
+it('returns void from logout when the request succeeds', async () => {
+  credentials.setAccess('current-token')
+  const harness = sessionHarness((config) =>
+    Promise.resolve(response(config, undefined)),
+  )
+
+  await expect(harness.session.logout()).resolves.toBeUndefined()
+  expect(credentials.getAccess()).toBeNull()
+})

@@ -33,6 +33,25 @@ const kindForStatus = (status: number | undefined): ApiProblemKind => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
+const problemKinds = new Set<ApiProblemKind>([
+  'cancelled',
+  'network',
+  'timeout',
+  'session-expired',
+  'forbidden',
+  'not-found',
+  'validation',
+  'conflict',
+  'server',
+  'unknown',
+])
+
+const isApiProblem = (value: unknown): value is ApiProblem =>
+  isRecord(value) &&
+  typeof value['kind'] === 'string' &&
+  problemKinds.has(value['kind'] as ApiProblemKind) &&
+  typeof value['message'] === 'string'
+
 const readFieldErrors = (
   value: unknown,
 ): Record<string, string[]> | undefined => {
@@ -65,6 +84,8 @@ const readRetryAfter = (headers: unknown) => {
 }
 
 export const normalizeApiProblem = (error: unknown): ApiProblem => {
+  if (isApiProblem(error)) return error
+
   if (axios.isCancel(error)) {
     return {
       kind: 'cancelled',
