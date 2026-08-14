@@ -7,12 +7,23 @@ import { tenantPreference } from '@/api/tenant-preference'
 import { useAuth } from '@/auth/AuthContext'
 import { BrandLogo } from '@/components/site/brand-logo'
 
-type InvitationState = 'expired' | 'used' | 'revoked' | 'not-found' | 'unknown'
+type InvitationState =
+  | 'expired'
+  | 'used'
+  | 'revoked'
+  | 'not-found'
+  | 'invalid'
+  | 'unknown'
 
 interface InvitationLoad {
   code: string
   info: InvitationInfo | null
   error: InvitationState | null
+}
+
+interface AcceptAttempt {
+  code: string
+  controller: AbortController
 }
 
 const stateContent: Record<
@@ -34,6 +45,11 @@ const stateContent: Record<
   'not-found': {
     title: 'Недійсне посилання',
     description: 'Перевірте адресу запрошення та спробуйте ще раз.',
+  },
+  invalid: {
+    title: 'Запрошення недійсне',
+    description:
+      'Це запрошення більше не діє. Попросіть власника надіслати нове.',
   },
   unknown: {
     title: 'Щось пішло не так',
@@ -60,9 +76,9 @@ export function InviteScreen() {
   const { code = '' } = useParams<{ code: string }>()
   const auth = useAuth()
   const navigate = useNavigate()
-  const acceptingRef = useRef(false)
+  const activeAcceptRef = useRef<AcceptAttempt | null>(null)
   const [load, setLoad] = useState<InvitationLoad | null>(null)
-  const [accepting, setAccepting] = useState(false)
+  const [acceptingCode, setAcceptingCode] = useState<string | null>(null)
   const [acceptError, setAcceptError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -77,7 +93,7 @@ export function InviteScreen() {
             error:
               Date.parse(result.expiresAt) <= Date.now()
                 ? 'expired'
-                : 'unknown',
+                : 'invalid',
           })
           return
         }
@@ -91,36 +107,59 @@ export function InviteScreen() {
     return () => controller.abort()
   }, [code])
 
+  useEffect(() => {
+    return () => {
+      const attempt = activeAcceptRef.current
+      if (attempt?.code === code) {
+        attempt.controller.abort()
+        activeAcceptRef.current = null
+        setAcceptingCode((current) => (current === code ? null : current))
+      }
+    }
+  }, [code])
+
   const loading = load?.code !== code
   const info = loading ? null : load.info
   const errorState = loading ? null : load.error
+  const acceptingCurrentCode = acceptingCode === code
 
   const loginHref = `/login?invite=${encodeURIComponent(code)}`
 
   const handleAccept = async () => {
-    if (acceptingRef.current || auth.status !== 'authenticated') return
+    if (activeAcceptRef.current || auth.status !== 'authenticated') return
     if ((auth.user?.displayName.trim().length ?? 0) < 2) {
       void navigate(loginHref, { replace: true })
       return
     }
 
-    acceptingRef.current = true
-    setAccepting(true)
+    const attempt: AcceptAttempt = { code, controller: new AbortController() }
+    activeAcceptRef.current = attempt
+    setAcceptingCode(code)
     setAcceptError(null)
+    const isCurrent = () =>
+      activeAcceptRef.current === attempt && !attempt.controller.signal.aborted
     try {
-      const result = await invitationsApi.accept(code)
+      const result = await invitationsApi.accept(code, {
+        signal: attempt.controller.signal,
+      })
+      if (!isCurrent()) return
       tenantPreference.set(result.tenantId)
+      if (!isCurrent()) return
       await auth.hydrate()
+      if (!isCurrent()) return
       void navigate('/account', { replace: true })
     } catch (error) {
+      if (!isCurrent()) return
       const problem = normalizeApiProblem(error)
       const nextState = invitationState(problem)
       if (nextState !== 'unknown') {
         setLoad({ code, info: null, error: nextState })
       } else setAcceptError(problem.message)
     } finally {
-      acceptingRef.current = false
-      setAccepting(false)
+      if (activeAcceptRef.current === attempt) {
+        activeAcceptRef.current = null
+        setAcceptingCode(null)
+      }
     }
   }
 
@@ -177,11 +216,11 @@ export function InviteScreen() {
               ) : (
                 <button
                   type="button"
-                  disabled={accepting || auth.status === 'loading'}
+                  disabled={acceptingCurrentCode || auth.status === 'loading'}
                   onClick={() => void handleAccept()}
                   className="bg-brand text-brand-foreground h-14 w-full rounded-full disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {accepting ? 'Приєднуємо…' : 'Прийняти запрошення'}
+                  {acceptingCurrentCode ? 'Приєднуємо…' : 'Прийняти запрошення'}
                 </button>
               )}
             </div>
