@@ -38,14 +38,29 @@ export function validateDependencyReport(report) {
   }
 }
 
+export function resolveNpmLsInvocation(options = {}) {
+  const nodeExecPath = options.nodeExecPath ?? process.execPath
+  const npmExecPath = Object.hasOwn(options, 'npmExecPath')
+    ? options.npmExecPath
+    : process.env.npm_execpath
+  if (!npmExecPath) {
+    throw new Error(
+      'npm_execpath is unavailable. Run this check through npm run deps:check.',
+    )
+  }
+  return {
+    file: nodeExecPath,
+    arguments: [npmExecPath, 'ls', '--json', '--all'],
+  }
+}
+
 async function readDependencyReport() {
-  const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  const invocation = resolveNpmLsInvocation()
   try {
-    const { stdout } = await execFileAsync(npmExecutable, [
-      'ls',
-      '--json',
-      '--all',
-    ])
+    const { stdout } = await execFileAsync(
+      invocation.file,
+      invocation.arguments,
+    )
     return JSON.parse(stdout)
   } catch (error) {
     if (

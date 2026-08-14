@@ -58,21 +58,34 @@ export function parseArguments(argumentsToParse, commandUsage = usage()) {
 const semanticVersion = /^v?\d+\.\d+\.\d+(?:-[0-9a-z]+(?:\.[0-9a-z]+)*)?$/i
 const commitDigest = /^(?:[a-f\d]{40}|[a-f\d]{64})$/i
 const sha256Digest = /^[a-f\d]{64}$/i
+const mutableAliases = new Set([
+  'current',
+  'dev',
+  'develop',
+  'head',
+  'latest',
+  'main',
+  'master',
+  'nightly',
+  'runtime',
+  'snapshot',
+])
 
 function hasImmutableIdentifier(url) {
   const pathSegments = url.pathname.split('/').filter(Boolean)
-  if (
-    pathSegments.some((segment) =>
-      /^(?:current|latest|nightly|runtime|snapshot)$/i.test(segment),
-    )
-  ) {
+  const pathTokens = url.pathname
+    .toLowerCase()
+    .split(/[^a-z\d]+/)
+    .filter(Boolean)
+  if (pathTokens.some((token) => mutableAliases.has(token))) {
     return false
   }
 
   const pathHasIdentifier = pathSegments.some(
     (segment) => semanticVersion.test(segment) || commitDigest.test(segment),
   )
-  if (pathHasIdentifier) return true
+  const queryEntries = [...url.searchParams.entries()]
+  if (pathHasIdentifier) return queryEntries.length === 0
 
   const rules = {
     commit: commitDigest,
@@ -80,10 +93,9 @@ function hasImmutableIdentifier(url) {
     sha256: sha256Digest,
     version: semanticVersion,
   }
-  return Object.entries(rules).some(([key, pattern]) => {
-    const values = url.searchParams.getAll(key)
-    return values.length === 1 && pattern.test(values[0])
-  })
+  if (queryEntries.length !== 1) return false
+  const [key, value] = queryEntries[0]
+  return Object.hasOwn(rules, key) && rules[key].test(value)
 }
 
 export function validateInput(input, label) {

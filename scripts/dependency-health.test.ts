@@ -60,3 +60,38 @@ describe('dependency report validation', () => {
     )
   })
 })
+
+describe('npm CLI invocation', () => {
+  it('uses Node to execute the npm CLI JavaScript path on Windows', async () => {
+    const { resolveNpmLsInvocation } =
+      await import('./check-dependency-health.mjs')
+
+    expect(
+      resolveNpmLsInvocation({
+        nodeExecPath: 'C:\\Program Files\\nodejs\\node.exe',
+        npmExecPath:
+          'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js',
+      }),
+    ).toEqual({
+      file: 'C:\\Program Files\\nodejs\\node.exe',
+      arguments: [
+        'C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js',
+        'ls',
+        '--json',
+        '--all',
+      ],
+    })
+  })
+
+  it('fails actionably when npm_execpath is unavailable', async () => {
+    const { resolveNpmLsInvocation } =
+      await import('./check-dependency-health.mjs')
+
+    expect(() =>
+      resolveNpmLsInvocation({
+        nodeExecPath: process.execPath,
+        npmExecPath: undefined,
+      }),
+    ).toThrow('Run this check through npm run deps:check')
+  })
+})

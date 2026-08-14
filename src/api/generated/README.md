@@ -10,14 +10,22 @@ OpenAPI inputs:
 npm run contracts:generate -- --core <versioned-file-or-url> --identity <versioned-file-or-url>
 ```
 
-Remote inputs must use an unencoded HTTP(S) path and contain one of these exact
-immutable identifiers: a full `v1.2.3`/`1.2.3` semantic-version path segment, a
-40- or 64-character hexadecimal commit/digest path segment, or one exact query
-key (`version`, `commit`, `digest`, or `sha256`) with the corresponding complete
-semantic-version or digest value. Values such as `latest`, `v1`, dates, short
-hashes, encoded path characters, fragments, credentials, and redirects are
-rejected. Local files are read once and generated from a private byte snapshot;
-remote response bytes use the same snapshot rule.
+Remote inputs must use an unencoded HTTP(S) path and exactly one immutable form:
+
+- a full `v1.2.3`/`1.2.3` semantic-version path segment or a complete 40- or
+  64-character hexadecimal commit/digest path segment, with no query parameters;
+  or
+- exactly one query parameter named `version`, `commit`, `digest`, or `sha256`,
+  with the corresponding complete semantic-version or digest value and no
+  immutable path segment.
+
+Mutable aliases (`latest`, `runtime`, `main`, `master`, `dev`, `develop`, `head`,
+`current`, `snapshot`, and `nightly`) are rejected as standalone path tokens or
+filename tokens such as `openapi-latest.json`. Dates, short versions/hashes,
+extra or conflicting query parameters, encoded path characters, fragments,
+credentials, and redirects are also rejected. Local files are read once and
+generated from a private byte snapshot; remote response bytes use the same
+snapshot rule.
 
 Check committed output for byte-for-byte drift with the same inputs:
 
