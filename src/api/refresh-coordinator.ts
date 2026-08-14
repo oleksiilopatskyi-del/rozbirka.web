@@ -20,10 +20,27 @@ const isSessionEndpoint = (url: string | undefined) => {
   if (!url) return false
 
   try {
-    return new URL(url, 'http://session.local').pathname.startsWith('/session/')
+    const pathname = new URL(url, 'http://session.local').pathname
+    return pathname === '/session' || pathname.startsWith('/session/')
   } catch {
     return false
   }
+}
+
+const isReplayableRequest = (request: SessionRetryConfig) => {
+  const body: unknown = request.data
+  if (typeof body !== 'object' || body === null) return true
+
+  if (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream) {
+    return false
+  }
+
+  const candidate = body as Record<string, unknown>
+  return (
+    candidate['bodyUsed'] !== true &&
+    typeof candidate['getReader'] !== 'function' &&
+    typeof candidate['pipe'] !== 'function'
+  )
 }
 
 export const createRefreshCoordinator = ({
@@ -76,7 +93,12 @@ export const createRefreshCoordinator = ({
       }
 
       const request = error.config as SessionRetryConfig | undefined
-      if (!request || request._sessionRetry || isSessionEndpoint(request.url)) {
+      if (
+        !request ||
+        request._sessionRetry ||
+        isSessionEndpoint(request.url) ||
+        !isReplayableRequest(request)
+      ) {
         throw problemError(problem)
       }
 

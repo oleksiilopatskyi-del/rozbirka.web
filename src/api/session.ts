@@ -29,8 +29,17 @@ export const createSessionApi = (
           '/session/otp/verify',
           req,
         )
-        credentials.setAccess(response.data.accessToken)
-        return response.data
+        const payload: SessionVerifyResponse = {
+          accessToken: response.data.accessToken,
+          user: {
+            id: response.data.user.id,
+            phone: response.data.user.phone,
+            displayName: response.data.user.displayName,
+          },
+          isNewUser: response.data.isNewUser,
+        }
+        credentials.setAccess(payload.accessToken)
+        return payload
       } catch (error) {
         throw problemError(normalizeApiProblem(error))
       }
@@ -40,8 +49,12 @@ export const createSessionApi = (
       try {
         const response =
           await client.post<SessionRefreshResponse>('/session/refresh')
-        credentials.setAccess(response.data.accessToken)
-        return response.data
+        const payload: SessionRefreshResponse = {
+          accessToken: response.data.accessToken,
+          expiresIn: response.data.expiresIn,
+        }
+        credentials.setAccess(payload.accessToken)
+        return payload
       } catch (error) {
         throw problemError(normalizeApiProblem(error))
       }

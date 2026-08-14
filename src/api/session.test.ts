@@ -13,6 +13,7 @@ import { createSessionApi } from './session'
 
 const verifyPayload = {
   accessToken: 'access-token',
+  refreshToken: 'must-not-escape',
   user: {
     id: 'user-1',
     phone: '+380501234567',
@@ -94,7 +95,15 @@ it('posts verify to the same-origin session route and stores only access in memo
     code: '123456',
   })
 
-  expect(result).toEqual(verifyPayload)
+  expect(result).toEqual({
+    accessToken: 'access-token',
+    user: {
+      id: 'user-1',
+      phone: '+380501234567',
+      displayName: 'Олена',
+    },
+    isNewUser: true,
+  })
   expect(result).not.toHaveProperty('refreshToken')
   expect(harness.requests[0]).toMatchObject({
     url: '/session/otp/verify',
@@ -112,12 +121,18 @@ it('posts verify to the same-origin session route and stores only access in memo
 it('uses credentials: include semantics through withCredentials', async () => {
   const harness = sessionHarness((config) =>
     Promise.resolve(
-      response(config, { accessToken: 'fresh-token', expiresIn: 900 }),
+      response(config, {
+        accessToken: 'fresh-token',
+        expiresIn: 900,
+        refreshToken: 'must-not-escape',
+      }),
     ),
   )
 
-  await harness.session.refresh()
+  const result = await harness.session.refresh()
 
+  expect(result).toEqual({ accessToken: 'fresh-token', expiresIn: 900 })
+  expect(result).not.toHaveProperty('refreshToken')
   expect(harness.defaults).toMatchObject({
     baseURL: '',
     timeout: 15000,

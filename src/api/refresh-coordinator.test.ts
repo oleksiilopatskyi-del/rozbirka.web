@@ -2,13 +2,14 @@ import { AxiosError, AxiosHeaders } from 'axios'
 import { expect, it, vi } from 'vitest'
 import { createRefreshCoordinator } from './refresh-coordinator'
 
-function unauthorized(url?: string, retried = false) {
+function unauthorized(url?: string, retried = false, data?: unknown) {
   const config = url
     ? {
         headers: new AxiosHeaders(),
         method: 'get',
         url,
         ...(retried ? { _sessionRetry: true } : {}),
+        ...(data === undefined ? {} : { data }),
       }
     : undefined
 
@@ -85,6 +86,21 @@ it('does not recover a session endpoint failure', async () => {
   expect(refresh).not.toHaveBeenCalled()
 })
 
+it('does not recover the exact session route', async () => {
+  const refresh = vi.fn(() => Promise.resolve('fresh'))
+  const coordinator = createRefreshCoordinator({
+    refresh,
+    setAccess: vi.fn(),
+    clearAccess: vi.fn(),
+    replay: vi.fn(() => Promise.resolve('replayed')),
+  })
+
+  await expect(
+    coordinator.recover(unauthorized('/session')),
+  ).rejects.toMatchObject({ kind: 'session-expired', status: 401 })
+  expect(refresh).not.toHaveBeenCalled()
+})
+
 it('does not recover an error with missing request config', async () => {
   const refresh = vi.fn(() => Promise.resolve('fresh'))
   const coordinator = createRefreshCoordinator({
@@ -99,6 +115,47 @@ it('does not recover an error with missing request config', async () => {
     status: 401,
   })
   expect(refresh).not.toHaveBeenCalled()
+})
+
+it.each([
+  { name: 'a web stream', data: new ReadableStream() },
+  { name: 'a stream-like body', data: { pipe: () => undefined } },
+  { name: 'an already-used input', data: { bodyUsed: true } },
+])('does not recover $name', async ({ data }) => {
+  const refresh = vi.fn(() => Promise.resolve('fresh'))
+  const replay = vi.fn(() => Promise.resolve('replayed'))
+  const coordinator = createRefreshCoordinator({
+    refresh,
+    setAccess: vi.fn(),
+    clearAccess: vi.fn(),
+    replay,
+  })
+
+  await expect(
+    coordinator.recover(unauthorized('/cars', false, data)),
+  ).rejects.toMatchObject({ kind: 'session-expired', status: 401 })
+  expect(refresh).not.toHaveBeenCalled()
+  expect(replay).not.toHaveBeenCalled()
+})
+
+it.each([
+  { name: 'JSON', data: { page: 1 } },
+  { name: 'a string', data: '{"page":1}' },
+  { name: 'an ArrayBuffer', data: new ArrayBuffer(8) },
+])('replays $name request data unchanged', async ({ data }) => {
+  const replay = vi.fn((request: { data?: unknown }) =>
+    Promise.resolve(request.data),
+  )
+  const coordinator = createRefreshCoordinator({
+    refresh: vi.fn(() => Promise.resolve('fresh')),
+    setAccess: vi.fn(),
+    clearAccess: vi.fn(),
+    replay,
+  })
+
+  await expect(
+    coordinator.recover(unauthorized('/cars', false, data)),
+  ).resolves.toBe(data)
 })
 
 it('normalizes refresh rejection as session-expired and clears access once', async () => {
