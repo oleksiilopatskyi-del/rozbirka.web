@@ -403,9 +403,25 @@ test('logout expires the cookie and leaves the user as guest @auth-smoke', async
 }) => {
   await installApiBoundary(page)
   await loginFrom(page)
+  const visitedPaths: string[] = []
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) {
+      visitedPaths.push(new URL(frame.url()).pathname)
+    }
+  })
+  const logoutResponse = page.waitForResponse((response) => {
+    const request = response.request()
+    return (
+      request.method() === 'POST' &&
+      new URL(response.url()).pathname === '/session/logout'
+    )
+  })
   await page.getByRole('button', { name: 'Вийти' }).click()
 
   await expect(page).toHaveURL('/')
+  await logoutResponse
+  expect(visitedPaths).toContain('/')
+  expect(visitedPaths).not.toContain('/login')
   expect(
     (await context.cookies(`${appOrigin}/session/logout`)).some(
       (cookie) => cookie.name === 'rozbirka_refresh',

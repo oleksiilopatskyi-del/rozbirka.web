@@ -87,8 +87,8 @@ export function AccountScreen() {
   }, [activeTenantId])
 
   const handleLogout = async () => {
+    void navigate('/', { replace: true, flushSync: true })
     await auth.signOut()
-    void navigate('/', { replace: true })
   }
 
   const refreshSubscription = async () => {
