@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router'
-import { postAuthPath } from '@/lib/plan-selection'
 import { useAuth } from './AuthContext'
+import { resolvePostLoginDestination } from './post-login'
 
 function FullScreenLoader() {
   return (
@@ -37,12 +37,26 @@ export function RedirectIfAuth({
   children: ReactNode
   to?: string
 }) {
-  const { status } = useAuth()
+  const { status, user } = useAuth()
   const location = useLocation()
 
   if (status === 'loading') return <FullScreenLoader />
-  if (status === 'authenticated') {
-    return <Navigate to={postAuthPath(location.search, to)} replace />
+  const mustCompleteName =
+    status === 'authenticated' && Boolean(authenticatedUserWithoutName(user))
+  if (status === 'authenticated' && !mustCompleteName) {
+    const fallback = (location.state as { from?: string } | null)?.from ?? to
+    return (
+      <Navigate
+        to={resolvePostLoginDestination(location.search, fallback)}
+        replace
+      />
+    )
   }
   return <>{children}</>
+}
+
+function authenticatedUserWithoutName(
+  user: ReturnType<typeof useAuth>['user'],
+) {
+  return user && user.displayName.trim().length < 2
 }

@@ -1,3 +1,5 @@
+import { resolvePostLoginDestination } from '@/auth/post-login'
+
 export const planCodes = [
   'lite_monthly',
   'pro_monthly',
@@ -24,6 +26,5 @@ export function accountPathForPlan(planCode: PlanCode): string {
 }
 
 export function postAuthPath(search: string, fallback: string): string {
-  const planCode = readPlanCode(search)
-  return planCode ? accountPathForPlan(planCode) : fallback
+  return resolvePostLoginDestination(search, fallback)
 }

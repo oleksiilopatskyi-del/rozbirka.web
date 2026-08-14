@@ -1,9 +1,10 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { handleRequest, type EdgeEnv } from './router'
 
 function env(): EdgeEnv {
   return {
+    IDENTITY_ORIGIN: 'https://identity.example',
     ASSETS: {
       // eslint-disable-next-line @typescript-eslint/require-await
       fetch: vi.fn(async (request: Request) => {
@@ -54,7 +55,43 @@ function env(): EdgeEnv {
   }
 }
 
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe('edge routing', () => {
+  it('routes session requests before static assets', async () => {
+    const edgeEnv = env()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          Response.json({
+            data: {
+              accessToken: 'rotated-access',
+              refreshToken: 'rotated-refresh',
+              expiresIn: 900,
+            },
+          }),
+        ),
+      ),
+    )
+
+    const response = await handleRequest(
+      new Request('https://rozbirka.pro/session/refresh', {
+        method: 'POST',
+        headers: { cookie: 'rozbirka_refresh=old-refresh' },
+      }),
+      edgeEnv,
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      accessToken: 'rotated-access',
+      expiresIn: 900,
+    })
+  })
+
   it('redirects www and HTTP to the HTTPS apex preserving path and query', async () => {
     const www = await handleRequest(
       new Request('https://www.rozbirka.pro/privacy?from=www'),
@@ -120,6 +157,20 @@ describe('edge routing', () => {
         env(),
       )
       expect(response.status).toBe(200)
+      expect(await response.text()).toContain('shell')
+    },
+  )
+
+  it.each(['/invite/ABCD1234', '/scan/QR-123'])(
+    'serves a noindex SPA shell for resumable deep link %s',
+    async (path) => {
+      const response = await handleRequest(
+        new Request(`https://rozbirka.pro${path}`),
+        env(),
+      )
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('x-robots-tag')).toBe('noindex')
       expect(await response.text()).toContain('shell')
     },
   )

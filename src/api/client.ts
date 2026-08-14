@@ -1,11 +1,19 @@
-import type { AxiosError } from 'axios'
 import axios, {
+  type AxiosError,
   type AxiosInstance,
+  type AxiosRequestConfig,
   type AxiosResponse,
   type InternalAxiosRequestConfig,
 } from 'axios'
-import { tokens } from './tokens'
-import type { RefreshResponse } from './types'
+import type { ApiProblem, IdempotentMutation } from './contracts'
+import { credentials } from './credentials'
+import { normalizeApiProblem } from './errors'
+import {
+  createRefreshCoordinator,
+  type SessionRetryConfig,
+} from './refresh-coordinator'
+import { sessionApi } from './session'
+import { tenantPreference } from './tenant-preference'
 
 // The deployed landing and API gateway use separate hosts
 // (rozbirka.pro → api.rozbirka.pro, qa.rozbirka.pro → qaapi.rozbirka.pro).
@@ -35,148 +43,115 @@ export const publicApiClient: AxiosInstance = axios.create({
   timeout: TIMEOUT,
 })
 
-// Attach auth + tenant headers on every request
+export const withIdempotency = <T extends AxiosRequestConfig>(
+  config: T,
+  option: IdempotentMutation | undefined,
+): T => (option ? { ...config, idempotency: option } : config)
+
 const attachAuth = (config: InternalAxiosRequestConfig) => {
-  const access = tokens.getAccess()
+  const access = credentials.getAccess()
   if (access) {
     config.headers.set('Authorization', `Bearer ${access}`)
   }
   return config
 }
 
+const attachIdempotency = (config: InternalAxiosRequestConfig) => {
+  const method = config.method?.toLowerCase()
+  const isSafeMethod =
+    method === 'get' || method === 'head' || method === 'options'
+  if (!config.idempotency || isSafeMethod) {
+    config.headers.delete('Idempotency-Key')
+    return config
+  }
+
+  const existingKey = config.headers.get('Idempotency-Key')
+  config.headers.set(
+    'Idempotency-Key',
+    config.idempotency.idempotencyKey ??
+      (typeof existingKey === 'string' ? existingKey : crypto.randomUUID()),
+  )
+  return config
+}
+
 identityClient.interceptors.request.use(attachAuth)
 apiClient.interceptors.request.use((config) => {
   attachAuth(config)
-  const tenant = tokens.getTenant()
+  const tenant = tenantPreference.get()
   if (tenant) {
     config.headers.set('X-Tenant-Id', tenant)
   }
   return config
 })
 
+identityClient.interceptors.request.use(attachIdempotency)
+apiClient.interceptors.request.use(attachIdempotency)
+publicApiClient.interceptors.request.use(attachIdempotency)
+
 // Unwrap { data: { data: T } } → T
-const unwrap = (resp: AxiosResponse): AxiosResponse => {
-  const body = resp.data as { data?: unknown } | null
+const unwrap = (response: AxiosResponse): AxiosResponse => {
+  const body = response.data as { data?: unknown } | null
   if (
     body &&
     typeof body === 'object' &&
     'data' in body &&
     body.data !== undefined
   ) {
-    resp.data = body.data
+    response.data = body.data
   }
-  return resp
+  return response
 }
 
-identityClient.interceptors.response.use(unwrap)
-apiClient.interceptors.response.use(unwrap)
-publicApiClient.interceptors.response.use(unwrap)
+const replayOwners = new WeakMap<SessionRetryConfig, AxiosInstance>()
+const refreshCoordinator = createRefreshCoordinator({
+  refresh: async () => (await sessionApi.refresh()).accessToken,
+  setAccess: (token) => credentials.setAccess(token),
+  clearAccess: () => credentials.clear(),
+  replay: (request) => {
+    const owner = replayOwners.get(request)
+    if (!owner) {
+      throw new Error('Authenticated request owner is unavailable')
+    }
+    return owner.request(request)
+  },
+})
 
-// 401 refresh handling — deduped
-let refreshPromise: Promise<string | null> | null = null
-
-const refreshAccessToken = async (): Promise<string | null> => {
-  const refresh = tokens.getRefresh()
-  if (!refresh) return null
-  try {
-    const resp = await axios.post<RefreshResponse | { data: RefreshResponse }>(
-      `${API_URL}/auth/refresh`,
-      { refreshToken: refresh },
-      { headers: { 'Content-Type': 'application/json' }, timeout: TIMEOUT },
-    )
-    const payload = 'data' in resp.data ? resp.data.data : resp.data
-    tokens.set(payload.accessToken, payload.refreshToken)
-    return payload.accessToken
-  } catch {
-    tokens.clear()
-    return null
-  }
-}
-
-const on401 = async (error: AxiosError) => {
-  const original = error.config as
-    | (InternalAxiosRequestConfig & { _retry?: boolean })
-    | undefined
-  if (!original || original._retry) throw error
-  if (error.response?.status !== 401) throw error
-  if (original.url?.includes('/auth/refresh')) throw error
-
-  original._retry = true
-  refreshPromise ??= refreshAccessToken().finally(() => {
-    refreshPromise = null
-  })
-  const newToken = await refreshPromise
-  if (!newToken) {
-    tokens.clear()
-    throw error
-  }
-  original.headers.set('Authorization', `Bearer ${newToken}`)
-  return axios.request(original)
-}
-
-/**
- * Normalize the backend's three error envelope shapes into a single
- * `{ code, message }` pair stamped onto the error object as `error.normalized`.
- * See rozbirka.core/docs/billing-integration.md → "Error Handling".
- *
- *   • Nested  (ErrorHandlingMiddleware): { data: null, error: { code, message } }
- *   • Flat    (TenantMiddleware):        { error: "tenant_blocked", message }
- *   • Flat+ok (AuthorizePermissionAttr): { success: false, error: "FORBIDDEN", message }
- */
-export interface NormalizedApiError {
-  code?: string
-  message?: string
-  status?: number
-}
-
-export const normalizeApiError = (error: AxiosError): NormalizedApiError => {
-  const body = error.response?.data as
-    | { error?: string | { code?: string; message?: string }; message?: string }
-    | undefined
-  const status = error.response?.status
-
-  const out: NormalizedApiError = {}
-  if (status !== undefined) out.status = status
-
-  if (typeof body?.error === 'string') {
-    if (body.error) out.code = body.error
-    if (body.message) out.message = body.message
-  } else if (body?.error && typeof body.error === 'object') {
-    if (body.error.code) out.code = body.error.code
-    if (body.error.message) out.message = body.error.message
-  }
-
-  return out
-}
-
-const stampError = (error: AxiosError) => {
-  ;(error as AxiosError & { normalized?: NormalizedApiError }).normalized =
-    normalizeApiError(error)
+const stampProblem = (error: AxiosError, problemSource: unknown = error) => {
+  error.problem = normalizeApiProblem(problemSource)
   throw error
 }
 
-identityClient.interceptors.response.use(undefined, async (e: AxiosError) => {
-  try {
-    return await on401(e)
-  } catch (err) {
-    stampError(err as AxiosError)
+const recoverSession = (owner: AxiosInstance) => async (error: AxiosError) => {
+  if (error.config) {
+    replayOwners.set(error.config, owner)
   }
-})
 
-apiClient.interceptors.response.use(undefined, async (e: AxiosError) => {
   try {
-    return await on401(e)
-  } catch (err) {
-    stampError(err as AxiosError)
+    return await refreshCoordinator.recover(error)
+  } catch (terminalError) {
+    stampProblem(error, terminalError)
   }
-})
+}
 
-publicApiClient.interceptors.response.use(undefined, (e: AxiosError) => {
-  stampError(e)
+identityClient.interceptors.response.use(unwrap, recoverSession(identityClient))
+apiClient.interceptors.response.use(unwrap, recoverSession(apiClient))
+publicApiClient.interceptors.response.use(unwrap, (error: AxiosError) => {
+  stampProblem(error)
 })
 
 declare module 'axios' {
-  interface AxiosError {
-    normalized?: NormalizedApiError
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars -- must match Axios declaration exactly
+  interface AxiosRequestConfig<D = any> {
+    idempotency?: IdempotentMutation
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars -- must match Axios declaration exactly
+  interface InternalAxiosRequestConfig<D = any> {
+    _sessionRetry?: boolean
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars -- must match Axios declaration exactly
+  interface AxiosError<T = unknown, D = any> {
+    problem?: ApiProblem
   }
 }

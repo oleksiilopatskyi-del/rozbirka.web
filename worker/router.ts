@@ -1,10 +1,19 @@
-export interface EdgeEnv {
+import { handleSessionRequest, type SessionEnv } from './session'
+
+export interface EdgeEnv extends SessionEnv {
   ASSETS: {
     fetch(request: Request): Promise<Response>
   }
 }
 
-const spaPaths = [/^\/$/, /^\/privacy\/?$/, /^\/login\/?$/, /^\/account\/?$/]
+const spaPaths = [
+  /^\/$/,
+  /^\/privacy\/?$/,
+  /^\/login\/?$/,
+  /^\/account\/?$/,
+  /^\/invite\/[A-Za-z0-9_-]{4,128}\/?$/,
+  /^\/scan\/[A-Za-z0-9._~-]{1,256}\/?$/,
+]
 
 const prototypePath = /^\/screens(?:\/|$)/
 const staticPath =
@@ -106,7 +115,7 @@ function shouldNoindex(url: URL) {
   return (
     url.hostname.startsWith('qa.') ||
     url.hostname.endsWith('.workers.dev') ||
-    /^\/(?:login|account)(?:\/|$)/.test(url.pathname)
+    /^\/(?:login|account|invite|scan)(?:\/|$)/.test(url.pathname)
   )
 }
 
@@ -119,6 +128,9 @@ async function notFound(request: Request, env: EdgeEnv) {
 }
 
 export async function handleRequest(request: Request, env: EdgeEnv) {
+  const sessionResponse = await handleSessionRequest(request, env)
+  if (sessionResponse) return sessionResponse
+
   const url = new URL(request.url)
 
   const requestHostname = request.headers.get('host')?.split(':')[0] ?? ''

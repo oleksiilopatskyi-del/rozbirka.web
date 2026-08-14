@@ -1,0 +1,415 @@
+import { StrictMode, useEffect } from 'react'
+import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { authApi } from '@/api/auth'
+import { credentials } from '@/api/credentials'
+import { sessionApi } from '@/api/session'
+import { tenantPreference } from '@/api/tenant-preference'
+import { tenantsApi } from '@/api/tenants'
+import type { Tenant, User } from '@/api/types'
+import { AuthProvider, useAuth } from './AuthContext'
+
+/* eslint-disable @typescript-eslint/unbound-method -- Vitest spies on API singleton methods at their module boundaries. */
+
+const user: User = {
+  id: 'user-1',
+  phone: '+380501112233',
+  displayName: 'Власник',
+  role: 'owner',
+  isActive: true,
+  lastLoginAt: '2026-08-13T10:00:00Z',
+}
+
+const firstTenant: Tenant = {
+  id: 'tenant-1',
+  name: 'Перша розбірка',
+  slug: 'first',
+  plan: 'active',
+  planTier: 'pro',
+  city: 'Київ',
+  logoUrl: null,
+  isActive: true,
+  createdAt: '2026-08-01T10:00:00Z',
+  roleName: 'owner',
+}
+
+const secondTenant: Tenant = {
+  ...firstTenant,
+  id: 'tenant-2',
+  name: 'Друга розбірка',
+  slug: 'second',
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done
+    reject = fail
+  })
+  return { promise, resolve, reject }
+}
+
+function AuthProbe({
+  onStatus,
+  onHydrate,
+  onSignOut,
+}: {
+  onStatus?: (status: string) => void
+  onHydrate?: (completion: Promise<void>) => void
+  onSignOut?: (completion: Promise<void>) => void
+}) {
+  const auth = useAuth()
+
+  useEffect(() => {
+    onStatus?.(auth.status)
+  }, [auth.status, onStatus])
+
+  return (
+    <div>
+      <span data-testid="status">{auth.status}</span>
+      <span data-testid="user">{auth.user?.displayName ?? 'none'}</span>
+      <span data-testid="tenant">{auth.tenant?.id ?? 'none'}</span>
+      <span data-testid="tenants">{auth.tenants.length}</span>
+      <button
+        type="button"
+        onClick={() => {
+          const completion = auth.hydrate()
+          onHydrate?.(completion)
+          void completion
+        }}
+      >
+        hydrate
+      </button>
+      <button type="button" onClick={() => void auth.signOut()}>
+        sign out
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          const completion = auth.signOut({ silent: true })
+          onSignOut?.(completion)
+          void completion
+        }}
+      >
+        sign out silently
+      </button>
+    </div>
+  )
+}
+
+async function expectStatus(status: string) {
+  await waitFor(() => {
+    expect(screen.getByTestId('status')).toHaveTextContent(status)
+  })
+}
+
+beforeEach(() => {
+  credentials.clear()
+  tenantPreference.clear()
+  vi.spyOn(authApi, 'me').mockResolvedValue(user)
+  vi.spyOn(authApi, 'logout').mockResolvedValue(undefined)
+  vi.spyOn(tenantsApi, 'list').mockResolvedValue([firstTenant, secondTenant])
+  vi.spyOn(sessionApi, 'invalidate').mockResolvedValue(undefined)
+  vi.spyOn(sessionApi, 'refresh').mockImplementation(() => {
+    credentials.setAccess('refreshed-access')
+    return Promise.resolve({ accessToken: 'refreshed-access', expiresIn: 900 })
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  credentials.clear()
+  tenantPreference.clear()
+})
+
+it('restores a reload session through the HttpOnly-cookie refresh facade', async () => {
+  render(
+    <StrictMode>
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    </StrictMode>,
+  )
+
+  await expectStatus('authenticated')
+  expect(screen.getByTestId('user')).toHaveTextContent('Власник')
+  expect(sessionApi.refresh).toHaveBeenCalledOnce()
+})
+
+it('shows guest when refresh reports an absent or expired session', async () => {
+  vi.mocked(sessionApi.refresh).mockRejectedValue({
+    kind: 'session-expired',
+    message: 'Сеанс завершився.',
+  })
+
+  render(
+    <AuthProvider>
+      <AuthProbe />
+    </AuthProvider>,
+  )
+
+  await expectStatus('guest')
+  expect(authApi.me).not.toHaveBeenCalled()
+  expect(tenantsApi.list).not.toHaveBeenCalled()
+})
+
+it('loads me and tenants only after refresh succeeds', async () => {
+  const refresh = deferred<{ accessToken: string; expiresIn: number }>()
+  vi.mocked(sessionApi.refresh).mockImplementation(async () => {
+    const response = await refresh.promise
+    credentials.setAccess(response.accessToken)
+    return response
+  })
+
+  render(
+    <AuthProvider>
+      <AuthProbe />
+    </AuthProvider>,
+  )
+
+  expect(screen.getByTestId('status')).toHaveTextContent('loading')
+  expect(authApi.me).not.toHaveBeenCalled()
+  expect(tenantsApi.list).not.toHaveBeenCalled()
+
+  refresh.resolve({ accessToken: 'refreshed-access', expiresIn: 900 })
+
+  await expectStatus('authenticated')
+  expect(authApi.me).toHaveBeenCalledOnce()
+  expect(tenantsApi.list).toHaveBeenCalledOnce()
+})
+
+it('chooses the stored tenant when membership still exists', async () => {
+  tenantPreference.set(secondTenant.id)
+
+  render(
+    <AuthProvider>
+      <AuthProbe />
+    </AuthProvider>,
+  )
+
+  await waitFor(() => {
+    expect(screen.getByTestId('tenant')).toHaveTextContent(secondTenant.id)
+  })
+  expect(tenantPreference.get()).toBe(secondTenant.id)
+})
+
+it('clears invalid tenant preference when the user has no matching tenant', async () => {
+  tenantPreference.set('former-tenant')
+  vi.mocked(tenantsApi.list).mockImplementation(() => {
+    expect(tenantPreference.get()).toBeNull()
+    return Promise.resolve([firstTenant, secondTenant])
+  })
+
+  render(
+    <AuthProvider>
+      <AuthProbe />
+    </AuthProvider>,
+  )
+
+  await waitFor(() => {
+    expect(screen.getByTestId('tenant')).toHaveTextContent(firstTenant.id)
+  })
+  expect(tenantPreference.get()).toBe(firstTenant.id)
+})
+
+it('resets React auth state once when a mid-session refresh fails', async () => {
+  credentials.setAccess('current-access')
+  const statuses: string[] = []
+
+  render(
+    <AuthProvider>
+      <AuthProbe onStatus={(status) => statuses.push(status)} />
+    </AuthProvider>,
+  )
+
+  await expectStatus('authenticated')
+
+  act(() => {
+    credentials.clear()
+    credentials.clear()
+  })
+
+  await waitFor(() => {
+    expect(screen.getByTestId('status')).toHaveTextContent('guest')
+  })
+  expect(screen.getByTestId('user')).toHaveTextContent('none')
+  expect(statuses.filter((status) => status === 'guest')).toHaveLength(1)
+})
+
+it('does not restore authenticated state when bootstrap resolves after credentials clear', async () => {
+  credentials.setAccess('current-access')
+  const pendingUser = deferred<User>()
+  const pendingTenants = deferred<Tenant[]>()
+  vi.mocked(authApi.me).mockReturnValue(pendingUser.promise)
+  vi.mocked(tenantsApi.list).mockReturnValue(pendingTenants.promise)
+
+  render(
+    <AuthProvider>
+      <AuthProbe />
+    </AuthProvider>,
+  )
+
+  await waitFor(() => {
+    expect(authApi.me).toHaveBeenCalledOnce()
+    expect(tenantsApi.list).toHaveBeenCalledOnce()
+  })
+
+  act(() => credentials.clear())
+  await expectStatus('guest')
+
+  await act(async () => {
+    pendingUser.resolve(user)
+    pendingTenants.resolve([firstTenant, secondTenant])
+    await Promise.all([pendingUser.promise, pendingTenants.promise])
+  })
+
+  expect(screen.getByTestId('status')).toHaveTextContent('guest')
+  expect(screen.getByTestId('user')).toHaveTextContent('none')
+  expect(screen.getByTestId('tenant')).toHaveTextContent('none')
+  expect(credentials.getAccess()).toBeNull()
+})
+
+it('ignores a stale bootstrap failure after a newer hydrate authenticates', async () => {
+  credentials.setAccess('initial-access')
+  const staleUser = deferred<User>()
+  const staleTenants = deferred<Tenant[]>()
+  vi.mocked(authApi.me)
+    .mockReturnValueOnce(staleUser.promise)
+    .mockResolvedValueOnce(user)
+  vi.mocked(tenantsApi.list)
+    .mockReturnValueOnce(staleTenants.promise)
+    .mockResolvedValueOnce([firstTenant, secondTenant])
+  const userEventApi = userEvent.setup()
+
+  render(
+    <AuthProvider>
+      <AuthProbe />
+    </AuthProvider>,
+  )
+
+  await waitFor(() => {
+    expect(authApi.me).toHaveBeenCalledOnce()
+    expect(tenantsApi.list).toHaveBeenCalledOnce()
+  })
+
+  credentials.setAccess('newer-access')
+  await userEventApi.click(screen.getByRole('button', { name: 'hydrate' }))
+  await expectStatus('authenticated')
+
+  await act(async () => {
+    staleUser.reject(new Error('stale profile failure'))
+    staleTenants.resolve([firstTenant, secondTenant])
+    await Promise.allSettled([staleUser.promise, staleTenants.promise])
+  })
+
+  expect(screen.getByTestId('status')).toHaveTextContent('authenticated')
+  expect(screen.getByTestId('user')).toHaveTextContent('Власник')
+  expect(credentials.getAccess()).toBe('newer-access')
+})
+
+it('settles a superseded hydrate with the newer terminal operation', async () => {
+  credentials.setAccess('initial-access')
+  const completions: Promise<void>[] = []
+  const userEventApi = userEvent.setup()
+
+  render(
+    <AuthProvider>
+      <AuthProbe onHydrate={(completion) => completions.push(completion)} />
+    </AuthProvider>,
+  )
+  await expectStatus('authenticated')
+
+  const staleUser = deferred<User>()
+  const staleTenants = deferred<Tenant[]>()
+  vi.mocked(authApi.me)
+    .mockReturnValueOnce(staleUser.promise)
+    .mockResolvedValueOnce(user)
+  vi.mocked(tenantsApi.list)
+    .mockReturnValueOnce(staleTenants.promise)
+    .mockResolvedValueOnce([firstTenant, secondTenant])
+
+  await userEventApi.click(screen.getByRole('button', { name: 'hydrate' }))
+  await userEventApi.click(screen.getByRole('button', { name: 'hydrate' }))
+  await expectStatus('authenticated')
+  expect(completions).toHaveLength(2)
+
+  let staleCompletionSettled = false
+  void completions[0]?.then(() => {
+    staleCompletionSettled = true
+  })
+  await completions[1]
+  await act(async () => Promise.resolve())
+
+  expect(staleCompletionSettled).toBe(true)
+})
+
+it('signs out locally even when Worker logout fails', async () => {
+  credentials.setAccess('current-access')
+  vi.mocked(authApi.logout).mockRejectedValue(new Error('worker offline'))
+  const userEventApi = userEvent.setup()
+
+  render(
+    <AuthProvider>
+      <AuthProbe />
+    </AuthProvider>,
+  )
+
+  await expectStatus('authenticated')
+  await userEventApi.click(screen.getByRole('button', { name: 'sign out' }))
+
+  expect(screen.getByTestId('status')).toHaveTextContent('guest')
+  expect(screen.getByTestId('user')).toHaveTextContent('none')
+  expect(credentials.getAccess()).toBeNull()
+})
+
+it('awaits session invalidation before silent sign-out can resolve', async () => {
+  const refresh = deferred<{ accessToken: string; expiresIn: number }>()
+  vi.mocked(sessionApi.refresh).mockImplementation(async () => {
+    const response = await refresh.promise
+    credentials.setAccess(response.accessToken)
+    return response
+  })
+  const invalidation = deferred<void>()
+  vi.mocked(sessionApi.invalidate).mockImplementation(async () => {
+    await invalidation.promise
+    credentials.clear()
+  })
+  const signOutCompletions: Promise<void>[] = []
+  const userEventApi = userEvent.setup()
+
+  render(
+    <AuthProvider>
+      <AuthProbe
+        onSignOut={(completion) => signOutCompletions.push(completion)}
+      />
+    </AuthProvider>,
+  )
+  await waitFor(() => expect(sessionApi.refresh).toHaveBeenCalledOnce())
+
+  await userEventApi.click(
+    screen.getByRole('button', { name: 'sign out silently' }),
+  )
+
+  expect(sessionApi.invalidate).toHaveBeenCalledOnce()
+  expect(authApi.logout).not.toHaveBeenCalled()
+  await expectStatus('guest')
+
+  let signOutSettled = false
+  void signOutCompletions[0]?.then(() => {
+    signOutSettled = true
+  })
+  refresh.resolve({ accessToken: 'late-access', expiresIn: 900 })
+  await act(async () => refresh.promise)
+  expect(credentials.getAccess()).toBe('late-access')
+  expect(signOutSettled).toBe(false)
+
+  invalidation.resolve()
+  await act(async () => invalidation.promise)
+  await signOutCompletions[0]
+
+  expect(signOutSettled).toBe(true)
+  expect(screen.getByTestId('status')).toHaveTextContent('guest')
+  expect(credentials.getAccess()).toBeNull()
+})

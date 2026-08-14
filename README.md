@@ -1,5 +1,15 @@
 # React + TypeScript + Vite
 
+## Deployment
+
+Deploy QA only through `npm run deploy:qa`. It builds with Vite's QA mode,
+verifies that the static artifact targets `https://qaapi.rozbirka.pro`, runs a
+Wrangler dry run, and only then deploys `qa-rozbirka-pro-web`.
+
+The artifact environment checks also run in GitHub Actions. A QA artifact that
+contains the production API origin (or a production artifact containing the QA
+origin) is rejected before deployment.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

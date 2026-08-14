@@ -22,20 +22,25 @@ export interface VerifyUser {
   displayName: string
 }
 
-export interface OtpVerifyResponse {
+export interface SessionVerifyResponse {
   accessToken: string
-  refreshToken: string
   user: VerifyUser
   isNewUser: boolean
+}
+
+export interface SessionRefreshResponse {
+  accessToken: string
+  expiresIn: number
 }
 
 export interface UpdateNameRequest {
   name: string
 }
 
-export interface RefreshResponse {
+export interface UpdateNameResponse {
+  user: VerifyUser
   accessToken: string
-  refreshToken: string
+  expiresIn: number
 }
 
 export type UserRole = 'owner' | 'manager' | 'master' | (string & {})
