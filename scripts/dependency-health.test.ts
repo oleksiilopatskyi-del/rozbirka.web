@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { execFile } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
@@ -7,6 +8,11 @@ import { describe, expect, it } from 'vitest'
 const execFileAsync = promisify(execFile)
 const repositoryRoot = resolve(import.meta.dirname, '..')
 const healthScript = join(repositoryRoot, 'scripts/check-dependency-health.mjs')
+const packageManifest = join(repositoryRoot, 'package.json')
+const deployWorkflow = join(
+  repositoryRoot,
+  '.github/workflows/deploy-node-static-template.yml',
+)
 
 it('accepts only the documented openapi-typescript TypeScript peer mismatch', async () => {
   const { stdout } = await execFileAsync(process.execPath, [healthScript], {
@@ -16,6 +22,15 @@ it('accepts only the documented openapi-typescript TypeScript peer mismatch', as
   expect(stdout).toContain(
     'Dependency tree is healthy with the documented openapi-typescript peer mismatch',
   )
+})
+
+it('pins the lockfile npm version in both CI install jobs', async () => {
+  const manifest: unknown = JSON.parse(await readFile(packageManifest, 'utf8'))
+  const workflow = await readFile(deployWorkflow, 'utf8')
+  const npmPins = workflow.match(/npm install --global npm@11\.16\.0/g) ?? []
+
+  expect(manifest).toMatchObject({ packageManager: 'npm@11.16.0' })
+  expect(npmPins).toHaveLength(2)
 })
 
 describe('dependency report validation', () => {
