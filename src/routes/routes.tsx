@@ -1,10 +1,41 @@
-import type { RouteObject } from 'react-router'
+import { Navigate, Outlet, type RouteObject } from 'react-router'
 import App from '@/App'
 import { RedirectIfAuth, RequireAuth } from '@/auth/guards'
+import {
+  cabinetModules,
+  type CabinetModuleKey,
+} from '@/cabinet/module-registry'
 
 const hydrateFallbackElement = (
   <div className="min-h-screen bg-background" aria-busy="true" />
 )
+
+const cabinetModuleRoute = (module: CabinetModuleKey): RouteObject => ({
+  path: cabinetModules[module].routeSegment.slice(1),
+  hydrateFallbackElement,
+  lazy: async () => {
+    const { CabinetModuleRoute } = await import('@/cabinet/ModuleBoundary')
+    return {
+      element: <CabinetModuleRoute module={module} />,
+    }
+  },
+})
+
+const cabinetChildren = (): RouteObject[] => [
+  { index: true, element: <Navigate to="dashboard" replace /> },
+  ...Object.keys(cabinetModules).map((module) =>
+    cabinetModuleRoute(module as CabinetModuleKey),
+  ),
+  {
+    path: '*',
+    hydrateFallbackElement,
+    lazy: async () => {
+      const { CabinetNotFoundScreen } =
+        await import('@/cabinet/screens/not-found')
+      return { element: <CabinetNotFoundScreen /> }
+    },
+  },
+]
 
 export function createAppRoutes(
   includePrototypeRoutes: boolean,
@@ -42,6 +73,23 @@ export function createAppRoutes(
           element: (
             <RequireAuth>
               <AccountScreen />
+            </RequireAuth>
+          ),
+        }
+      },
+    },
+    {
+      path: '/app/:tenant',
+      hydrateFallbackElement,
+      children: cabinetChildren(),
+      lazy: async () => {
+        const { CabinetProvider } = await import('@/cabinet/CabinetContext')
+        return {
+          element: (
+            <RequireAuth>
+              <CabinetProvider>
+                <Outlet />
+              </CabinetProvider>
             </RequireAuth>
           ),
         }

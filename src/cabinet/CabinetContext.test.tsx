@@ -143,7 +143,7 @@ function renderCabinet(path: string) {
     <MemoryRouter initialEntries={[path]}>
       <AuthProvider>
         <Routes>
-          <Route path="/app/:tenantSlug/*" element={<CabinetRoute />} />
+          <Route path="/app/:tenant/*" element={<CabinetRoute />} />
         </Routes>
       </AuthProvider>
     </MemoryRouter>,

@@ -40,4 +40,22 @@ describe('production route boundary', () => {
     expect(paths).toContain('/invite/:code')
     expect(paths).toContain('/scan/:qrCode')
   })
+
+  it('registers the cabinet parent and lazy children', () => {
+    const app = createAppRoutes(false).find(
+      (route) => route.path === '/app/:tenant',
+    )
+    const childPaths = app?.children?.map((route) => route.path)
+
+    expect(app?.lazy).toEqual(expect.any(Function))
+    expect(childPaths).toContain('dashboard')
+    expect(childPaths).toContain('settings/billing/plans')
+    expect(childPaths).toContain('settings/billing/payments')
+    expect(app?.children?.at(-1)?.path).toBe('*')
+    expect(
+      app?.children
+        ?.filter((route) => route.path !== undefined)
+        .every((route) => route.lazy !== undefined),
+    ).toBe(true)
+  })
 })

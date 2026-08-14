@@ -52,7 +52,8 @@ const cabinetPathFor = (pathname: string, slug: string) => {
 
 export function CabinetProvider({ children }: { children: ReactNode }) {
   const auth = useAuth()
-  const { tenantSlug } = useParams<{ tenantSlug: string }>()
+  const params = useParams<{ tenant: string; tenantSlug: string }>()
+  const tenantSlug = params.tenant ?? params.tenantSlug
   const location = useLocation()
   const navigate = useNavigate()
   const [state, setState] = useState<CabinetState>(initialState)
