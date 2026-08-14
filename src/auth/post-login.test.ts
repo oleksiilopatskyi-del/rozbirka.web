@@ -7,6 +7,7 @@ describe('safe post-login destinations', () => {
     '//evil.example/x',
     '/\\evil',
     '/%0aevil',
+    '/account?next=%7F',
     '/privacy',
     '/unknown',
   ])('rejects %s', (value) => expect(isSafeCabinetPath(value)).toBe(false))

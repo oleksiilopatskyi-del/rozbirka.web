@@ -10,7 +10,13 @@ const SAFE_PATHS = [
 const hasUnsafeCharacters = (value: string): boolean => {
   try {
     const decoded = decodeURIComponent(value)
-    return /[\x00-\x1F\x7F\\]/.test(decoded)
+    return Array.from(decoded).some((character) => {
+      const codePoint = character.codePointAt(0)
+      return (
+        codePoint !== undefined &&
+        (codePoint <= 0x1f || codePoint === 0x7f || character === '\\')
+      )
+    })
   } catch {
     return true
   }
