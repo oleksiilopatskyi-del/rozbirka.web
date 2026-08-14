@@ -132,6 +132,33 @@ html {
   }
 }
 
+.cabinet-shell {
+  max-width: 100vw;
+  overflow-x: clip;
+}
+
+.cabinet-shell__content {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+@supports not (overflow: clip) {
+  .cabinet-shell {
+    overflow-x: hidden;
+  }
+}
+
+@media (min-width: 768px) {
+  .cabinet-shell__content {
+    padding-bottom: 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .cabinet-shell__content {
+    padding-bottom: 2.5rem;
+  }
+}
+
 /* Typography scale from UI kit (Mobile → Desktop @ ≥1024px). */
 .text-h1 {
   font-size: 59px;

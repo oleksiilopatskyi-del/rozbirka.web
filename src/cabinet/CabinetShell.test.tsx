@@ -1,0 +1,92 @@
+import { render, screen } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router'
+import { beforeEach, expect, it, vi } from 'vitest'
+import type { Tenant } from '../api/types'
+import type { AuthContextValue } from '../auth/AuthContext'
+import { useAuth } from '../auth/AuthContext'
+import type { TenantAccessSnapshot } from './access-types'
+import type { CabinetContextValue } from './CabinetContext'
+import { useCabinet } from './CabinetContext'
+import { CabinetShell } from './CabinetShell'
+import { CabinetHomeScreen } from './screens/cabinet-home'
+
+vi.mock('../auth/AuthContext', () => ({ useAuth: vi.fn() }))
+vi.mock('./CabinetContext', () => ({ useCabinet: vi.fn() }))
+
+const tenant: Tenant = {
+  id: 'tenant-1',
+  name: 'Koval Auto',
+  slug: 'koval',
+  plan: 'active',
+  planTier: 'pro',
+  city: 'Київ',
+  logoUrl: null,
+  isActive: true,
+  createdAt: '2026-08-01T10:00:00Z',
+  roleName: 'owner',
+}
+
+const snapshot: TenantAccessSnapshot = {
+  userId: 'user-1',
+  tenantId: tenant.id,
+  generation: 1,
+  role: 'owner',
+  permissions: new Set(['billing.view']),
+  features: new Set(),
+  subscription: null,
+}
+
+beforeEach(() => {
+  vi.mocked(useAuth).mockReturnValue({
+    status: 'authenticated',
+    user: {
+      id: 'user-1',
+      phone: '+380501112233',
+      displayName: 'Власник',
+      role: 'owner',
+      isActive: true,
+      lastLoginAt: null,
+    },
+    tenant,
+    tenants: [tenant],
+    hydrate: vi.fn(),
+    commitTenant: vi.fn(),
+    signOut: vi.fn(),
+  } satisfies AuthContextValue)
+  vi.mocked(useCabinet).mockReturnValue({
+    status: 'ready',
+    targetTenant: tenant,
+    snapshot,
+    error: null,
+    retry: vi.fn(),
+    switchTenant: vi.fn(),
+  } satisfies CabinetContextValue)
+})
+
+it('renders nested cabinet content in a responsive overflow-safe shell', () => {
+  render(
+    <MemoryRouter initialEntries={['/app/koval/dashboard']}>
+      <Routes>
+        <Route path="/app/:tenant" element={<CabinetShell />}>
+          <Route path="dashboard" element={<p>Вміст модуля</p>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  expect(screen.getByRole('main')).toHaveClass('min-w-0')
+  expect(screen.getByText('Вміст модуля')).toBeVisible()
+  expect(screen.getByLabelText('rozbirka — на головну')).toHaveAttribute(
+    'href',
+    '/app/koval/dashboard',
+  )
+})
+
+it('renders the minimal tenant dashboard home', () => {
+  render(<CabinetHomeScreen />)
+
+  expect(
+    screen.getByRole('heading', { name: 'Вітаємо в Koval Auto' }),
+  ).toBeVisible()
+  expect(screen.getByText('Ваш робочий простір готовий.')).toBeVisible()
+})
