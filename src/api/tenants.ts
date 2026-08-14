@@ -1,24 +1,38 @@
 import { apiClient } from './client'
-import { tokens } from './tokens'
+import type { RequestOptions } from './contracts'
+import { tenantPreference } from './tenant-preference'
 import type { CreateTenantRequest, CreateTenantResponse, Tenant } from './types'
 
+const requestConfig = (options: RequestOptions) =>
+  options.signal ? { signal: options.signal } : {}
+
 export const tenantsApi = {
-  async list(): Promise<Tenant[]> {
-    const resp = await apiClient.get<Tenant[]>('/tenants')
+  async list(options: RequestOptions = {}): Promise<Tenant[]> {
+    const resp = await apiClient.get<Tenant[]>(
+      '/tenants',
+      requestConfig(options),
+    )
     return resp.data
   },
 
-  async create(req: CreateTenantRequest): Promise<CreateTenantResponse> {
-    const resp = await apiClient.post<CreateTenantResponse>('/tenants', req)
+  async create(
+    req: CreateTenantRequest,
+    options: RequestOptions = {},
+  ): Promise<CreateTenantResponse> {
+    const resp = await apiClient.post<CreateTenantResponse>(
+      '/tenants',
+      req,
+      requestConfig(options),
+    )
     return resp.data
   },
 
-  async ensureSelected(): Promise<Tenant | null> {
-    if (tokens.getTenant()) return null
-    const tenants = await this.list().catch(() => [])
+  async ensureSelected(options: RequestOptions = {}): Promise<Tenant | null> {
+    if (tenantPreference.get()) return null
+    const tenants = await this.list(options).catch(() => [])
     const first = tenants[0]
     if (first) {
-      tokens.setTenant(first.id)
+      tenantPreference.set(first.id)
       return first
     }
     return null

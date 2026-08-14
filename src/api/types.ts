@@ -22,13 +22,6 @@ export interface VerifyUser {
   displayName: string
 }
 
-export interface OtpVerifyResponse {
-  accessToken: string
-  refreshToken: string
-  user: VerifyUser
-  isNewUser: boolean
-}
-
 export interface SessionVerifyResponse {
   accessToken: string
   user: VerifyUser
@@ -44,9 +37,10 @@ export interface UpdateNameRequest {
   name: string
 }
 
-export interface RefreshResponse {
+export interface UpdateNameResponse {
+  user: VerifyUser
   accessToken: string
-  refreshToken: string
+  expiresIn: number
 }
 
 export type UserRole = 'owner' | 'manager' | 'master' | (string & {})

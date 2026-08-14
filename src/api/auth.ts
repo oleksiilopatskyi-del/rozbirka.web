@@ -1,10 +1,13 @@
 import { identityClient } from './client'
-import { tokens } from './tokens'
+import { credentials } from './credentials'
+import { sessionApi } from './session'
 import type {
-  OtpVerifyResponse,
   SendOtpRequest,
   SendOtpResponse,
+  SessionVerifyResponse,
+  UpdateNameResponse,
   User,
+  VerifyUser,
   VerifyOtpRequest,
 } from './types'
 
@@ -14,27 +17,16 @@ export const authApi = {
     return resp.data
   },
 
-  async otpVerify(req: VerifyOtpRequest): Promise<OtpVerifyResponse> {
+  async otpVerify(req: VerifyOtpRequest): Promise<SessionVerifyResponse> {
     // Web is the registration surface: allow account creation on first verify.
-    const resp = await identityClient.post<OtpVerifyResponse>('/auth/verify', {
+    return sessionApi.verify({
       allowRegistration: true,
       ...req,
     })
-    tokens.set(resp.data.accessToken, resp.data.refreshToken)
-    return resp.data
   },
 
   async logout(): Promise<void> {
-    const refresh = tokens.getRefresh()
-    try {
-      if (refresh) {
-        await identityClient.post('/auth/logout', { refreshToken: refresh })
-      }
-    } catch {
-      // ignore
-    } finally {
-      tokens.clear()
-    }
+    await sessionApi.logout()
   },
 
   async me(): Promise<User> {
@@ -42,7 +34,12 @@ export const authApi = {
     return resp.data
   },
 
-  async updateName(name: string): Promise<void> {
-    await identityClient.patch('/auth/me/name', { name })
+  async updateName(name: string): Promise<VerifyUser> {
+    const response = await identityClient.patch<UpdateNameResponse>(
+      '/auth/me/name',
+      { name },
+    )
+    credentials.setAccess(response.data.accessToken)
+    return response.data.user
   },
 }

@@ -36,7 +36,6 @@ beforeEach(() => {
   })
   otpVerify.mockResolvedValue({
     accessToken: 'access',
-    refreshToken: 'refresh',
     user: {
       id: 'user-1',
       phone: '+380501112233',

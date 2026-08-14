@@ -2,9 +2,7 @@ import axios, { type InternalAxiosRequestConfig } from 'axios'
 import type { ApiProblem } from './contracts'
 import { normalizeApiProblem } from './errors'
 
-export type SessionRetryConfig = InternalAxiosRequestConfig & {
-  _sessionRetry?: boolean
-}
+export type SessionRetryConfig = InternalAxiosRequestConfig
 
 interface RefreshCoordinatorDependencies {
   refresh: () => Promise<string>

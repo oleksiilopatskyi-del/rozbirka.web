@@ -14,8 +14,8 @@ import {
 import { cn } from '@/lib/utils'
 import { BrandLogo } from '@/components/site/brand-logo'
 import { billingApi } from '@/api/billing'
+import { tenantPreference } from '@/api/tenant-preference'
 import { tenantsApi } from '@/api/tenants'
-import { tokens } from '@/api/tokens'
 import { useAuth } from '@/auth/AuthContext'
 import { readPlanCode, type PlanCode } from '@/lib/plan-selection'
 import type {
@@ -255,7 +255,7 @@ function OnboardingScreen({
         tenantName: name.trim(),
         ...(city.trim() ? { city: city.trim() } : {}),
       })
-      tokens.setTenant(res.tenantId)
+      tenantPreference.set(res.tenantId)
       await onCreated()
     } catch {
       setError('Не вдалося створити розбірку. Спробуйте ще раз.')
