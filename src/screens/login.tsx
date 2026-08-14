@@ -9,11 +9,12 @@ import {
 } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
-import { isAxiosError } from 'axios'
 import { BrandLogo } from '@/components/site/brand-logo'
 import { authApi } from '@/api/auth'
+import { normalizeApiProblem } from '@/api/errors'
 import { useAuth } from '@/auth/AuthContext'
-import { postAuthPath } from '@/lib/plan-selection'
+import { resolvePostLoginDestination } from '@/auth/post-login'
+import type { SendOtpResponse } from '@/api/types'
 
 type Step = 'phone' | 'otp' | 'name' | 'success'
 
@@ -29,16 +30,18 @@ const errorMessages: Record<string, string> = {
 }
 
 function extractError(err: unknown, fallback: string): string {
-  if (isAxiosError(err)) {
-    const data = err.response?.data as
-      | { code?: string; error?: { code?: string }; message?: string }
-      | undefined
-    const code = data?.error?.code ?? data?.code
-    if (code && errorMessages[code]) return errorMessages[code]
-    if (data?.message) return data.message
-  }
-  return fallback
+  const problem = normalizeApiProblem(err)
+  const mappedMessage = problem.code ? errorMessages[problem.code] : undefined
+  if (mappedMessage) return mappedMessage
+  if (problem.kind === 'network') return 'Немає з’єднання з мережею.'
+  if (problem.kind === 'timeout') return 'Час очікування запиту минув.'
+  if (problem.kind === 'unknown' || problem.kind === 'cancelled')
+    return fallback
+  return problem.message || fallback
 }
+
+const cooldownFrom = (response: SendOtpResponse): number =>
+  Math.max(response.cooldownSeconds ?? 60, response.retryAfterSeconds ?? 0)
 
 function formatUkrainianPhone(raw: string): string {
   let digits = raw.replace(/\D/g, '')
@@ -59,14 +62,19 @@ export function LoginScreen() {
   const navigate = useNavigate()
   const location = useLocation()
   const auth = useAuth()
-  const fallbackReturnTo =
-    (location.state as { from?: string } | null)?.from ?? '/account'
-  const returnTo = postAuthPath(location.search, fallbackReturnTo)
+  const fallbackReturnTo = (location.state as { from?: string } | null)?.from
+  const returnTo = resolvePostLoginDestination(
+    location.search,
+    fallbackReturnTo ?? '/account',
+  )
   const [step, setStep] = useState<Step>('phone')
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
   const [name, setName] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [sendingOtp, setSendingOtp] = useState(false)
+  const [verifyingOtp, setVerifyingOtp] = useState(false)
+  const [savingName, setSavingName] = useState(false)
+  const [resendingOtp, setResendingOtp] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [resendIn, setResendIn] = useState(0)
 
@@ -77,42 +85,46 @@ export function LoginScreen() {
   }, [resendIn])
 
   const toE164 = (formatted: string) => '+' + formatted.replace(/\D/g, '')
+  const actionInProgress =
+    sendingOtp || verifyingOtp || savingName || resendingOtp
 
   const handlePhoneSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    if (actionInProgress) return
     setError(null)
     const digits = phone.replace(/\D/g, '')
     if (digits.length !== 12) {
       setError('Введіть повний номер телефону')
       return
     }
-    setLoading(true)
+    setSendingOtp(true)
     try {
       const resp = await authApi.otpSend({ phone: toE164(phone) })
       setStep('otp')
-      setResendIn(resp.cooldownSeconds || 60)
+      setResendIn(cooldownFrom(resp))
     } catch (err) {
       setError(extractError(err, 'Не вдалося надіслати код'))
     } finally {
-      setLoading(false)
+      setSendingOtp(false)
     }
   }
 
   const handleOtpSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    if (actionInProgress) return
     setError(null)
     if (otp.length < OTP_LENGTH) {
       setError(`Введіть всі ${OTP_LENGTH} цифр`)
       return
     }
-    setLoading(true)
+    setVerifyingOtp(true)
     try {
       const resp = await authApi.otpVerify({ phone: toE164(phone), code: otp })
       // Existing user — straight to success. Brand-new user — ask their name first.
       if (resp.isNewUser) {
         setStep('name')
       } else {
-        await auth.hydrate()
+        await auth.hydrate(resp.accessToken)
         setStep('success')
         window.setTimeout(() => {
           void navigate(returnTo, { replace: true })
@@ -121,19 +133,20 @@ export function LoginScreen() {
     } catch (err) {
       setError(extractError(err, 'Невірний код'))
     } finally {
-      setLoading(false)
+      setVerifyingOtp(false)
     }
   }
 
   const handleNameSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    if (actionInProgress) return
     setError(null)
     const trimmed = name.trim()
     if (trimmed.length < 2) {
       setError('Введіть ім’я')
       return
     }
-    setLoading(true)
+    setSavingName(true)
     try {
       await authApi.updateName(trimmed)
       await auth.hydrate()
@@ -144,22 +157,28 @@ export function LoginScreen() {
     } catch (err) {
       setError(extractError(err, 'Не вдалося зберегти ім’я'))
     } finally {
-      setLoading(false)
+      setSavingName(false)
     }
   }
 
   const handleResend = async () => {
-    if (resendIn > 0) return
-    setLoading(true)
+    if (resendIn > 0 || actionInProgress) return
+    setResendingOtp(true)
     try {
       const resp = await authApi.otpSend({ phone: toE164(phone) })
       setOtp('')
       setError(null)
-      setResendIn(resp.cooldownSeconds || 60)
+      setResendIn(cooldownFrom(resp))
     } catch (err) {
-      setError(extractError(err, 'Не вдалося надіслати код'))
+      const problem = normalizeApiProblem(err)
+      setError(extractError(problem, 'Не вдалося надіслати код'))
+      if (problem.retryAfterSeconds !== undefined) {
+        setResendIn((current) =>
+          Math.max(current, problem.retryAfterSeconds ?? 0),
+        )
+      }
     } finally {
-      setLoading(false)
+      setResendingOtp(false)
     }
   }
 
@@ -183,7 +202,7 @@ export function LoginScreen() {
               phone={phone}
               onChange={setPhone}
               onSubmit={(e) => void handlePhoneSubmit(e)}
-              loading={loading}
+              loading={sendingOtp}
               error={error}
             />
           )}
@@ -200,7 +219,9 @@ export function LoginScreen() {
               }}
               onResend={() => void handleResend()}
               resendIn={resendIn}
-              loading={loading}
+              verifying={verifyingOtp}
+              resending={resendingOtp}
+              blocked={actionInProgress}
               error={error}
             />
           )}
@@ -209,7 +230,8 @@ export function LoginScreen() {
               name={name}
               onChange={setName}
               onSubmit={(e) => void handleNameSubmit(e)}
-              loading={loading}
+              loading={savingName}
+              blocked={actionInProgress}
               error={error}
             />
           )}
@@ -310,7 +332,9 @@ function OtpStep({
   onBack,
   onResend,
   resendIn,
-  loading,
+  verifying,
+  resending,
+  blocked,
   error,
 }: {
   phone: string
@@ -320,7 +344,9 @@ function OtpStep({
   onBack: () => void
   onResend: () => void
   resendIn: number
-  loading: boolean
+  verifying: boolean
+  resending: boolean
+  blocked: boolean
   error: string | null
 }) {
   return (
@@ -362,11 +388,11 @@ function OtpStep({
 
         <button
           type="submit"
-          disabled={loading || otp.length < OTP_LENGTH}
+          disabled={blocked || otp.length < OTP_LENGTH}
           className="bg-brand hover:bg-brand-hover text-brand-foreground group mt-2 inline-flex h-16 items-center justify-center gap-3 rounded-full text-[16px] font-normal transition-all duration-300 hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <span>{loading ? 'Перевіряємо…' : 'Підтвердити'}</span>
-          {!loading && (
+          <span>{verifying ? 'Перевіряємо…' : 'Підтвердити'}</span>
+          {!verifying && (
             <Check className="size-4 transition-transform group-hover:scale-110" />
           )}
         </button>
@@ -374,12 +400,14 @@ function OtpStep({
         <button
           type="button"
           onClick={onResend}
-          disabled={resendIn > 0 || loading}
+          disabled={resendIn > 0 || blocked}
           className="mt-2 text-center text-[13px] text-neutral-500 transition-colors hover:text-white disabled:cursor-not-allowed disabled:hover:text-neutral-500"
         >
-          {resendIn > 0
-            ? `Надіслати код ще раз — через ${resendIn}\u00A0с`
-            : 'Надіслати код ще раз'}
+          {resending
+            ? 'Надсилаємо…'
+            : resendIn > 0
+              ? `Надіслати код ще раз — через ${resendIn}\u00A0с`
+              : 'Надіслати код ще раз'}
         </button>
       </form>
     </div>
@@ -391,12 +419,14 @@ function NameStep({
   onChange,
   onSubmit,
   loading,
+  blocked,
   error,
 }: {
   name: string
   onChange: (v: string) => void
   onSubmit: (e: FormEvent) => void
   loading: boolean
+  blocked: boolean
   error: string | null
 }) {
   return (
@@ -440,7 +470,7 @@ function NameStep({
 
         <button
           type="submit"
-          disabled={loading || name.trim().length < 2}
+          disabled={blocked || name.trim().length < 2}
           className="bg-brand hover:bg-brand-hover text-brand-foreground group mt-2 inline-flex h-16 items-center justify-center gap-3 rounded-full text-[16px] font-normal transition-all duration-300 hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span>{loading ? 'Зберігаємо…' : 'Продовжити'}</span>
