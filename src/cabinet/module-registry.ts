@@ -6,7 +6,6 @@ import {
   ClipboardList,
   CreditCard,
   LayoutDashboard,
-  LogOut,
   Package,
   ReceiptText,
   ScanLine,
@@ -17,7 +16,12 @@ import {
   WalletCards,
   type LucideIcon,
 } from 'lucide-react'
-import { FEATURES, type FeatureCode, type PlanUsageDto } from '../api/types'
+import {
+  FEATURES,
+  type BillingState,
+  type FeatureCode,
+  type PlanUsageDto,
+} from '../api/types'
 import type { Permission } from './access-types'
 
 export type CabinetModuleKey =
@@ -26,7 +30,7 @@ export type CabinetModuleKey =
   | 'parts'
   | 'orders'
   | 'customers'
-  | 'finance'
+  | 'cash'
   | 'team'
   | 'intakes'
   | 'stickers'
@@ -35,9 +39,7 @@ export type CabinetModuleKey =
   | 'plans'
   | 'payments'
   | 'profile'
-  | 'logout'
-  | 'onboarding'
-  | 'tenant-switching'
+  | 'business'
 
 export type QuotaResource = keyof PlanUsageDto
 
@@ -54,17 +56,24 @@ export interface CabinetModuleDefinition {
   viewPermission?: Permission
   mutationPermission?: Permission
   requiredFeature?: FeatureCode
-  subscriptionRequired?: boolean
+  allowedSubscriptionStates?: readonly BillingState[]
   quotaResource?: QuotaResource
   navigation?: CabinetNavigationItem
 }
+
+const BUSINESS_SUBSCRIPTION_STATES = [
+  'trial',
+  'active',
+  'pastDue',
+  'cancelled',
+] as const satisfies readonly BillingState[]
 
 export const cabinetModules: Readonly<
   Record<CabinetModuleKey, CabinetModuleDefinition>
 > = {
   dashboard: {
     key: 'dashboard',
-    routeSegment: 'dashboard',
+    routeSegment: '/dashboard',
     released: true,
     navigation: {
       label: 'Головна',
@@ -74,31 +83,31 @@ export const cabinetModules: Readonly<
   },
   cars: {
     key: 'cars',
-    routeSegment: 'cars',
+    routeSegment: '/cars',
     released: false,
     viewPermission: 'cars.view',
     mutationPermission: 'cars.manage',
-    subscriptionRequired: true,
+    allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     quotaResource: 'cars',
     navigation: { label: 'Автомобілі', icon: Car, placement: 'primary' },
   },
   parts: {
     key: 'parts',
-    routeSegment: 'parts',
+    routeSegment: '/parts',
     released: false,
     viewPermission: 'parts.view',
     mutationPermission: 'parts.manage',
-    subscriptionRequired: true,
+    allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     quotaResource: 'parts',
     navigation: { label: 'Запчастини', icon: Package, placement: 'primary' },
   },
   orders: {
     key: 'orders',
-    routeSegment: 'orders',
+    routeSegment: '/orders',
     released: false,
     viewPermission: 'orders.view',
     mutationPermission: 'orders.manage',
-    subscriptionRequired: true,
+    allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     navigation: {
       label: 'Замовлення',
       icon: ClipboardList,
@@ -107,67 +116,67 @@ export const cabinetModules: Readonly<
   },
   customers: {
     key: 'customers',
-    routeSegment: 'customers',
+    routeSegment: '/customers',
     released: false,
     viewPermission: 'customers.view',
     mutationPermission: 'customers.manage',
-    subscriptionRequired: true,
+    allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     navigation: { label: 'Клієнти', icon: Users, placement: 'primary' },
   },
-  finance: {
-    key: 'finance',
-    routeSegment: 'finance',
+  cash: {
+    key: 'cash',
+    routeSegment: '/cash',
     released: false,
     viewPermission: 'finance.view',
     mutationPermission: 'finance.manage',
-    subscriptionRequired: true,
+    allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     quotaResource: 'cashRegisters',
     navigation: { label: 'Фінанси', icon: WalletCards, placement: 'primary' },
   },
   team: {
     key: 'team',
-    routeSegment: 'team',
+    routeSegment: '/team',
     released: false,
     viewPermission: 'team.view',
     mutationPermission: 'team.manage',
     requiredFeature: FEATURES.TeamCollaboration,
-    subscriptionRequired: true,
+    allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     quotaResource: 'users',
     navigation: { label: 'Команда', icon: UserRoundCog, placement: 'primary' },
   },
   intakes: {
     key: 'intakes',
-    routeSegment: 'intakes',
+    routeSegment: '/intakes',
     released: false,
     viewPermission: 'intakes.view',
     mutationPermission: 'intakes.manage',
     requiredFeature: FEATURES.IntakeManagement,
-    subscriptionRequired: true,
+    allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     quotaResource: 'intakes',
     navigation: { label: 'Приймання', icon: ScanLine, placement: 'primary' },
   },
   stickers: {
     key: 'stickers',
-    routeSegment: 'stickers',
+    routeSegment: '/stickers',
     released: false,
     viewPermission: 'parts.view',
     mutationPermission: 'stickers.manage',
-    subscriptionRequired: true,
+    allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     navigation: { label: 'Стікери', icon: Sticker, placement: 'primary' },
   },
   reports: {
     key: 'reports',
-    routeSegment: 'reports',
+    routeSegment: '/reports',
     released: false,
     viewPermission: 'reports.view',
     mutationPermission: 'reports.manage',
     requiredFeature: FEATURES.AdvancedReports,
-    subscriptionRequired: true,
+    allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     navigation: { label: 'Звіти', icon: BarChart3, placement: 'primary' },
   },
   billing: {
     key: 'billing',
-    routeSegment: 'billing',
+    routeSegment: '/settings/billing/overview',
     released: true,
     viewPermission: 'billing.view',
     mutationPermission: 'billing.manage',
@@ -179,7 +188,7 @@ export const cabinetModules: Readonly<
   },
   plans: {
     key: 'plans',
-    routeSegment: 'plans',
+    routeSegment: '/settings/billing/plans',
     released: true,
     viewPermission: 'billing.view',
     mutationPermission: 'billing.manage',
@@ -191,7 +200,7 @@ export const cabinetModules: Readonly<
   },
   payments: {
     key: 'payments',
-    routeSegment: 'payments',
+    routeSegment: '/settings/billing/payments',
     released: true,
     viewPermission: 'billing.view',
     mutationPermission: 'billing.manage',
@@ -203,7 +212,7 @@ export const cabinetModules: Readonly<
   },
   profile: {
     key: 'profile',
-    routeSegment: 'profile',
+    routeSegment: '/settings/profile',
     released: true,
     navigation: {
       label: 'Профіль',
@@ -211,27 +220,15 @@ export const cabinetModules: Readonly<
       placement: 'account',
     },
   },
-  logout: {
-    key: 'logout',
-    routeSegment: 'logout',
-    released: true,
+  business: {
+    key: 'business',
+    routeSegment: '/settings/business',
+    released: false,
+    viewPermission: 'team.view',
+    mutationPermission: 'team.manage',
+    allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     navigation: {
-      label: 'Вийти',
-      icon: LogOut,
-      placement: 'account',
-    },
-  },
-  onboarding: {
-    key: 'onboarding',
-    routeSegment: 'onboarding',
-    released: true,
-  },
-  'tenant-switching': {
-    key: 'tenant-switching',
-    routeSegment: 'tenants',
-    released: true,
-    navigation: {
-      label: 'Організація',
+      label: 'Бізнес',
       icon: Building2,
       placement: 'account',
     },

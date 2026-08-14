@@ -2,7 +2,7 @@ import type { BillingState } from '../api/types'
 import type { TenantAccessState } from './access-types'
 import type { CabinetModuleDefinition, QuotaResource } from './module-registry'
 
-export type ModuleAccessOperation = 'view' | 'mutation'
+export type ModuleAccessOperation = 'view' | 'control' | 'mutation'
 
 export type ModuleAccessDecision =
   | { kind: 'allowed' }
@@ -46,13 +46,13 @@ export const evaluateModuleAccess = (
     return { kind: 'unreleased' }
   }
 
-  const requiredPermission =
-    operation === 'mutation'
-      ? definition.mutationPermission
-      : definition.viewPermission
+  const consumesResource = operation !== 'view'
+  const requiredPermission = consumesResource
+    ? definition.mutationPermission
+    : definition.viewPermission
 
   if (
-    (operation === 'mutation' && requiredPermission === undefined) ||
+    (consumesResource && requiredPermission === undefined) ||
     (requiredPermission !== undefined &&
       !access.snapshot.permissions.has(requiredPermission))
   ) {
@@ -69,18 +69,18 @@ export const evaluateModuleAccess = (
     }
   }
 
-  if (definition.subscriptionRequired) {
+  if (definition.allowedSubscriptionStates !== undefined) {
     const { subscription } = access.snapshot
     if (subscription === null) {
       return { kind: 'access-error' }
     }
 
-    if (subscription.state === 'blocked') {
+    if (!definition.allowedSubscriptionStates.includes(subscription.state)) {
       return { kind: 'subscription-blocked', state: subscription.state }
     }
   }
 
-  if (operation === 'mutation' && definition.quotaResource !== undefined) {
+  if (consumesResource && definition.quotaResource !== undefined) {
     const subscription = access.snapshot.subscription
     if (subscription === null) {
       return { kind: 'access-error' }
