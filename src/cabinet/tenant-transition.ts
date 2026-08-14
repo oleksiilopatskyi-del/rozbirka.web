@@ -1,5 +1,76 @@
 import type { SubscriptionDto, Tenant } from '../api/types'
-import type { MePermissionsDto, TenantAccessSnapshot } from './access-types'
+import type {
+  MePermissionsDto,
+  TenantAccessSnapshot,
+  TenantSubscriptionSnapshot,
+} from './access-types'
+
+class ImmutableSet<T> implements ReadonlySet<T> {
+  readonly #values: Set<T>
+
+  constructor(values: Iterable<T>) {
+    this.#values = new Set(values)
+    Object.freeze(this)
+  }
+
+  get size() {
+    return this.#values.size
+  }
+
+  readonly [Symbol.toStringTag] = 'Set'
+
+  has(value: T) {
+    return this.#values.has(value)
+  }
+
+  entries() {
+    return this.#values.entries()
+  }
+
+  keys() {
+    return this.#values.keys()
+  }
+
+  values() {
+    return this.#values.values()
+  }
+
+  [Symbol.iterator]() {
+    return this.#values[Symbol.iterator]()
+  }
+
+  forEach(
+    callback: (value: T, valueAgain: T, set: ReadonlySet<T>) => void,
+    thisArg?: unknown,
+  ) {
+    for (const value of this.#values) {
+      callback.call(thisArg, value, value, this)
+    }
+  }
+}
+
+const cloneAndFreeze = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map((item: unknown) => cloneAndFreeze(item)))
+  }
+
+  if (value !== null && typeof value === 'object') {
+    const clone = Object.fromEntries(
+      Object.entries(value).map(([key, nested]) => [
+        key,
+        cloneAndFreeze(nested),
+      ]),
+    )
+    return Object.freeze(clone)
+  }
+
+  return value
+}
+
+const freezeSubscription = (
+  subscription: SubscriptionDto,
+): TenantSubscriptionSnapshot =>
+  cloneAndFreeze(subscription) as TenantSubscriptionSnapshot
 
 export type TenantTransitionResult =
   | {
@@ -85,9 +156,12 @@ export const createTenantTransition = (
           tenantId: target.id,
           generation: transitionGeneration,
           role: loadedAccess.role,
-          permissions: new Set(loadedAccess.permissions),
-          features: new Set(loadedAccess.features),
-          subscription: loadedSubscription,
+          permissions: new ImmutableSet(loadedAccess.permissions),
+          features: new ImmutableSet(loadedAccess.features),
+          subscription:
+            loadedSubscription === null
+              ? null
+              : freezeSubscription(loadedSubscription),
         })
 
         dependencies.commit(target, snapshot)

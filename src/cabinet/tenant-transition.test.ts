@@ -312,3 +312,177 @@ it('deduplicates concurrent transitions to the same tenant', async () => {
   expect(begins).toBe(1)
   expect(accessLoads).toBe(1)
 })
+
+it('prevents runtime mutation of committed permission and feature sets', async () => {
+  const loadedAccess = access(['cars.view'])
+  const transition = createTenantTransition({
+    currentScope: () => ({ userId: 'u1', tenantId: tenantA.id }),
+    begin: vi.fn(),
+    rotateRequests: vi.fn(),
+    clear: vi.fn().mockResolvedValue(undefined),
+    persistTenant: vi.fn(),
+    loadAccess: vi.fn().mockResolvedValue(loadedAccess),
+    loadSubscription: vi.fn(),
+    commit: vi.fn(),
+    fail: vi.fn(),
+  })
+
+  const result = await transition.transition(tenantB)
+  if (result.kind !== 'committed') {
+    throw new Error(`Expected a committed transition, received ${result.kind}`)
+  }
+
+  expect(() =>
+    (result.snapshot.permissions as Set<string>).add('team.manage'),
+  ).toThrow(TypeError)
+  expect(() =>
+    (result.snapshot.features as Set<string>).add('mutated-feature'),
+  ).toThrow(TypeError)
+
+  loadedAccess.permissions.push('orders.manage')
+  loadedAccess.features.push('source-mutation')
+
+  expect([...result.snapshot.permissions]).toEqual(['cars.view'])
+  expect([...result.snapshot.features]).toEqual(['inventory'])
+})
+
+it('defensively clones and deeply freezes the subscription snapshot', async () => {
+  const loadedSubscription = structuredClone(subscription)
+  const transition = createTenantTransition({
+    currentScope: () => ({ userId: 'u1', tenantId: tenantA.id }),
+    begin: vi.fn(),
+    rotateRequests: vi.fn(),
+    clear: vi.fn().mockResolvedValue(undefined),
+    persistTenant: vi.fn(),
+    loadAccess: vi.fn().mockResolvedValue(access()),
+    loadSubscription: vi.fn().mockResolvedValue(loadedSubscription),
+    commit: vi.fn(),
+    fail: vi.fn(),
+  })
+
+  const result = await transition.transition(tenantB)
+  if (result.kind !== 'committed' || result.snapshot.subscription === null) {
+    throw new Error('Expected a committed transition with subscription')
+  }
+  const snapshotSubscription = result.snapshot.subscription as SubscriptionDto
+
+  expect(() => {
+    snapshotSubscription.planName = 'Mutated plan'
+  }).toThrow(TypeError)
+  expect(() => {
+    snapshotSubscription.usage.cars.used = 999
+  }).toThrow(TypeError)
+  expect(() => snapshotSubscription.features.push('mutated-feature')).toThrow(
+    TypeError,
+  )
+
+  loadedSubscription.planName = 'Changed at source'
+  loadedSubscription.usage.cars.used = 500
+  loadedSubscription.features.push('source-mutation')
+
+  expect(result.snapshot.subscription).toMatchObject({
+    planName: 'Pro',
+    usage: { cars: { used: 1, max: 100 } },
+    features: ['inventory'],
+  })
+})
+
+it('reports cleanup failure before target persistence or access loading', async () => {
+  const cleanupFailure = new Error('cleanup failed')
+  const persisted: string[] = []
+  const accessLoads: string[] = []
+  const failures: unknown[] = []
+  const transition = createTenantTransition({
+    currentScope: () => ({ userId: 'u1', tenantId: tenantA.id }),
+    begin: vi.fn(),
+    rotateRequests: vi.fn(),
+    clear: vi.fn().mockRejectedValue(cleanupFailure),
+    persistTenant: (tenantId) => persisted.push(tenantId),
+    loadAccess: () => {
+      accessLoads.push('access')
+      return Promise.resolve(access(['cars.view']))
+    },
+    loadSubscription: vi.fn(),
+    commit: vi.fn(),
+    fail: (_target, error) => failures.push(error),
+  })
+
+  const result = await transition.transition(tenantB)
+
+  expect(result).toEqual({
+    kind: 'error',
+    target: tenantB,
+    error: cleanupFailure,
+  })
+  expect(persisted).toEqual([])
+  expect(accessLoads).toEqual([])
+  expect(failures).toEqual([cleanupFailure])
+})
+
+it('reports persistence failure without loading or committing target access', async () => {
+  const persistenceFailure = new Error('preference write failed')
+  const accessLoads: string[] = []
+  const commits: string[] = []
+  const failures: unknown[] = []
+  const transition = createTenantTransition({
+    currentScope: () => ({ userId: 'u1', tenantId: tenantA.id }),
+    begin: vi.fn(),
+    rotateRequests: vi.fn(),
+    clear: vi.fn().mockResolvedValue(undefined),
+    persistTenant: () => {
+      throw persistenceFailure
+    },
+    loadAccess: () => {
+      accessLoads.push('access')
+      return Promise.resolve(access(['cars.view']))
+    },
+    loadSubscription: vi.fn(),
+    commit: (target) => commits.push(target.id),
+    fail: (_target, error) => failures.push(error),
+  })
+
+  const result = await transition.transition(tenantB)
+
+  expect(result).toEqual({
+    kind: 'error',
+    target: tenantB,
+    error: persistenceFailure,
+  })
+  expect(accessLoads).toEqual([])
+  expect(commits).toEqual([])
+  expect(failures).toEqual([persistenceFailure])
+})
+
+it('suppresses a stale cleanup failure after a newer transition commits', async () => {
+  const staleCleanup = deferred<void>()
+  const staleFailure = new Error('late cleanup failure')
+  const persisted: string[] = []
+  const commits: string[] = []
+  const failures: unknown[] = []
+  let cleanupCalls = 0
+  const transition = createTenantTransition({
+    currentScope: () => ({ userId: 'u1', tenantId: tenantA.id }),
+    begin: vi.fn(),
+    rotateRequests: vi.fn(),
+    clear: () => {
+      cleanupCalls += 1
+      return cleanupCalls === 1 ? staleCleanup.promise : Promise.resolve()
+    },
+    persistTenant: (tenantId) => persisted.push(tenantId),
+    loadAccess: vi.fn().mockResolvedValue(access(['cars.view'])),
+    loadSubscription: vi.fn(),
+    commit: (target) => commits.push(target.id),
+    fail: (_target, error) => failures.push(error),
+  })
+
+  const b = transition.transition(tenantB)
+  await vi.waitFor(() => expect(cleanupCalls).toBe(1))
+  const c = transition.transition(tenantC)
+  await expect(c).resolves.toMatchObject({ kind: 'committed', target: tenantC })
+  staleCleanup.reject(staleFailure)
+
+  await expect(b).resolves.toEqual({ kind: 'superseded', target: tenantB })
+  expect(persisted).toEqual(['c'])
+  expect(commits).toEqual(['c'])
+  expect(failures).toEqual([])
+})

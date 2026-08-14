@@ -31,15 +31,23 @@ export interface MePermissionsDto {
   features: string[]
 }
 
+type DeepReadonly<T> = T extends readonly (infer Item)[]
+  ? readonly DeepReadonly<Item>[]
+  : T extends object
+    ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+    : T
+
+export type TenantSubscriptionSnapshot = DeepReadonly<SubscriptionDto>
+
 /** Effective tenant-scoped access, preserving permissions unknown to this client. */
 export interface TenantAccessSnapshot {
-  userId: string
-  tenantId: string
-  generation: number
-  role: string
-  permissions: ReadonlySet<string>
-  features: ReadonlySet<string>
-  subscription: SubscriptionDto | null
+  readonly userId: string
+  readonly tenantId: string
+  readonly generation: number
+  readonly role: string
+  readonly permissions: ReadonlySet<string>
+  readonly features: ReadonlySet<string>
+  readonly subscription: TenantSubscriptionSnapshot | null
 }
 
 export type TenantAccessState =
