@@ -25,6 +25,8 @@
     "test:e2e": "playwright test",
     "check:routes": "node scripts/check-production-routes.mjs",
     "check:prerender": "node scripts/check-prerender-output.mjs",
+    "contracts:generate": "node scripts/generate-api-contracts.mjs",
+    "contracts:check": "node scripts/check-api-contracts.mjs",
     "verify:prod": "npm run check && npm run build:prod && npm run budget:assets && npm run test:e2e && npm run audit:lhci && wrangler deploy --dry-run --env production",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test"
   },
@@ -64,6 +66,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
+    "openapi-typescript": "7.13.0",
     "prettier": "^3.8.3",
     "sharp": "^0.35.3",
     "typescript": "~6.0.2",
