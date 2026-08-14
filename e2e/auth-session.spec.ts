@@ -11,6 +11,8 @@ const appOrigin = 'http://127.0.0.1:4173'
 const phone = '501112233'
 const otp = '123456'
 const fixtureRefreshSecret = 'refresh-1'
+const fixtureOtpErrorSecret = 'identity-otp-internal-secret'
+const fixtureArbitrarySecret = 'identity-arbitrary-secret'
 
 const namedUser = {
   id: 'user-1',
@@ -270,8 +272,17 @@ test('OTP login stores refresh only in HttpOnly cookie and no credentials in sto
   expect(verifyResponse.status()).toBe(200)
   expect(verifyResponse.headers()['content-type']).toContain('application/json')
   const verifyPayload: unknown = await verifyResponse.json()
-  expect(verifyPayload).toMatchObject({ accessToken: 'access-1' })
+  expect(verifyPayload).toEqual({
+    accessToken: 'access-1',
+    user: {
+      id: 'user-1',
+      phone: '+380501112233',
+      displayName: 'Олена Коваль',
+    },
+    isNewUser: false,
+  })
   expect(containsRefreshCredential(verifyPayload)).toBe(false)
+  expect(JSON.stringify(verifyPayload)).not.toContain(fixtureArbitrarySecret)
   expect((await upstreamStats(request)).verifyRequests).toBe(1)
 
   const cookies = await context.cookies(`${appOrigin}/session/refresh`)
@@ -294,6 +305,34 @@ test('OTP login stores refresh only in HttpOnly cookie and no credentials in sto
   expect(storageText).not.toMatch(
     /access.?token|refresh.?token|access-|refresh-/,
   )
+})
+
+test('invalid OTP reaches the Ukrainian login error through the Worker without leaking upstream details @auth-smoke', async ({
+  page,
+}) => {
+  await installApiBoundary(page)
+  await page.goto('/login')
+  await page.getByLabel('Номер телефону').fill(phone)
+  await page.getByRole('button', { name: 'Отримати код' }).click()
+  for (const [index, digit] of [...'000000'].entries()) {
+    await page.getByLabel(`Цифра ${index + 1}`).fill(digit)
+  }
+
+  const verifyResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname === '/session/otp/verify'
+  })
+  await page.getByRole('button', { name: 'Підтвердити' }).click()
+
+  const verifyResponse = await verifyResponsePromise
+  const text = await verifyResponse.text()
+  expect(verifyResponse.status()).toBe(400)
+  expect(JSON.parse(text)).toEqual({
+    error: { code: 'OTP_INVALID', message: 'OTP verification failed' },
+  })
+  expect(text).not.toContain(fixtureOtpErrorSecret)
+  await expect(page.getByRole('alert')).toHaveText('Невірний код')
+  await expect(page).toHaveURL('/login')
 })
 
 test('reload restores the account session through one refresh request @auth-smoke', async ({

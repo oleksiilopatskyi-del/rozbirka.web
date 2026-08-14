@@ -22,7 +22,7 @@ const OTP_LENGTH = 6
 
 const errorMessages: Record<string, string> = {
   OTP_COOLDOWN: 'Зачекайте перед повторним надсиланням',
-  OTP_RATE_LIMIT: 'Забагато спроб. Спробуйте пізніше',
+  OTP_RATE_LIMITED: 'Забагато спроб. Спробуйте пізніше',
   PHONE_NOT_FOUND: 'Номер не знайдено',
   OTP_INVALID: 'Невірний код',
   OTP_EXPIRED: 'Код вже не дійсний — запитайте новий',

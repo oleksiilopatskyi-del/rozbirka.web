@@ -31,8 +31,11 @@ describe('session BFF', () => {
                 id: 'u1',
                 phone: '+380501112233',
                 displayName: 'Vlad',
+                nestedSecret: 'user-internal-secret',
               },
               isNewUser: false,
+              expiresIn: 900,
+              internalSecret: 'identity-internal-secret',
             },
           }),
         )
@@ -57,6 +60,8 @@ describe('session BFF', () => {
     )
     expect(response!.headers.get('cache-control')).toBe('no-store')
     expect(text).not.toContain('refresh-secret')
+    expect(text).not.toContain('identity-internal-secret')
+    expect(text).not.toContain('user-internal-secret')
     expect(JSON.parse(text)).toEqual({
       accessToken: 'access',
       user: {
@@ -85,6 +90,9 @@ describe('session BFF', () => {
             data: {
               accessToken: 'rotated-access',
               refreshToken: 'rotated-refresh',
+              expiresIn: 900,
+              authorization: 'upstream-bearer-secret',
+              nested: { token: 'nested-secret' },
             },
           }),
         )
@@ -99,12 +107,91 @@ describe('session BFF', () => {
       env,
     )
 
-    expect(await response!.json()).toEqual({ accessToken: 'rotated-access' })
+    expect(await response!.json()).toEqual({
+      accessToken: 'rotated-access',
+      expiresIn: 900,
+    })
     expect(response!.headers.get('set-cookie')).toContain(
       'rozbirka_refresh=rotated-refresh',
     )
     expect(await upstreamRequest?.json()).toEqual({
       refreshToken: 'old-refresh',
+    })
+  })
+
+  it.each([
+    {
+      name: 'a missing access token',
+      data: {
+        refreshToken: 'refresh-secret',
+        user: { id: 'u1', phone: '+380501112233', displayName: 'Vlad' },
+        isNewUser: false,
+      },
+    },
+    {
+      name: 'a malformed user',
+      data: {
+        accessToken: 'access',
+        refreshToken: 'refresh-secret',
+        user: { id: 'u1', phoneNumber: '+380501112233', displayName: 'Vlad' },
+        isNewUser: false,
+      },
+    },
+    {
+      name: 'a malformed new-user flag',
+      data: {
+        accessToken: 'access',
+        refreshToken: 'refresh-secret',
+        user: { id: 'u1', phone: '+380501112233', displayName: 'Vlad' },
+        isNewUser: 'false',
+      },
+    },
+  ])('rejects verify success data with $name', async ({ data }) => {
+    identityResponse({ data })
+
+    const response = await handleSessionRequest(
+      new Request('https://rozbirka.pro/session/otp/verify', {
+        method: 'POST',
+        body: JSON.stringify({ phone: '+380501112233', code: '123456' }),
+      }),
+      env,
+    )
+
+    expect(response!.status).toBe(502)
+    expect(response!.headers.get('set-cookie')).toBeNull()
+    expect(await response!.json()).toEqual({
+      error: {
+        code: 'IDENTITY_REQUEST_FAILED',
+        message: 'Identity service request failed',
+      },
+    })
+  })
+
+  it.each([
+    {
+      accessToken: 'rotated-access',
+      refreshToken: 'rotated-refresh',
+    },
+    {
+      accessToken: 'rotated-access',
+      refreshToken: 'rotated-refresh',
+      expiresIn: '900',
+    },
+  ])('rejects malformed refresh success data %#', async (data) => {
+    identityResponse({ data })
+
+    const response = await handleSessionRequest(
+      new Request('https://rozbirka.pro/session/refresh', {
+        method: 'POST',
+        headers: { cookie: 'rozbirka_refresh=old-refresh' },
+      }),
+      env,
+    )
+
+    expect(response!.status).toBe(502)
+    expect(response!.headers.get('set-cookie')).toBeNull()
+    expect(await response!.json()).toMatchObject({
+      error: { code: 'IDENTITY_REQUEST_FAILED' },
     })
   })
 
@@ -246,13 +333,98 @@ describe('session BFF', () => {
     expect(text).not.toContain('refresh-secret')
   })
 
+  it.each([
+    'OTP_INVALID',
+    'OTP_COOLDOWN',
+    'OTP_RATE_LIMITED',
+    'OTP_EXPIRED',
+    'OTP_MAX_ATTEMPTS',
+  ])(
+    'preserves the allowlisted OTP code %s with a fixed message',
+    async (code) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve(
+            Response.json(
+              {
+                data: null,
+                error: {
+                  code,
+                  message: 'refresh-secret and internal host 10.0.0.7',
+                  details: { refreshToken: 'refresh-secret' },
+                },
+              },
+              {
+                status: 400,
+                headers: { 'Retry-After': '17' },
+              },
+            ),
+          ),
+        ),
+      )
+
+      const response = await handleSessionRequest(
+        new Request('https://rozbirka.pro/session/otp/verify', {
+          method: 'POST',
+          body: JSON.stringify({ phone: '+380501112233', code: '000000' }),
+        }),
+        env,
+      )
+      const text = await response!.text()
+
+      expect(response!.status).toBe(400)
+      expect(response!.headers.get('retry-after')).toBe('17')
+      expect(JSON.parse(text)).toEqual({
+        error: { code, message: 'OTP verification failed' },
+      })
+      expect(text).not.toContain('refresh-secret')
+      expect(text).not.toContain('10.0.0.7')
+      expect(text).not.toContain('details')
+    },
+  )
+
+  it.each(['-1', '1.5', '1e2', '9007199254740992'])(
+    'does not forward an invalid Retry-After value %s',
+    async (retryAfter) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve(
+            Response.json(
+              {
+                data: null,
+                error: { code: 'OTP_INVALID', message: 'secret' },
+              },
+              { status: 400, headers: { 'Retry-After': retryAfter } },
+            ),
+          ),
+        ),
+      )
+
+      const response = await handleSessionRequest(
+        new Request('https://rozbirka.pro/session/otp/verify', {
+          method: 'POST',
+          body: JSON.stringify({ phone: '+380501112233', code: '000000' }),
+        }),
+        env,
+      )
+
+      expect(response!.headers.get('retry-after')).toBeNull()
+    },
+  )
+
   it('omits Secure only for localhost or 127.0.0.1 over HTTP', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
         Promise.resolve(
           Response.json({
-            data: { accessToken: 'access', refreshToken: 'refresh' },
+            data: {
+              accessToken: 'access',
+              refreshToken: 'refresh',
+              expiresIn: 900,
+            },
           }),
         ),
       ),

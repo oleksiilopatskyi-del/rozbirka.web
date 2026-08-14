@@ -171,6 +171,25 @@ it('shows the mapped expired-code message', async () => {
   )
 })
 
+it('shows the mapped backend rate-limit message', async () => {
+  otpSend.mockResolvedValueOnce({ cooldownSeconds: 0, retryAfterSeconds: 0 })
+  otpVerify.mockRejectedValue({
+    kind: 'unknown',
+    code: 'OTP_RATE_LIMITED',
+    message: 'upstream wording that must not be shown',
+  })
+  const user = userEvent.setup()
+  renderLogin()
+  await reachOtpStep(user)
+  await enterOtp(user)
+
+  await user.click(screen.getByRole('button', { name: 'Підтвердити' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Забагато спроб. Спробуйте пізніше',
+  )
+})
+
 it('shows a network fallback without leaking transport details', async () => {
   otpSend.mockRejectedValue(
     Object.assign(new Error('socket hang up at 10.0.0.7:443'), {

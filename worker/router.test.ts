@@ -70,6 +70,7 @@ describe('edge routing', () => {
             data: {
               accessToken: 'rotated-access',
               refreshToken: 'rotated-refresh',
+              expiresIn: 900,
             },
           }),
         ),
@@ -85,7 +86,10 @@ describe('edge routing', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ accessToken: 'rotated-access' })
+    expect(await response.json()).toEqual({
+      accessToken: 'rotated-access',
+      expiresIn: 900,
+    })
   })
 
   it('redirects www and HTTP to the HTTPS apex preserving path and query', async () => {

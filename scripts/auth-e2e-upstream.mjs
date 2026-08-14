@@ -3,6 +3,7 @@ import { createServer } from 'node:http'
 const hostname = '127.0.0.1'
 const port = 4174
 const maxBodyBytes = 16 * 1024
+const validOtp = '123456'
 
 let newUser = false
 let tokenSequence = 0
@@ -31,12 +32,13 @@ function issueSession() {
   }
 }
 
-function sendJson(response, status, value) {
+function sendJson(response, status, value, extraHeaders = {}) {
   const body = JSON.stringify(value)
   response.writeHead(status, {
     'Cache-Control': 'no-store',
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(body),
+    ...extraHeaders,
   })
   response.end(body)
 }
@@ -96,6 +98,24 @@ const server = createServer(async (request, response) => {
         return
       }
       verifyRequests += 1
+      if (body.code !== validOtp) {
+        sendJson(
+          response,
+          400,
+          {
+            data: null,
+            error: {
+              code: 'OTP_INVALID',
+              message: 'Invalid OTP identity-otp-internal-secret',
+              details: {
+                internalToken: 'identity-otp-internal-secret',
+              },
+            },
+          },
+          { 'Retry-After': '17' },
+        )
+        return
+      }
       const session = issueSession()
       sendJson(response, 200, {
         data: {
@@ -104,8 +124,10 @@ const server = createServer(async (request, response) => {
             id: 'user-1',
             phone: body.phone,
             displayName: newUser ? '' : 'Олена Коваль',
+            internalSecret: 'identity-arbitrary-secret',
           },
           isNewUser: newUser,
+          internalSecret: 'identity-arbitrary-secret',
         },
       })
       return

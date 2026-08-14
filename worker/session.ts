@@ -12,6 +12,29 @@ export interface SessionEnv {
 
 type JsonRecord = Record<string, unknown>
 
+interface VerifyBrowserDto {
+  accessToken: string
+  user: {
+    id: string
+    phone: string
+    displayName: string
+  }
+  isNewUser: boolean
+}
+
+interface RefreshBrowserDto {
+  accessToken: string
+  expiresIn: number
+}
+
+const SAFE_OTP_ERROR_CODES = new Set([
+  'OTP_INVALID',
+  'OTP_COOLDOWN',
+  'OTP_RATE_LIMITED',
+  'OTP_EXPIRED',
+  'OTP_MAX_ATTEMPTS',
+])
+
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -93,6 +116,95 @@ function identityFailure(status = 502) {
   )
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0
+}
+
+function verifyBrowserData(data: unknown): {
+  browser: VerifyBrowserDto
+  refreshToken: string
+} | null {
+  if (!isRecord(data) || !isRecord(data.user)) return null
+  if (
+    !isNonEmptyString(data.accessToken) ||
+    !isNonEmptyString(data.refreshToken) ||
+    !isNonEmptyString(data.user.id) ||
+    !isNonEmptyString(data.user.phone) ||
+    typeof data.user.displayName !== 'string' ||
+    typeof data.isNewUser !== 'boolean'
+  ) {
+    return null
+  }
+
+  return {
+    browser: {
+      accessToken: data.accessToken,
+      user: {
+        id: data.user.id,
+        phone: data.user.phone,
+        displayName: data.user.displayName,
+      },
+      isNewUser: data.isNewUser,
+    },
+    refreshToken: data.refreshToken,
+  }
+}
+
+function refreshBrowserData(data: unknown): {
+  browser: RefreshBrowserDto
+  refreshToken: string
+} | null {
+  if (
+    !isRecord(data) ||
+    !isNonEmptyString(data.accessToken) ||
+    !isNonEmptyString(data.refreshToken) ||
+    typeof data.expiresIn !== 'number' ||
+    !Number.isSafeInteger(data.expiresIn) ||
+    data.expiresIn < 0
+  ) {
+    return null
+  }
+
+  return {
+    browser: { accessToken: data.accessToken, expiresIn: data.expiresIn },
+    refreshToken: data.refreshToken,
+  }
+}
+
+function safeRetryAfter(response: Response) {
+  const raw = response.headers.get('retry-after')
+  if (raw === null || !/^(0|[1-9]\d*)$/.test(raw)) return undefined
+  const seconds = Number(raw)
+  return Number.isSafeInteger(seconds) ? raw : undefined
+}
+
+async function otpFailure(response: Response) {
+  let code: string | undefined
+  try {
+    const payload: unknown = await response.json()
+    if (isRecord(payload) && isRecord(payload.error)) {
+      const candidate = payload.error.code
+      if (
+        typeof candidate === 'string' &&
+        SAFE_OTP_ERROR_CODES.has(candidate)
+      ) {
+        code = candidate
+      }
+    }
+  } catch {
+    // Malformed upstream errors are intentionally collapsed below.
+  }
+
+  if (!code) return identityFailure(response.status)
+  const retryAfter = safeRetryAfter(response)
+  return jsonProblem(
+    response.status,
+    code,
+    'OTP verification failed',
+    retryAfter === undefined ? undefined : { 'Retry-After': retryAfter },
+  )
+}
+
 async function callIdentity(
   url: string,
   body: JsonRecord,
@@ -160,14 +272,15 @@ export async function handleSessionRequest(
       ...body,
     })
     if (!response) return identityFailure()
-    if (!response.ok) return identityFailure(response.status)
+    if (!response.ok) return otpFailure(response)
 
     const data = await upstreamData(response)
-    if (!isRecord(data) || typeof data.refreshToken !== 'string') {
-      return identityFailure()
-    }
-    const { refreshToken, ...browserPayload } = data
-    return withCookie(json(browserPayload), refreshCookie(url, refreshToken))
+    const validated = verifyBrowserData(data)
+    if (!validated) return identityFailure()
+    return withCookie(
+      json(validated.browser),
+      refreshCookie(url, validated.refreshToken),
+    )
   }
 
   const refreshToken = cookieValue(request)
@@ -190,13 +303,11 @@ export async function handleSessionRequest(
     if (!response.ok) return identityFailure(response.status)
 
     const data = await upstreamData(response)
-    if (!isRecord(data) || typeof data.refreshToken !== 'string') {
-      return identityFailure()
-    }
-    const { refreshToken: nextRefreshToken, ...browserPayload } = data
+    const validated = refreshBrowserData(data)
+    if (!validated) return identityFailure()
     return withCookie(
-      json(browserPayload),
-      refreshCookie(url, nextRefreshToken),
+      json(validated.browser),
+      refreshCookie(url, validated.refreshToken),
     )
   }
 
