@@ -1,5 +1,14 @@
 type Listener = () => void
 
+const clearLegacyAuthStorage = () => {
+  if (typeof window === 'undefined') return
+
+  window.localStorage.removeItem('rozbirka.accessToken')
+  window.localStorage.removeItem('rozbirka.refreshToken')
+}
+
+clearLegacyAuthStorage()
+
 let accessToken: string | null = null
 const clearListeners = new Set<Listener>()
 

@@ -58,19 +58,19 @@ const attachAuth = (config: InternalAxiosRequestConfig) => {
 
 const attachIdempotency = (config: InternalAxiosRequestConfig) => {
   const method = config.method?.toLowerCase()
-  if (
-    config.idempotency &&
-    method !== 'get' &&
-    method !== 'head' &&
-    method !== 'options'
-  ) {
-    const existingKey = config.headers.get('Idempotency-Key')
-    config.headers.set(
-      'Idempotency-Key',
-      config.idempotency.idempotencyKey ??
-        (typeof existingKey === 'string' ? existingKey : crypto.randomUUID()),
-    )
+  const isSafeMethod =
+    method === 'get' || method === 'head' || method === 'options'
+  if (!config.idempotency || isSafeMethod) {
+    config.headers.delete('Idempotency-Key')
+    return config
   }
+
+  const existingKey = config.headers.get('Idempotency-Key')
+  config.headers.set(
+    'Idempotency-Key',
+    config.idempotency.idempotencyKey ??
+      (typeof existingKey === 'string' ? existingKey : crypto.randomUUID()),
+  )
   return config
 }
 

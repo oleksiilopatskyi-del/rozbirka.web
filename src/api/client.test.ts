@@ -228,3 +228,29 @@ it('adds Idempotency-Key only when an idempotent mutation opts in', async () => 
   ])
   expect(randomUUID).toHaveBeenCalledOnce()
 })
+
+it('strips pre-existing idempotency keys unless a mutation explicitly opts in', async () => {
+  const observed: { method: string; key: unknown }[] = []
+  apiClient.defaults.adapter = (config) => {
+    observed.push({
+      method: String(config.method),
+      key: config.headers.get('Idempotency-Key'),
+    })
+    return Promise.resolve(response(config, { ok: true }))
+  }
+  const injectedHeader = { headers: { 'Idempotency-Key': 'injected-key' } }
+
+  await apiClient.post('/cars', {}, injectedHeader)
+  await apiClient.get('/cars', withIdempotency(injectedHeader, {}))
+  await apiClient.head('/cars', withIdempotency(injectedHeader, {}))
+  await apiClient.options('/cars', withIdempotency(injectedHeader, {}))
+  await apiClient.post('/cars', {}, withIdempotency(injectedHeader, {}))
+
+  expect(observed).toEqual([
+    { method: 'post', key: undefined },
+    { method: 'get', key: undefined },
+    { method: 'head', key: undefined },
+    { method: 'options', key: undefined },
+    { method: 'post', key: 'injected-key' },
+  ])
+})

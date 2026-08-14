@@ -209,3 +209,56 @@ it('returns void from logout when the request succeeds', async () => {
   await expect(harness.session.logout()).resolves.toBeUndefined()
   expect(credentials.getAccess()).toBeNull()
 })
+
+it('settles an invalidated refresh before dispatching logout', async () => {
+  credentials.setAccess('current-token')
+  const order: string[] = []
+  let releaseRefresh!: () => void
+  const harness = sessionHarness((config) => {
+    if (config.url === '/session/refresh') {
+      order.push('refresh-start')
+      config.signal?.addEventListener?.('abort', () => {
+        order.push('refresh-abort')
+      })
+      return new Promise((resolve) => {
+        releaseRefresh = () => {
+          order.push('refresh-settle')
+          resolve(
+            response(config, { accessToken: 'late-access', expiresIn: 900 }),
+          )
+        }
+      })
+    }
+
+    if (config.url === '/session/logout') {
+      order.push('logout-start')
+      return Promise.resolve(response(config, undefined))
+    }
+
+    return Promise.reject(new Error(`Unexpected route: ${String(config.url)}`))
+  })
+
+  const refreshProblem = harness.session.refresh().then(
+    () => null,
+    (error: unknown) => normalizeApiProblem(error),
+  )
+  await vi.waitFor(() => expect(order).toEqual(['refresh-start']))
+
+  const logout = harness.session.logout()
+  await vi.waitFor(() => expect(order).toHaveLength(2))
+  const logoutStartedBeforeRefreshSettlement = order.includes('logout-start')
+  const refreshWasAborted = order.includes('refresh-abort')
+  releaseRefresh()
+
+  await expect(refreshProblem).resolves.toMatchObject({ kind: 'cancelled' })
+  await expect(logout).resolves.toBeUndefined()
+  expect(refreshWasAborted).toBe(true)
+  expect(logoutStartedBeforeRefreshSettlement).toBe(false)
+  expect(order).toEqual([
+    'refresh-start',
+    'refresh-abort',
+    'refresh-settle',
+    'logout-start',
+  ])
+  expect(credentials.getAccess()).toBeNull()
+})

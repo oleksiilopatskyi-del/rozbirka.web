@@ -10,6 +10,12 @@ import type {
 
 type AxiosInstanceFactory = (config: CreateAxiosDefaults) => AxiosInstance
 
+interface ActiveRefresh {
+  controller: AbortController
+  settled: Promise<void>
+  settle: () => void
+}
+
 const problemError = (problem: ApiProblem): Error & ApiProblem =>
   Object.assign(new Error(problem.message), problem)
 
@@ -21,6 +27,9 @@ export const createSessionApi = (
     timeout: 15000,
     withCredentials: true,
   })
+  let sessionGeneration = 0
+  let logoutInProgress = false
+  const activeRefreshes = new Set<ActiveRefresh>()
 
   return {
     async verify(req: VerifyOtpRequest): Promise<SessionVerifyResponse> {
@@ -46,9 +55,31 @@ export const createSessionApi = (
     },
 
     async refresh(): Promise<SessionRefreshResponse> {
+      if (logoutInProgress) {
+        throw problemError(normalizeApiProblem(new axios.CanceledError()))
+      }
+
+      const generation = sessionGeneration
+      const controller = new AbortController()
+      let settle!: () => void
+      const activeRefresh: ActiveRefresh = {
+        controller,
+        settled: new Promise((resolve) => {
+          settle = resolve
+        }),
+        settle: () => settle(),
+      }
+      activeRefreshes.add(activeRefresh)
+
       try {
-        const response =
-          await client.post<SessionRefreshResponse>('/session/refresh')
+        const response = await client.post<SessionRefreshResponse>(
+          '/session/refresh',
+          undefined,
+          { signal: controller.signal },
+        )
+        if (generation !== sessionGeneration) {
+          throw new axios.CanceledError()
+        }
         const payload: SessionRefreshResponse = {
           accessToken: response.data.accessToken,
           expiresIn: response.data.expiresIn,
@@ -57,11 +88,21 @@ export const createSessionApi = (
         return payload
       } catch (error) {
         throw problemError(normalizeApiProblem(error))
+      } finally {
+        activeRefreshes.delete(activeRefresh)
+        activeRefresh.settle()
       }
     },
 
     async logout(): Promise<void> {
       const accessToken = credentials.getAccess()
+      sessionGeneration += 1
+      logoutInProgress = true
+      credentials.clear()
+      const refreshes = [...activeRefreshes]
+      refreshes.forEach(({ controller }) => controller.abort())
+      await Promise.all(refreshes.map(({ settled }) => settled))
+
       try {
         await client.post(
           '/session/logout',
@@ -74,6 +115,7 @@ export const createSessionApi = (
         throw problemError(normalizeApiProblem(error))
       } finally {
         credentials.clear()
+        logoutInProgress = false
       }
     },
   }

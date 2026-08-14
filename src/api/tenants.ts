@@ -1,5 +1,6 @@
 import { apiClient } from './client'
 import type { RequestOptions } from './contracts'
+import { normalizeApiProblem } from './errors'
 import { tenantPreference } from './tenant-preference'
 import type { CreateTenantRequest, CreateTenantResponse, Tenant } from './types'
 
@@ -29,7 +30,10 @@ export const tenantsApi = {
 
   async ensureSelected(options: RequestOptions = {}): Promise<Tenant | null> {
     if (tenantPreference.get()) return null
-    const tenants = await this.list(options).catch(() => [])
+    const tenants = await this.list(options).catch((error: unknown) => {
+      if (normalizeApiProblem(error).kind === 'cancelled') throw error
+      return []
+    })
     const first = tenants[0]
     if (first) {
       tenantPreference.set(first.id)
