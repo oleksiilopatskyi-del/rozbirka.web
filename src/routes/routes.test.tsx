@@ -34,4 +34,10 @@ describe('production route boundary', () => {
       expect(paths).not.toContain('/marketplace/shops/:slug')
     }
   })
+
+  it('keeps resumable invitation and scan deep links in production', () => {
+    const paths = createAppRoutes(false).map((route) => route.path)
+    expect(paths).toContain('/invite/:code')
+    expect(paths).toContain('/scan/:qrCode')
+  })
 })

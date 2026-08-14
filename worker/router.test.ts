@@ -157,6 +157,20 @@ describe('edge routing', () => {
     },
   )
 
+  it.each(['/invite/ABCD1234', '/scan/QR-123'])(
+    'serves a noindex SPA shell for resumable deep link %s',
+    async (path) => {
+      const response = await handleRequest(
+        new Request(`https://rozbirka.pro${path}`),
+        env(),
+      )
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('x-robots-tag')).toBe('noindex')
+      expect(await response.text()).toContain('shell')
+    },
+  )
+
   it('rewrites current app shell canonical and OG URL metadata for privacy', async () => {
     const response = await handleRequest(
       new Request('https://rozbirka.pro/privacy?source=test'),

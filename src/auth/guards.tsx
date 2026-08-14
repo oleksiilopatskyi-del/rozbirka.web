@@ -37,11 +37,13 @@ export function RedirectIfAuth({
   children: ReactNode
   to?: string
 }) {
-  const { status } = useAuth()
+  const { status, user } = useAuth()
   const location = useLocation()
 
   if (status === 'loading') return <FullScreenLoader />
-  if (status === 'authenticated') {
+  const mustCompleteName =
+    status === 'authenticated' && Boolean(authenticatedUserWithoutName(user))
+  if (status === 'authenticated' && !mustCompleteName) {
     const fallback = (location.state as { from?: string } | null)?.from ?? to
     return (
       <Navigate
@@ -51,4 +53,10 @@ export function RedirectIfAuth({
     )
   }
   return <>{children}</>
+}
+
+function authenticatedUserWithoutName(
+  user: ReturnType<typeof useAuth>['user'],
+) {
+  return user && user.displayName.trim().length < 2
 }

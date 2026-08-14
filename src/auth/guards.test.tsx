@@ -124,3 +124,34 @@ it('records the full protected path for a guest login return', () => {
     screen.getByText('/login|{"from":"/account?section=team"}'),
   ).toBeInTheDocument()
 })
+
+it('allows an authenticated user without a display name to finish the login name step', () => {
+  vi.mocked(useAuth).mockReturnValue({
+    ...authValue('authenticated'),
+    user: {
+      id: 'user-1',
+      phone: '+380501112233',
+      displayName: ' ',
+      role: 'owner',
+      isActive: true,
+      lastLoginAt: null,
+    },
+  })
+
+  render(
+    <MemoryRouter initialEntries={['/login?invite=ABCD1234']}>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            <RedirectIfAuth>
+              <span>name step</span>
+            </RedirectIfAuth>
+          }
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  expect(screen.getByText('name step')).toBeInTheDocument()
+})

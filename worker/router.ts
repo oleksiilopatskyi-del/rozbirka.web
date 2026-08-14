@@ -6,7 +6,14 @@ export interface EdgeEnv extends SessionEnv {
   }
 }
 
-const spaPaths = [/^\/$/, /^\/privacy\/?$/, /^\/login\/?$/, /^\/account\/?$/]
+const spaPaths = [
+  /^\/$/,
+  /^\/privacy\/?$/,
+  /^\/login\/?$/,
+  /^\/account\/?$/,
+  /^\/invite\/[A-Za-z0-9_-]{4,128}\/?$/,
+  /^\/scan\/[A-Za-z0-9._~-]{1,256}\/?$/,
+]
 
 const prototypePath = /^\/screens(?:\/|$)/
 const staticPath =
@@ -108,7 +115,7 @@ function shouldNoindex(url: URL) {
   return (
     url.hostname.startsWith('qa.') ||
     url.hostname.endsWith('.workers.dev') ||
-    /^\/(?:login|account)(?:\/|$)/.test(url.pathname)
+    /^\/(?:login|account|invite|scan)(?:\/|$)/.test(url.pathname)
   )
 }
 

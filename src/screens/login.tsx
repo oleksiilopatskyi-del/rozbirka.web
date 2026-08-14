@@ -67,7 +67,12 @@ export function LoginScreen() {
     location.search,
     fallbackReturnTo ?? '/account',
   )
-  const [step, setStep] = useState<Step>('phone')
+  const [step, setStep] = useState<Step>(() =>
+    auth.status === 'authenticated' &&
+    (auth.user?.displayName.trim().length ?? 0) < 2
+      ? 'name'
+      : 'phone',
+  )
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
   const [name, setName] = useState('')

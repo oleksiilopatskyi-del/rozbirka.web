@@ -274,3 +274,27 @@ it('preserves invitation before scan and plan intents', async () => {
     await screen.findByRole('link', { name: 'Продовжити' }),
   ).toHaveAttribute('href', '/invite/INVITE_1234')
 })
+
+it('starts an authenticated unnamed user at the name step and resumes the invite', async () => {
+  auth.status = 'authenticated'
+  auth.user = {
+    id: 'user-1',
+    phone: '+380501112233',
+    displayName: ' ',
+    role: 'owner',
+    isActive: true,
+    lastLoginAt: null,
+  }
+  updateName.mockResolvedValue({ ...existingUser, displayName: 'Олена' })
+  const user = userEvent.setup()
+  renderLogin('/login?invite=ABCD1234')
+
+  const nameInput = screen.getByLabelText('Ім’я')
+  await user.type(nameInput, 'Олена')
+  await user.click(screen.getByRole('button', { name: 'Продовжити' }))
+
+  expect(auth.hydrate).toHaveBeenCalledOnce()
+  expect(
+    await screen.findByRole('link', { name: 'Продовжити' }),
+  ).toHaveAttribute('href', '/invite/ABCD1234')
+})
