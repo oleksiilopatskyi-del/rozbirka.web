@@ -43,13 +43,21 @@ const secondTenant: Tenant = {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((done) => {
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((done, fail) => {
     resolve = done
+    reject = fail
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
-function AuthProbe({ onStatus }: { onStatus?: (status: string) => void }) {
+function AuthProbe({
+  onStatus,
+  onHydrate,
+}: {
+  onStatus?: (status: string) => void
+  onHydrate?: (completion: Promise<void>) => void
+}) {
   const auth = useAuth()
 
   useEffect(() => {
@@ -62,7 +70,14 @@ function AuthProbe({ onStatus }: { onStatus?: (status: string) => void }) {
       <span data-testid="user">{auth.user?.displayName ?? 'none'}</span>
       <span data-testid="tenant">{auth.tenant?.id ?? 'none'}</span>
       <span data-testid="tenants">{auth.tenants.length}</span>
-      <button type="button" onClick={() => void auth.hydrate()}>
+      <button
+        type="button"
+        onClick={() => {
+          const completion = auth.hydrate()
+          onHydrate?.(completion)
+          void completion
+        }}
+      >
         hydrate
       </button>
       <button type="button" onClick={() => void auth.signOut()}>
@@ -208,6 +223,113 @@ it('resets React auth state once when a mid-session refresh fails', async () => 
   })
   expect(screen.getByTestId('user')).toHaveTextContent('none')
   expect(statuses.filter((status) => status === 'guest')).toHaveLength(1)
+})
+
+it('does not restore authenticated state when bootstrap resolves after credentials clear', async () => {
+  credentials.setAccess('current-access')
+  const pendingUser = deferred<User>()
+  const pendingTenants = deferred<Tenant[]>()
+  vi.mocked(authApi.me).mockReturnValue(pendingUser.promise)
+  vi.mocked(tenantsApi.list).mockReturnValue(pendingTenants.promise)
+
+  render(
+    <AuthProvider>
+      <AuthProbe />
+    </AuthProvider>,
+  )
+
+  await waitFor(() => {
+    expect(authApi.me).toHaveBeenCalledOnce()
+    expect(tenantsApi.list).toHaveBeenCalledOnce()
+  })
+
+  act(() => credentials.clear())
+  await expectStatus('guest')
+
+  await act(async () => {
+    pendingUser.resolve(user)
+    pendingTenants.resolve([firstTenant, secondTenant])
+    await Promise.all([pendingUser.promise, pendingTenants.promise])
+  })
+
+  expect(screen.getByTestId('status')).toHaveTextContent('guest')
+  expect(screen.getByTestId('user')).toHaveTextContent('none')
+  expect(screen.getByTestId('tenant')).toHaveTextContent('none')
+  expect(credentials.getAccess()).toBeNull()
+})
+
+it('ignores a stale bootstrap failure after a newer hydrate authenticates', async () => {
+  credentials.setAccess('initial-access')
+  const staleUser = deferred<User>()
+  const staleTenants = deferred<Tenant[]>()
+  vi.mocked(authApi.me)
+    .mockReturnValueOnce(staleUser.promise)
+    .mockResolvedValueOnce(user)
+  vi.mocked(tenantsApi.list)
+    .mockReturnValueOnce(staleTenants.promise)
+    .mockResolvedValueOnce([firstTenant, secondTenant])
+  const userEventApi = userEvent.setup()
+
+  render(
+    <AuthProvider>
+      <AuthProbe />
+    </AuthProvider>,
+  )
+
+  await waitFor(() => {
+    expect(authApi.me).toHaveBeenCalledOnce()
+    expect(tenantsApi.list).toHaveBeenCalledOnce()
+  })
+
+  credentials.setAccess('newer-access')
+  await userEventApi.click(screen.getByRole('button', { name: 'hydrate' }))
+  await expectStatus('authenticated')
+
+  await act(async () => {
+    staleUser.reject(new Error('stale profile failure'))
+    staleTenants.resolve([firstTenant, secondTenant])
+    await Promise.allSettled([staleUser.promise, staleTenants.promise])
+  })
+
+  expect(screen.getByTestId('status')).toHaveTextContent('authenticated')
+  expect(screen.getByTestId('user')).toHaveTextContent('Власник')
+  expect(credentials.getAccess()).toBe('newer-access')
+})
+
+it('settles a superseded hydrate with the newer terminal operation', async () => {
+  credentials.setAccess('initial-access')
+  const completions: Promise<void>[] = []
+  const userEventApi = userEvent.setup()
+
+  render(
+    <AuthProvider>
+      <AuthProbe onHydrate={(completion) => completions.push(completion)} />
+    </AuthProvider>,
+  )
+  await expectStatus('authenticated')
+
+  const staleUser = deferred<User>()
+  const staleTenants = deferred<Tenant[]>()
+  vi.mocked(authApi.me)
+    .mockReturnValueOnce(staleUser.promise)
+    .mockResolvedValueOnce(user)
+  vi.mocked(tenantsApi.list)
+    .mockReturnValueOnce(staleTenants.promise)
+    .mockResolvedValueOnce([firstTenant, secondTenant])
+
+  await userEventApi.click(screen.getByRole('button', { name: 'hydrate' }))
+  await userEventApi.click(screen.getByRole('button', { name: 'hydrate' }))
+  await expectStatus('authenticated')
+  expect(completions).toHaveLength(2)
+
+  let staleCompletionSettled = false
+  void completions[0]?.then(() => {
+    staleCompletionSettled = true
+  })
+  await completions[1]
+  await act(async () => Promise.resolve())
+
+  expect(staleCompletionSettled).toBe(true)
 })
 
 it('signs out locally even when Worker logout fails', async () => {

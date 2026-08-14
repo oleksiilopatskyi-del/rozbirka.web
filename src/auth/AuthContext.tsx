@@ -33,12 +33,21 @@ export interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+interface AuthOperation {
+  generation: number
+  tenantPreferenceId: string | null
+  completion: Promise<void>
+  settleCompletion: (next?: PromiseLike<void>) => void
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [user, setUser] = useState<User | null>(null)
   const [tenant, setTenantState] = useState<Tenant | null>(null)
   const [tenants, setTenants] = useState<Tenant[]>([])
   const bootstrappedRef = useRef(false)
+  const authGenerationRef = useRef(0)
+  const activeOperationRef = useRef<AuthOperation | null>(null)
 
   const reset = useCallback(() => {
     setUser((current) => (current === null ? current : null))
@@ -47,41 +56,101 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus((current) => (current === 'guest' ? current : 'guest'))
   }, [])
 
-  const bootstrap = useCallback(async () => {
-    try {
-      if (!credentials.getAccess()) {
-        await sessionApi.refresh()
+  const restorePendingTenantPreference = useCallback(
+    (operation: AuthOperation | null) => {
+      if (operation?.tenantPreferenceId && tenantPreference.get() === null) {
+        tenantPreference.set(operation.tenantPreferenceId)
       }
+    },
+    [],
+  )
 
-      const storedId = tenantPreference.get()
-      tenantPreference.clear()
+  const invalidateAuth = useCallback(() => {
+    authGenerationRef.current += 1
+    restorePendingTenantPreference(activeOperationRef.current)
+    activeOperationRef.current?.settleCompletion()
+    activeOperationRef.current = null
+    reset()
+  }, [reset, restorePendingTenantPreference])
 
-      let me: User
-      let list: Tenant[]
-      try {
-        ;[me, list] = await Promise.all([authApi.me(), tenantsApi.list()])
-      } catch (error) {
-        if (storedId) tenantPreference.set(storedId)
-        throw error
+  const bootstrap = useCallback((): Promise<void> => {
+    const supersededOperation = activeOperationRef.current
+    restorePendingTenantPreference(supersededOperation)
+
+    let settleCompletion!: (next?: PromiseLike<void>) => void
+    const completion = new Promise<void>((resolve) => {
+      settleCompletion = (next) => {
+        if (next) resolve(next)
+        else resolve()
       }
+    })
 
-      const storedTenant = list.find((candidate) => candidate.id === storedId)
-      const current = storedTenant ?? list[0] ?? null
-      if (current) tenantPreference.set(current.id)
-      setUser(me)
-      setTenants(list)
-      setTenantState(current)
-      setStatus('authenticated')
-    } catch (error) {
-      const problem = normalizeApiProblem(error)
-      credentials.clear()
-      reset()
-
-      if (problem.kind === 'session-expired') return
-      // Non-session bootstrap failures deliberately settle as guest too. Keeping
-      // the normalized problem here makes this branch ready for observability.
+    const operation: AuthOperation = {
+      generation: authGenerationRef.current + 1,
+      tenantPreferenceId: null,
+      completion,
+      settleCompletion,
     }
-  }, [reset])
+    authGenerationRef.current = operation.generation
+    activeOperationRef.current = operation
+    supersededOperation?.settleCompletion(operation.completion)
+
+    const isCurrent = () =>
+      authGenerationRef.current === operation.generation &&
+      activeOperationRef.current === operation
+
+    const run = async () => {
+      try {
+        if (!credentials.getAccess()) {
+          await sessionApi.refresh()
+        }
+        if (!isCurrent() || !credentials.getAccess()) {
+          return
+        }
+
+        operation.tenantPreferenceId = tenantPreference.get()
+        tenantPreference.clear()
+
+        const [me, list] = await Promise.all([authApi.me(), tenantsApi.list()])
+        if (!isCurrent() || !credentials.getAccess()) {
+          return
+        }
+
+        activeOperationRef.current = null
+        const storedTenant = list.find(
+          (candidate) => candidate.id === operation.tenantPreferenceId,
+        )
+        const current = storedTenant ?? list[0] ?? null
+        if (current) tenantPreference.set(current.id)
+        setUser(me)
+        setTenants(list)
+        setTenantState(current)
+        setStatus('authenticated')
+        operation.settleCompletion()
+      } catch (error) {
+        if (!isCurrent()) {
+          return
+        }
+
+        const problem = normalizeApiProblem(error)
+        restorePendingTenantPreference(operation)
+        activeOperationRef.current = null
+        credentials.clear()
+        if (authGenerationRef.current === operation.generation) {
+          authGenerationRef.current += 1
+          reset()
+        }
+        operation.settleCompletion()
+
+        if (problem.kind === 'session-expired') return
+        // Non-session bootstrap failures deliberately settle as guest too. Keeping
+        // the normalized problem here makes this branch ready for observability.
+      }
+    }
+
+    void run()
+    return operation.completion
+  }, [reset, restorePendingTenantPreference])
 
   useEffect(() => {
     if (bootstrappedRef.current) return
@@ -91,8 +160,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Sync React state when the API client wipes tokens (e.g. refresh fails mid-session).
   useEffect(() => {
-    return credentials.onCleared(reset)
-  }, [reset])
+    return credentials.onCleared(invalidateAuth)
+  }, [invalidateAuth])
 
   const hydrate = useCallback(
     async (accessToken?: string) => {
@@ -116,6 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback<AuthContextValue['signOut']>(
     async ({ silent } = {}) => {
+      invalidateAuth()
       if (!silent) {
         try {
           await authApi.logout()
@@ -126,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       credentials.clear()
       reset()
     },
-    [reset],
+    [invalidateAuth, reset],
   )
 
   const value: AuthContextValue = {
