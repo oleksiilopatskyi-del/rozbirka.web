@@ -1,4 +1,4 @@
-import { useMemo, type ComponentProps } from 'react'
+import { useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import { Ellipsis, LogOut, X } from 'lucide-react'
 import { Dialog } from 'radix-ui'
 import { NavLink } from 'react-router'
@@ -164,12 +164,14 @@ function TabletNavigation({
         />
       </nav>
       <div className="mt-4 border-t border-white/[0.06] pt-4">
-        <TenantSwitcher
-          compact
-          tenant={tenant}
-          tenants={tenants}
-          onSwitch={onSwitchTenant}
-        />
+        <RailControl label="Перемкнути розбірку">
+          <TenantSwitcher
+            compact
+            tenant={tenant}
+            tenants={tenants}
+            onSwitch={onSwitchTenant}
+          />
+        </RailControl>
         <LogoutButton onLogout={onLogout} presentation="rail" />
       </div>
     </aside>
@@ -256,17 +258,16 @@ function LogoutButton({
   onLogout: () => Promise<void>
   presentation: 'desktop' | 'rail' | 'dialog'
 }) {
-  return (
+  const button = (
     <button
       type="button"
       aria-label={presentation === 'rail' ? 'Вийти' : undefined}
-      title={presentation === 'rail' ? 'Вийти' : undefined}
       onClick={() => void onLogout()}
       className={cn(
         'min-h-11 min-w-11 rounded-xl text-neutral-400 transition-colors hover:bg-white/[0.05] hover:text-white',
         presentation === 'desktop' &&
           'mt-3 flex w-full items-center gap-3 px-4 text-sm',
-        presentation === 'rail' && 'mt-3 grid place-items-center',
+        presentation === 'rail' && 'grid place-items-center',
         presentation === 'dialog' &&
           'mt-3 flex w-full items-center gap-3 px-3 py-2 text-sm',
       )}
@@ -274,6 +275,14 @@ function LogoutButton({
       <LogOut aria-hidden className="size-5 shrink-0" />
       {presentation !== 'rail' && <span>Вийти</span>}
     </button>
+  )
+
+  return presentation === 'rail' ? (
+    <RailControl className="mt-3" label="Вийти">
+      {button}
+    </RailControl>
+  ) : (
+    button
   )
 }
 
@@ -290,7 +299,13 @@ function NavigationList({
     <ul role="list" className={cn('grid gap-1', className)}>
       {entries.map((entry) => (
         <li key={entry.key}>
-          <NavigationLink entry={entry} presentation={presentation} />
+          {presentation === 'rail' ? (
+            <RailControl label={entry.label}>
+              <NavigationLink entry={entry} presentation={presentation} />
+            </RailControl>
+          ) : (
+            <NavigationLink entry={entry} presentation={presentation} />
+          )}
         </li>
       ))}
     </ul>
@@ -326,11 +341,42 @@ function NavigationLink({
         )
       }
       end
-      title={presentation === 'rail' ? entry.label : undefined}
       to={entry.to}
     >
       <Icon aria-hidden className="size-5 shrink-0" />
       {presentation !== 'rail' && <span>{entry.label}</span>}
     </NavLink>
+  )
+}
+
+function RailControl({
+  children,
+  className,
+  label,
+}: {
+  children: ReactNode
+  className?: string
+  label: string
+}) {
+  const [hasFocus, setHasFocus] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+
+  return (
+    <div
+      className={cn('relative', className)}
+      onBlur={() => setHasFocus(false)}
+      onFocus={() => setHasFocus(true)}
+      onPointerEnter={() => setIsHovered(true)}
+      onPointerLeave={() => setIsHovered(false)}
+    >
+      {children}
+      <span
+        className="cabinet-rail-tooltip"
+        hidden={!hasFocus && !isHovered}
+        role="tooltip"
+      >
+        {label}
+      </span>
+    </div>
   )
 }

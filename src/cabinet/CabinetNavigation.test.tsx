@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { expect, it, vi } from 'vitest'
@@ -113,6 +113,48 @@ it('omits released links denied by the shared cabinet policy', () => {
     within(desktop).queryByRole('link', { name: 'Підписка' }),
   ).not.toBeInTheDocument()
   expect(within(desktop).getByRole('link', { name: 'Профіль' })).toBeVisible()
+})
+
+it('shows and restores every tablet rail label on focus and hover', async () => {
+  const user = userEvent.setup()
+  renderNavigation()
+  const tabletNavigation = screen.getByRole('navigation', {
+    name: 'Навігація планшета',
+  })
+  const rail = tabletNavigation.closest('aside')
+  if (rail === null) throw new Error('Tablet rail was not rendered')
+
+  const controls = [
+    ...['Головна', 'Підписка', 'Тарифи', 'Платежі', 'Профіль'].map(
+      (label) =>
+        [
+          within(tabletNavigation).getByRole('link', { name: label }),
+          label,
+        ] as const,
+    ),
+    [
+      within(rail).getByRole('combobox', { name: 'Перемкнути розбірку' }),
+      'Перемкнути розбірку',
+    ] as const,
+    [within(rail).getByRole('button', { name: 'Вийти' }), 'Вийти'] as const,
+  ]
+
+  for (const [control, label] of controls) {
+    const tooltip = within(rail).getByText(label, {
+      selector: '[role="tooltip"]',
+    })
+    expect(tooltip).not.toBeVisible()
+
+    fireEvent.focus(control)
+    expect(tooltip).toBeVisible()
+    fireEvent.blur(control)
+    expect(tooltip).not.toBeVisible()
+
+    await user.hover(control)
+    expect(tooltip).toBeVisible()
+    await user.unhover(control)
+    expect(tooltip).not.toBeVisible()
+  }
 })
 
 it('opens the mobile More dialog by keyboard and restores trigger focus', async () => {

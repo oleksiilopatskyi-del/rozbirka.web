@@ -1,5 +1,6 @@
-import { lazy } from 'react'
+import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SubscriptionDto } from '../api/types'
 import type { CabinetContextValue } from './CabinetContext'
@@ -30,6 +31,16 @@ vi.mock('./module-registry', async (importOriginal) => {
 })
 
 const mockedUseCabinet = vi.mocked(useCabinet)
+
+const renderBoundary = (
+  module: CabinetModuleKey,
+  screenComponent: LazyExoticComponent<ComponentType<CabinetModuleScreenProps>>,
+) =>
+  render(
+    <MemoryRouter>
+      <ModuleBoundary module={module} screen={screenComponent} />
+    </MemoryRouter>,
+  )
 
 const subscription: SubscriptionDto = {
   state: 'active',
@@ -100,11 +111,15 @@ describe('ModuleBoundary', () => {
     )
     const Screen = lazy(load)
 
-    render(<ModuleBoundary module="cars" screen={Screen} />)
+    renderBoundary('cars', Screen)
 
     expect(
       screen.getByRole('heading', { name: 'Модуль готується до запуску' }),
     ).toBeVisible()
+    expect(screen.getByRole('link', { name: 'До головної' })).toHaveAttribute(
+      'href',
+      '/app/koval/dashboard',
+    )
     expect(screen.queryByText('Cars module code')).not.toBeInTheDocument()
     expect(load).not.toHaveBeenCalled()
   })
@@ -119,7 +134,7 @@ describe('ModuleBoundary', () => {
     )
     const Screen = lazy(load)
 
-    render(<ModuleBoundary module="billing" screen={Screen} />)
+    renderBoundary('billing', Screen)
 
     expect(
       await screen.findByRole('heading', { name: 'Підписка' }),
@@ -138,7 +153,7 @@ describe('ModuleBoundary', () => {
     )
     const Screen = lazy(load)
 
-    render(<ModuleBoundary module="billing" screen={Screen} />)
+    renderBoundary('billing', Screen)
 
     expect(
       screen.getByRole('heading', { name: 'Недостатньо прав' }),
@@ -158,7 +173,7 @@ describe('ModuleBoundary', () => {
     )
     const Screen = lazy(load)
 
-    render(<ModuleBoundary module="reports" screen={Screen} />)
+    renderBoundary('reports', Screen)
 
     expect(
       screen.getByRole('heading', {
@@ -166,6 +181,10 @@ describe('ModuleBoundary', () => {
       }),
     ).toBeVisible()
     expect(screen.getByText(/поточн.*тариф/i)).toBeVisible()
+    expect(screen.getByRole('link', { name: 'До головної' })).toHaveAttribute(
+      'href',
+      '/app/koval/dashboard',
+    )
     expect(
       screen.queryByRole('heading', { name: 'Модуль готується до запуску' }),
     ).not.toBeInTheDocument()

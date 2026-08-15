@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { billingApi } from '../api/billing'
 import { tenantPreference } from '../api/tenant-preference'
 import type { Tenant } from '../api/types'
@@ -320,6 +320,14 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
       ? (auth.tenants.find((candidate) => candidate.slug === tenantSlug) ??
         null)
       : null
+  const recoveryTenant =
+    auth.status === 'authenticated' && auth.user !== null
+      ? (auth.tenants.find(
+          (candidate) => candidate.id === auth.tenant?.id && candidate.isActive,
+        ) ??
+        auth.tenants.find((candidate) => candidate.isActive) ??
+        null)
+      : null
 
   const viewState = useMemo<CabinetState>(() => {
     if (auth.status !== 'authenticated' || auth.user === null) {
@@ -401,10 +409,10 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
       )
       break
     case 'not-found':
-      content = stateMessage('Розбірку не знайдено', 'alert')
+      content = tenantRecoveryState('Розбірку не знайдено', recoveryTenant)
       break
     case 'inactive':
-      content = stateMessage('Розбірка неактивна', 'alert')
+      content = tenantRecoveryState('Розбірка неактивна', recoveryTenant)
       break
     default:
       content = loadingState
@@ -425,6 +433,30 @@ const stateMessage = (message: string, role: 'status' | 'alert' = 'status') => (
 )
 
 const loadingState = stateMessage('Завантажуємо розбірку…')
+
+const tenantRecoveryState = (
+  message: string,
+  recoveryTenant: Tenant | null,
+) => (
+  <div
+    className="bg-background grid min-h-dvh place-items-center px-4 text-center text-neutral-400"
+    role="alert"
+  >
+    <div className="grid max-w-md justify-items-center gap-4">
+      <p>{message}</p>
+      <Link
+        className="bg-brand text-brand-foreground flex min-h-11 items-center rounded-full px-5 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        to={
+          recoveryTenant === null
+            ? '/'
+            : cabinetPath(recoveryTenant.slug, 'dashboard')
+        }
+      >
+        {recoveryTenant === null ? 'На головну' : 'До активної розбірки'}
+      </Link>
+    </div>
+  </div>
+)
 
 // eslint-disable-next-line react-refresh/only-export-components -- hook colocated with its provider.
 export function useCabinet(): CabinetContextValue {

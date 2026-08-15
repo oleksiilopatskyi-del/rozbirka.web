@@ -301,6 +301,9 @@ it('does not fall back to another tenant for an unknown URL slug', async () => {
   renderCabinet('/app/missing/dashboard')
 
   expect(await screen.findByText('Розбірку не знайдено')).toBeVisible()
+  expect(
+    screen.getByRole('link', { name: 'До активної розбірки' }),
+  ).toHaveAttribute('href', '/app/a/dashboard')
   expect(accessApi.get).not.toHaveBeenCalled()
   expect(tenantPreference.get()).toBe(tenantA.id)
 })
@@ -309,9 +312,36 @@ it('does not load tenant access for an inactive tenant', async () => {
   renderCabinet('/app/inactive/dashboard')
 
   expect(await screen.findByText('Розбірка неактивна')).toBeVisible()
+  expect(
+    screen.getByRole('link', { name: 'До активної розбірки' }),
+  ).toHaveAttribute('href', '/app/a/dashboard')
   expect(accessApi.get).not.toHaveBeenCalled()
   expect(tenantPreference.get()).toBe(tenantA.id)
 })
+
+it.each([
+  ['/app/missing/dashboard', 'Розбірку не знайдено'],
+  ['/app/inactive/dashboard', 'Розбірка неактивна'],
+])(
+  'offers public-home recovery at %s when no active membership exists',
+  async (path, message) => {
+    vi.mocked(tenantsApi.list).mockResolvedValue([inactiveTenant])
+    tenantPreference.set(inactiveTenant.id)
+
+    renderCabinet(path)
+
+    expect(await screen.findByText(message)).toBeVisible()
+    expect(screen.getByRole('link', { name: 'На головну' })).toHaveAttribute(
+      'href',
+      '/',
+    )
+    expect(
+      screen.queryByRole('link', { name: 'До активної розбірки' }),
+    ).not.toBeInTheDocument()
+    expect(accessApi.get).not.toHaveBeenCalled()
+    expect(tenantPreference.get()).toBe(inactiveTenant.id)
+  },
+)
 
 it('keeps the current tenant untouched when an inactive tenant is selected', async () => {
   const preferenceSet = vi.spyOn(tenantPreference, 'set')
