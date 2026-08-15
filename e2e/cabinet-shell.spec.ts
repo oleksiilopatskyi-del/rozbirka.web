@@ -94,8 +94,51 @@ const blockedSubscription = {
   canCancel: false,
 }
 
+const publicPlans = [
+  {
+    code: 'lite_monthly',
+    name: 'Lite',
+    amount: 29000,
+    currency: 'UAH',
+    interval: '1m',
+    trialDays: 14,
+    limits: {
+      cars: 10,
+      intakes: 10,
+      parts: 1000,
+      users: 2,
+      cashRegisters: 1,
+      photosPerPart: null,
+    },
+    features: [],
+  },
+]
+
+const pendingPaymentPage = {
+  items: [
+    {
+      id: 'payment-1',
+      type: 'checkout',
+      status: 'pending',
+      amount: 29000,
+      currency: 'UAH',
+      providerInvoiceId: 'invoice-pending-1',
+      checkoutUrl: 'https://pay.example/secure-checkout',
+      checkoutExpiresAt: '2026-08-15T12:00:00.000Z',
+      createdAt: '2026-08-15T10:00:00.000Z',
+    },
+  ],
+  page: 1,
+  pageSize: 10,
+  total: 1,
+  totalPages: 1,
+}
+
 interface CabinetFixtureOptions {
   sobolBilling?: boolean
+  pendingPayment?: boolean
+  subscribeFailureStatus?: 403 | 409
+  cancelPaymentFailureStatus?: 403 | 409
 }
 
 interface CabinetRequest {
@@ -154,11 +197,14 @@ async function installCabinetApiBoundary(
     }
     if (path.startsWith('/api/v1/')) requests.push({ path, tenantId })
 
-    const tenantScopedPaths = new Set([
-      '/api/v1/me/permissions',
-      '/api/v1/billing/subscription',
-    ])
-    if (tenantScopedPaths.has(path)) {
+    const isTenantScoped =
+      path === '/api/v1/me/permissions' ||
+      path === '/api/v1/billing/subscription' ||
+      path === '/api/v1/billing/payments' ||
+      path === '/api/v1/billing/subscribe' ||
+      path === '/api/v1/billing/cancel' ||
+      /^\/api\/v1\/billing\/payments\/[^/]+\/cancel$/.test(path)
+    if (isTenantScoped) {
       if (tenantId === null) {
         await fulfillData(
           route,
@@ -259,6 +305,64 @@ async function installCabinetApiBoundary(
         route,
         tenantId === 'tenant-2' ? blockedSubscription : activeSubscription,
       )
+      return
+    }
+    if (path === '/api/v1/billing/plans' && request.method() === 'GET') {
+      await fulfillData(route, publicPlans)
+      return
+    }
+    if (path === '/api/v1/billing/payments' && request.method() === 'GET') {
+      await fulfillData(
+        route,
+        options.pendingPayment
+          ? pendingPaymentPage
+          : {
+              items: [],
+              page: 1,
+              pageSize: 10,
+              total: 0,
+              totalPages: 0,
+            },
+      )
+      return
+    }
+    if (path === '/api/v1/billing/subscribe' && request.method() === 'POST') {
+      if (options.subscribeFailureStatus) {
+        await fulfillData(
+          route,
+          {
+            error: {
+              code: 'BILLING_DENIED',
+              message: 'Raw fixture billing denial',
+            },
+          },
+          options.subscribeFailureStatus,
+        )
+      } else {
+        await fulfillData(route, {
+          checkoutUrl: 'https://pay.example/new-checkout',
+        })
+      }
+      return
+    }
+    if (
+      /^\/api\/v1\/billing\/payments\/[^/]+\/cancel$/.test(path) &&
+      request.method() === 'POST'
+    ) {
+      if (options.cancelPaymentFailureStatus) {
+        await fulfillData(
+          route,
+          {
+            error: {
+              code: 'PAYMENT_STATUS_CHANGED',
+              message: 'Raw fixture payment conflict',
+            },
+          },
+          options.cancelPaymentFailureStatus,
+        )
+      } else {
+        await fulfillData(route, null)
+      }
       return
     }
 
@@ -748,6 +852,76 @@ test('visible mobile cabinet controls meet the 44px target minimum', async ({
   expect(boxes.every(({ width, height }) => width >= 44 && height >= 44)).toBe(
     true,
   )
+})
+
+for (const width of [320, 768]) {
+  test(`pending payment wraps without overflow and keeps 44px actions at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await installCabinetApiBoundary(page, { pendingPayment: true })
+    await loginFrom(page)
+    await page.goto('/app/koval/settings/billing/payments')
+
+    const checkout = page.getByRole('link', { name: 'Продовжити оплату' })
+    const cancel = page.getByRole('button', { name: 'Скасувати' })
+    await expect(checkout).toBeVisible()
+    await expect(cancel).toBeVisible()
+    await expect(checkout).toHaveAttribute(
+      'href',
+      'https://pay.example/secure-checkout',
+    )
+    await expect(checkout).toHaveAttribute('target', '_blank')
+    await expect(checkout).toHaveAttribute('rel', 'noopener noreferrer')
+
+    const actionBoxes = await checkout.or(cancel).evaluateAll((elements) =>
+      elements.map((element) => {
+        const rect = element.getBoundingClientRect()
+        return { width: rect.width, height: rect.height }
+      }),
+    )
+    expect(actionBoxes).toHaveLength(2)
+    expect(
+      actionBoxes.every(({ width: boxWidth, height }) =>
+        Boolean(boxWidth >= 44 && height >= 44),
+      ),
+    ).toBe(true)
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true)
+  })
+}
+
+test('billing mutation failures stay truthful and handled in Chromium', async ({
+  page,
+}) => {
+  const pageErrors: Error[] = []
+  page.on('pageerror', (error) => pageErrors.push(error))
+  await installCabinetApiBoundary(page, {
+    pendingPayment: true,
+    subscribeFailureStatus: 403,
+    cancelPaymentFailureStatus: 409,
+  })
+  await loginFrom(page)
+
+  await page.goto('/app/koval/settings/billing/plans')
+  await page.getByRole('button', { name: 'Обрати' }).click()
+  const checkoutAlert = page.getByRole('alert')
+  await expect(checkoutAlert).toContainText(
+    'У вас більше немає права змінювати підписку.',
+  )
+  await expect(checkoutAlert).not.toContainText('Raw fixture billing denial')
+
+  await page.goto('/app/koval/settings/billing/payments')
+  await page.getByRole('button', { name: 'Скасувати' }).click()
+  const paymentAlert = page.getByRole('alert')
+  await expect(paymentAlert).toContainText(
+    'Статус платежу вже змінився. Оновіть список платежів.',
+  )
+  await expect(paymentAlert).not.toContainText('Raw fixture payment conflict')
+  expect(pageErrors).toEqual([])
 })
 
 test('logs out normally from the cabinet shell @cabinet-smoke', async ({

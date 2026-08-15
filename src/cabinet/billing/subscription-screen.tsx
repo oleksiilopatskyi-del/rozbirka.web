@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { billingApi } from '@/api/billing'
+import { normalizeApiProblem } from '@/api/errors'
 import type { BillingState, LimitUsageDto, SubscriptionDto } from '@/api/types'
 import type { TenantAccessSnapshot } from '../access-types'
 import { cn } from '@/lib/utils'
 import { cabinetPath } from '../cabinet-paths'
+import { ModuleAccessDeniedError } from '../policy'
 import {
   BillingHeader,
   BillingMutationGate,
@@ -14,13 +16,44 @@ import {
   useBillingMutation,
 } from './billing-layout'
 
+type SubscriptionMutation = 'checkout' | 'cancel'
+
+type SubscriptionMutationState =
+  | { kind: 'idle' }
+  | {
+      kind: 'pending'
+      generation: number
+      mutation: SubscriptionMutation
+    }
+  | {
+      kind: 'mutation-error'
+      generation: number
+      message: string
+    }
+
 export function SubscriptionScreen() {
   const navigate = useNavigate()
   const { cabinet, controlDecision, requireLatestMutation } =
     useBillingMutation('billing')
   const snapshotSubscription = cabinet.snapshot?.subscription ?? null
-  const [subscription, setSubscription] = useState(snapshotSubscription)
-  const [busy, setBusy] = useState(false)
+  const generation = cabinet.snapshot?.generation
+  const latestSnapshotRef = useRef(cabinet.snapshot)
+  const [refreshedSubscription, setRefreshedSubscription] = useState<{
+    generation: number
+    value: SubscriptionDto
+  } | null>(null)
+  const [mutationState, setMutationState] = useState<SubscriptionMutationState>(
+    { kind: 'idle' },
+  )
+  const subscription =
+    refreshedSubscription !== null &&
+    refreshedSubscription.generation === generation
+      ? refreshedSubscription.value
+      : snapshotSubscription
+
+  useEffect(() => {
+    latestSnapshotRef.current = cabinet.snapshot
+  }, [cabinet.snapshot])
 
   if (!subscription || !cabinet.targetTenant) return <EmptyBillingPanel />
 
@@ -28,44 +61,80 @@ export function SubscriptionScreen() {
     void navigate(cabinetPath(cabinet.targetTenant!.slug, 'plans'))
 
   const subscribe = async () => {
-    setBusy(true)
+    let scope: ReturnType<typeof requireLatestMutation> | null = null
     try {
-      const scope = requireLatestMutation()
+      scope = requireLatestMutation()
+      setMutationState({
+        kind: 'pending',
+        generation: scope.generation,
+        mutation: 'checkout',
+      })
       const { checkoutUrl } = await billingApi.subscribe(undefined, {
         signal: scope.signal,
       })
-      if (!scope.signal.aborted) window.location.assign(checkoutUrl)
-    } catch {
-      setBusy(false)
+      if (isCurrentScope(scope, latestSnapshotRef.current)) {
+        window.location.assign(checkoutUrl)
+      }
+    } catch (error) {
+      if (scope && !isCurrentScope(scope, latestSnapshotRef.current)) return
+      setMutationState({
+        kind: 'mutation-error',
+        generation: scope?.generation ?? generation ?? -1,
+        message: subscriptionFailureMessage('checkout', error),
+      })
     }
   }
 
   const cancel = async () => {
     if (!confirm('Скасувати підписку?')) return
-    setBusy(true)
+    let scope: ReturnType<typeof requireLatestMutation> | null = null
+    let cancellationCompleted = false
     try {
-      const scope = requireLatestMutation()
+      scope = requireLatestMutation()
+      setMutationState({
+        kind: 'pending',
+        generation: scope.generation,
+        mutation: 'cancel',
+      })
       await billingApi.cancel(undefined, { signal: scope.signal })
-      if (scope.signal.aborted) return
+      cancellationCompleted = true
+      if (!isCurrentScope(scope, latestSnapshotRef.current)) return
       const refreshed = await billingApi.getSubscription({
         signal: scope.signal,
       })
-      if (
-        !scope.signal.aborted &&
-        cabinet.snapshot?.tenantId === scope.tenantId &&
-        cabinet.snapshot.generation === scope.generation
-      ) {
-        setSubscription(refreshed)
+      if (isCurrentScope(scope, latestSnapshotRef.current)) {
+        setRefreshedSubscription({
+          generation: scope.generation,
+          value: refreshed,
+        })
+        setMutationState({ kind: 'idle' })
       }
-    } finally {
-      setBusy(false)
+    } catch (error) {
+      if (scope && !isCurrentScope(scope, latestSnapshotRef.current)) return
+      setMutationState({
+        kind: 'mutation-error',
+        generation: scope?.generation ?? generation ?? -1,
+        message: cancellationCompleted
+          ? 'Підписку скасовано, але не вдалося оновити її стан. Оновіть сторінку.'
+          : subscriptionFailureMessage('cancel', error),
+      })
     }
   }
+
+  const mutationForGeneration =
+    mutationState.kind !== 'idle' && mutationState.generation === generation
+      ? mutationState
+      : { kind: 'idle' as const }
 
   return (
     <SubscriptionPanel
       subscription={subscription}
-      busy={busy}
+      busy={mutationForGeneration.kind === 'pending'}
+      mutationError={
+        mutationForGeneration.kind === 'mutation-error'
+          ? mutationForGeneration.message
+          : null
+      }
       manageDecision={controlDecision}
       onSubscribe={() => void subscribe()}
       onCancel={() => void cancel()}
@@ -77,6 +146,7 @@ export function SubscriptionScreen() {
 function SubscriptionPanel({
   subscription,
   busy,
+  mutationError,
   manageDecision,
   onSubscribe,
   onCancel,
@@ -84,6 +154,7 @@ function SubscriptionPanel({
 }: {
   subscription: NonNullable<TenantAccessSnapshot['subscription']>
   busy: boolean
+  mutationError: string | null
   manageDecision: ReturnType<typeof useBillingMutation>['controlDecision']
   onSubscribe: () => void
   onCancel: () => void
@@ -126,6 +197,14 @@ function SubscriptionPanel({
         title="Підписка"
         subtitle="Керуй своїм планом та статусом доступу"
       />
+      {mutationError && (
+        <p
+          role="alert"
+          className="rounded-2xl border border-red-500/30 bg-red-500/[0.06] px-5 py-4 text-[14px] text-red-200"
+        >
+          {mutationError}
+        </p>
+      )}
       <div className="bg-brand text-brand-foreground rounded-(--radius-card) flex flex-col gap-8 p-8 lg:p-10">
         <div className="flex flex-col gap-3">
           <span className="inline-flex w-fit items-center rounded-full bg-black/15 px-3 py-1.5 text-[11px] font-medium tracking-[0.05em] uppercase">
@@ -306,6 +385,43 @@ function UsageBlock({
         })}
       </ul>
     </section>
+  )
+}
+
+function subscriptionFailureMessage(
+  mutation: SubscriptionMutation,
+  error: unknown,
+): string {
+  if (error instanceof ModuleAccessDeniedError) {
+    return 'Дія більше недоступна: права або стан підписки змінилися.'
+  }
+  const problem = normalizeApiProblem(error)
+  if (problem.kind === 'forbidden') {
+    return 'У вас більше немає права змінювати підписку.'
+  }
+  if (problem.kind === 'conflict') {
+    return 'Підписка вже змінилася. Оновіть сторінку та спробуйте ще раз.'
+  }
+  if (problem.kind === 'network' || problem.kind === 'timeout') {
+    return mutation === 'cancel'
+      ? 'Не вдалося скасувати підписку: немає з’єднання з мережею.'
+      : 'Не вдалося розпочати оплату: немає з’єднання з мережею.'
+  }
+  return mutation === 'cancel'
+    ? 'Не вдалося скасувати підписку. Спробуйте ще раз.'
+    : 'Не вдалося розпочати оплату. Спробуйте ще раз.'
+}
+
+function isCurrentScope(
+  scope: ReturnType<
+    ReturnType<typeof useBillingMutation>['requireLatestMutation']
+  >,
+  snapshot: ReturnType<typeof useBillingMutation>['cabinet']['snapshot'],
+): boolean {
+  return (
+    !scope.signal.aborted &&
+    snapshot?.tenantId === scope.tenantId &&
+    snapshot.generation === scope.generation
   )
 }
 
