@@ -138,10 +138,12 @@ interface CabinetFixtureOptions {
   sobolBilling?: boolean
   pendingPayment?: boolean
   subscribeFailureStatus?: 403 | 409
+  cancelSubscriptionFailureStatus?: 403 | 409
   cancelPaymentFailureStatus?: 403 | 409
 }
 
 interface CabinetRequest {
+  method: string
   path: string
   tenantId: string | null
 }
@@ -161,6 +163,18 @@ interface CabinetFixtureState {
 async function fulfillData(route: Route, data: unknown, status = 200) {
   await route.fulfill({ status, json: status < 400 ? { data } : data })
 }
+
+const isPaymentCancellationPath = (path: string) =>
+  /^\/api\/v1\/billing\/payments\/[^/]+\/cancel$/.test(path)
+
+const isRecognizedBillingPath = (path: string) =>
+  [
+    '/api/v1/billing/subscription',
+    '/api/v1/billing/plans',
+    '/api/v1/billing/payments',
+    '/api/v1/billing/subscribe',
+    '/api/v1/billing/cancel',
+  ].includes(path) || isPaymentCancellationPath(path)
 
 async function installCabinetApiBoundary(
   page: Page,
@@ -195,7 +209,9 @@ async function installCabinetApiBoundary(
       await fulfillData(route, tenants)
       return
     }
-    if (path.startsWith('/api/v1/')) requests.push({ path, tenantId })
+    if (path.startsWith('/api/v1/')) {
+      requests.push({ method: request.method(), path, tenantId })
+    }
 
     const isTenantScoped =
       path === '/api/v1/me/permissions' ||
@@ -203,7 +219,7 @@ async function installCabinetApiBoundary(
       path === '/api/v1/billing/payments' ||
       path === '/api/v1/billing/subscribe' ||
       path === '/api/v1/billing/cancel' ||
-      /^\/api\/v1\/billing\/payments\/[^/]+\/cancel$/.test(path)
+      isPaymentCancellationPath(path)
     if (isTenantScoped) {
       if (tenantId === null) {
         await fulfillData(
@@ -300,7 +316,7 @@ async function installCabinetApiBoundary(
       }
       return
     }
-    if (path === '/api/v1/billing/subscription') {
+    if (path === '/api/v1/billing/subscription' && request.method() === 'GET') {
       await fulfillData(
         route,
         tenantId === 'tenant-2' ? blockedSubscription : activeSubscription,
@@ -345,10 +361,24 @@ async function installCabinetApiBoundary(
       }
       return
     }
-    if (
-      /^\/api\/v1\/billing\/payments\/[^/]+\/cancel$/.test(path) &&
-      request.method() === 'POST'
-    ) {
+    if (path === '/api/v1/billing/cancel' && request.method() === 'POST') {
+      if (options.cancelSubscriptionFailureStatus) {
+        await fulfillData(
+          route,
+          {
+            error: {
+              code: 'SUBSCRIPTION_STATUS_CHANGED',
+              message: 'Raw fixture subscription conflict',
+            },
+          },
+          options.cancelSubscriptionFailureStatus,
+        )
+      } else {
+        await fulfillData(route, null)
+      }
+      return
+    }
+    if (isPaymentCancellationPath(path) && request.method() === 'POST') {
       if (options.cancelPaymentFailureStatus) {
         await fulfillData(
           route,
@@ -363,6 +393,19 @@ async function installCabinetApiBoundary(
       } else {
         await fulfillData(route, null)
       }
+      return
+    }
+    if (isRecognizedBillingPath(path)) {
+      await fulfillData(
+        route,
+        {
+          error: {
+            code: 'FIXTURE_METHOD_NOT_ALLOWED',
+            message: 'Billing fixture method not allowed',
+          },
+        },
+        405,
+      )
       return
     }
 
@@ -428,6 +471,39 @@ async function fixtureGet(page: Page, path: string, tenantId?: string) {
       }
     },
     { requestPath: path, requestedTenant: tenantId },
+  )
+}
+
+async function fixtureRequest(
+  page: Page,
+  {
+    path,
+    method,
+    tenantId,
+  }: { path: string; method: string; tenantId?: string },
+) {
+  return page.evaluate(
+    async ({ requestPath, requestMethod, requestedTenant }) => {
+      const response = await fetch(requestPath, {
+        method: requestMethod,
+        headers: requestedTenant
+          ? { 'X-Tenant-Id': requestedTenant }
+          : undefined,
+      })
+      const text = await response.text()
+      let body: unknown = text
+      try {
+        body = JSON.parse(text) as unknown
+      } catch {
+        // Preserve the non-JSON body so an escaped fixture route fails clearly.
+      }
+      return { status: response.status, body }
+    },
+    {
+      requestPath: path,
+      requestMethod: method,
+      requestedTenant: tenantId,
+    },
   )
 }
 
@@ -521,6 +597,80 @@ test('tenant fixture rejects unknown and inactive tenant headers', async ({
   }
 })
 
+test('billing fixture fails closed for every unsupported recognized method', async ({
+  page,
+}) => {
+  await installCabinetApiBoundary(page)
+  await page.goto('/login')
+
+  for (const request of [
+    {
+      path: '/api/v1/billing/subscription',
+      method: 'POST',
+      tenantId: 'tenant-1',
+    },
+    { path: '/api/v1/billing/plans', method: 'POST' },
+    {
+      path: '/api/v1/billing/payments',
+      method: 'POST',
+      tenantId: 'tenant-1',
+    },
+    {
+      path: '/api/v1/billing/subscribe',
+      method: 'GET',
+      tenantId: 'tenant-1',
+    },
+    {
+      path: '/api/v1/billing/cancel',
+      method: 'GET',
+      tenantId: 'tenant-1',
+    },
+    {
+      path: '/api/v1/billing/payments/payment-1/cancel',
+      method: 'GET',
+      tenantId: 'tenant-1',
+    },
+  ]) {
+    expect(
+      await fixtureRequest(page, request),
+      `${request.method} ${request.path}`,
+    ).toEqual({
+      status: 405,
+      body: {
+        error: {
+          code: 'FIXTURE_METHOD_NOT_ALLOWED',
+          message: 'Billing fixture method not allowed',
+        },
+      },
+    })
+  }
+})
+
+test('billing fixture handles subscription cancellation without route escape', async ({
+  page,
+}) => {
+  await installCabinetApiBoundary(page, {
+    cancelSubscriptionFailureStatus: 409,
+  })
+  await page.goto('/login')
+
+  expect(
+    await fixtureRequest(page, {
+      path: '/api/v1/billing/cancel',
+      method: 'POST',
+      tenantId: 'tenant-1',
+    }),
+  ).toEqual({
+    status: 409,
+    body: {
+      error: {
+        code: 'SUBSCRIPTION_STATUS_CHANGED',
+        message: 'Raw fixture subscription conflict',
+      },
+    },
+  })
+})
+
 test('aborts former tenant access before it can render after B commits @cabinet-smoke', async ({
   page,
 }) => {
@@ -605,8 +755,16 @@ test('loads tenant-specific subscription data from tenant-scoped requests @cabin
   await expect(page.getByText('Доступ закрито').first()).toBeVisible()
   expect(fixture.requests).toEqual(
     expect.arrayContaining([
-      { path: '/api/v1/billing/subscription', tenantId: 'tenant-1' },
-      { path: '/api/v1/billing/subscription', tenantId: 'tenant-2' },
+      {
+        method: 'GET',
+        path: '/api/v1/billing/subscription',
+        tenantId: 'tenant-1',
+      },
+      {
+        method: 'GET',
+        path: '/api/v1/billing/subscription',
+        tenantId: 'tenant-2',
+      },
     ]),
   )
 })
@@ -899,9 +1057,10 @@ test('billing mutation failures stay truthful and handled in Chromium', async ({
 }) => {
   const pageErrors: Error[] = []
   page.on('pageerror', (error) => pageErrors.push(error))
-  await installCabinetApiBoundary(page, {
+  const fixture = await installCabinetApiBoundary(page, {
     pendingPayment: true,
     subscribeFailureStatus: 403,
+    cancelSubscriptionFailureStatus: 409,
     cancelPaymentFailureStatus: 409,
   })
   await loginFrom(page)
@@ -921,6 +1080,42 @@ test('billing mutation failures stay truthful and handled in Chromium', async ({
     'Статус платежу вже змінився. Оновіть список платежів.',
   )
   await expect(paymentAlert).not.toContainText('Raw fixture payment conflict')
+
+  await page.goto('/app/koval/settings/billing/overview')
+  page.once('dialog', (dialog) => void dialog.accept())
+  await page.getByRole('button', { name: 'Скасувати' }).click()
+  const subscriptionAlert = page.getByRole('alert')
+  await expect(subscriptionAlert).toContainText(
+    'Підписка вже змінилася. Оновіть сторінку та спробуйте ще раз.',
+  )
+  await expect(subscriptionAlert).not.toContainText(
+    'Raw fixture subscription conflict',
+  )
+  expect(
+    fixture.requests.filter(({ path }) =>
+      [
+        '/api/v1/billing/subscribe',
+        '/api/v1/billing/payments/payment-1/cancel',
+        '/api/v1/billing/cancel',
+      ].includes(path),
+    ),
+  ).toEqual([
+    {
+      method: 'POST',
+      path: '/api/v1/billing/subscribe',
+      tenantId: 'tenant-1',
+    },
+    {
+      method: 'POST',
+      path: '/api/v1/billing/payments/payment-1/cancel',
+      tenantId: 'tenant-1',
+    },
+    {
+      method: 'POST',
+      path: '/api/v1/billing/cancel',
+      tenantId: 'tenant-1',
+    },
+  ])
   expect(pageErrors).toEqual([])
 })
 
