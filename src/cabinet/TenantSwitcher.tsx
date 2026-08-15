@@ -55,7 +55,6 @@ export function TenantSwitcher({
         )}
         disabled={isSwitching || tenants.length <= 1}
         onChange={(event) => void handleChange(event)}
-        title={compact ? tenant.name : undefined}
         value={tenant.id}
       >
         {tenants.map((candidate) => (

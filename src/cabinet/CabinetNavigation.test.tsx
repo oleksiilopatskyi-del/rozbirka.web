@@ -143,6 +143,7 @@ it('shows and restores every tablet rail label on focus and hover', async () => 
     const tooltip = within(rail).getByText(label, {
       selector: '[role="tooltip"]',
     })
+    expect(control).not.toHaveAttribute('title')
     expect(tooltip).not.toBeVisible()
 
     fireEvent.focus(control)
