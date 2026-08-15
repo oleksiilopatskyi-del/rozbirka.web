@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { Tenant } from '../api/types'
 import type { AuthContextValue } from '../auth/AuthContext'
@@ -37,7 +38,16 @@ const snapshot: TenantAccessSnapshot = {
   subscription: null,
 }
 
+const signOut = vi.fn<() => Promise<void>>()
+
+function LocationProbe() {
+  const location = useLocation()
+  return <output aria-label="Поточний маршрут">{location.pathname}</output>
+}
+
 beforeEach(() => {
+  signOut.mockReset()
+  signOut.mockResolvedValue()
   vi.mocked(useAuth).mockReturnValue({
     status: 'authenticated',
     user: {
@@ -52,7 +62,7 @@ beforeEach(() => {
     tenants: [tenant],
     hydrate: vi.fn(),
     commitTenant: vi.fn(),
-    signOut: vi.fn(),
+    signOut,
   } satisfies AuthContextValue)
   vi.mocked(useCabinet).mockReturnValue({
     status: 'ready',
@@ -62,6 +72,32 @@ beforeEach(() => {
     retry: vi.fn(),
     switchTenant: vi.fn(),
   } satisfies CabinetContextValue)
+})
+
+it('navigates home before awaiting cabinet logout', async () => {
+  let finishLogout!: () => void
+  signOut.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finishLogout = resolve
+    }),
+  )
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/koval/dashboard']}>
+      <Routes>
+        <Route path="/app/:tenant" element={<CabinetShell />}>
+          <Route path="dashboard" element={<p>Вміст модуля</p>} />
+        </Route>
+        <Route path="*" element={<LocationProbe />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  await user.click(screen.getAllByRole('button', { name: 'Вийти' })[0]!)
+
+  expect(screen.getByLabelText('Поточний маршрут')).toHaveTextContent(/^\/$/)
+  expect(signOut).toHaveBeenCalledOnce()
+  finishLogout()
 })
 
 it('renders nested cabinet content in a responsive overflow-safe shell', () => {

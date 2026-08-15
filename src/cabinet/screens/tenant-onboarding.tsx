@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { ArrowRight, LogOut } from 'lucide-react'
 import { tenantsApi } from '@/api/tenants'
@@ -14,14 +14,52 @@ export function TenantOnboardingScreen() {
   const [city, setCity] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resume, setResume] = useState<{
+    generation: number
+    tenantId: string
+  } | null>(null)
+  const generationRef = useRef(0)
+  const activeCreateRef = useRef<{
+    generation: number
+    controller: AbortController
+  } | null>(null)
+
+  useEffect(() => {
+    return () => {
+      generationRef.current += 1
+      activeCreateRef.current?.controller.abort('onboarding-unmounted')
+      activeCreateRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (resume?.generation !== generationRef.current) return
+    const createdTenant = auth.tenants.find(
+      (tenant) => tenant.id === resume.tenantId,
+    )
+    if (createdTenant) {
+      void navigate(cabinetPath(createdTenant.slug, 'dashboard'), {
+        replace: true,
+      })
+    }
+  }, [auth.tenants, navigate, resume])
+
+  const invalidateCreate = (reason: string) => {
+    generationRef.current += 1
+    activeCreateRef.current?.controller.abort(reason)
+    activeCreateRef.current = null
+  }
 
   const handleLogout = async () => {
+    invalidateCreate('onboarding-logout')
+    tenantPreference.clear()
     void navigate('/', { replace: true, flushSync: true })
     await auth.signOut()
   }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
+    if (activeCreateRef.current !== null) return
     setError(null)
     if (name.trim().length < 2) {
       setError('Введіть назву розбірки')
@@ -29,17 +67,40 @@ export function TenantOnboardingScreen() {
     }
 
     setBusy(true)
+    const operation = {
+      generation: generationRef.current + 1,
+      controller: new AbortController(),
+    }
+    generationRef.current = operation.generation
+    activeCreateRef.current = operation
+    const isCurrent = () =>
+      activeCreateRef.current === operation &&
+      generationRef.current === operation.generation &&
+      !operation.controller.signal.aborted
     try {
-      const created = await tenantsApi.create({
-        tenantName: name.trim(),
-        ...(city.trim() ? { city: city.trim() } : {}),
-      })
+      const created = await tenantsApi.create(
+        {
+          tenantName: name.trim(),
+          ...(city.trim() ? { city: city.trim() } : {}),
+        },
+        { signal: operation.controller.signal },
+      )
+      if (!isCurrent()) return
       tenantPreference.set(created.tenantId)
       await auth.hydrate()
-      void navigate(cabinetPath(created.slug, 'dashboard'), { replace: true })
+      if (!isCurrent()) return
+      setResume({
+        generation: operation.generation,
+        tenantId: created.tenantId,
+      })
     } catch {
+      if (!isCurrent()) return
       setError('Не вдалося створити розбірку. Спробуйте ще раз.')
-      setBusy(false)
+    } finally {
+      if (activeCreateRef.current === operation) {
+        activeCreateRef.current = null
+        setBusy(false)
+      }
     }
   }
 

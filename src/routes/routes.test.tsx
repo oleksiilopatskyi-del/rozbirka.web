@@ -1,5 +1,25 @@
+import { isValidElement, type ReactElement, type ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
 import { createAppRoutes } from './routes'
+
+const cabinetRoute = () =>
+  createAppRoutes(false).find((route) => route.path === '/app/:tenant')!
+
+const loadRoute = async (route: NonNullable<ReturnType<typeof cabinetRoute>>) =>
+  (route.lazy as () => Promise<{ element: ReactNode }>)()
+
+const elementTypeNames = (node: ReactNode): string[] => {
+  if (!isValidElement(node)) return []
+  const type = node.type
+  const name =
+    typeof type === 'function'
+      ? type.name
+      : typeof type === 'string'
+        ? type
+        : ''
+  const children = (node.props as { children?: ReactNode }).children
+  return [name, ...elementTypeNames(children)]
+}
 
 describe('production route boundary', () => {
   it('omits prototype routes in production', () => {
@@ -42,9 +62,7 @@ describe('production route boundary', () => {
   })
 
   it('registers the cabinet parent and lazy children', () => {
-    const app = createAppRoutes(false).find(
-      (route) => route.path === '/app/:tenant',
-    )
+    const app = cabinetRoute()
     const childPaths = app?.children?.map((route) => route.path)
 
     expect(app?.lazy).toEqual(expect.any(Function))
@@ -57,5 +75,49 @@ describe('production route boundary', () => {
         ?.filter((route) => route.path !== undefined)
         .every((route) => route.lazy !== undefined),
     ).toBe(true)
+  })
+
+  it('mounts the responsive cabinet shell inside the tenant provider', async () => {
+    const loaded = await loadRoute(cabinetRoute())
+
+    expect(elementTypeNames(loaded.element)).toEqual([
+      'RequireAuth',
+      'CabinetProvider',
+      'CabinetShell',
+    ])
+  })
+
+  it.each([
+    ['dashboard', 'CabinetHomeScreen'],
+    ['settings/billing/overview', 'SubscriptionScreen'],
+    ['settings/billing/plans', 'PlansScreen'],
+    ['settings/billing/payments', 'PaymentsScreen'],
+  ])(
+    'loads %s through its distinct released screen',
+    async (path, screenName) => {
+      const route = cabinetRoute().children?.find(
+        (child) => child.path === path,
+      )
+      const loaded = await loadRoute(route!)
+      const element = loaded.element as ReactElement<{
+        screen?: { displayName?: string; name?: string }
+      }>
+
+      expect(
+        element.props.screen?.displayName ?? element.props.screen?.name,
+      ).toBe(screenName)
+    },
+  )
+
+  it('keeps unreleased module routes on the shared lazy boundary', async () => {
+    const route = cabinetRoute().children?.find(
+      (child) => child.path === 'cars',
+    )
+    const loaded = await loadRoute(route!)
+    const element = loaded.element as ReactElement
+
+    expect(
+      typeof element.type === 'function' ? element.type.name : element.type,
+    ).toBe('CabinetModuleRoute')
   })
 })

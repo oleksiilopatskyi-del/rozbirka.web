@@ -242,3 +242,67 @@ it('loads payments with tenant scope and exposes cancel only with billing.manage
   tenantRequestScope.rotate()
   expect(options?.signal?.aborted).toBe(true)
 })
+
+it('keeps pending checkout as a secured new-tab link', async () => {
+  vi.mocked(billingApi.getPayments).mockResolvedValue({
+    items: [
+      {
+        id: 'payment-1',
+        type: 'checkout',
+        status: 'pending',
+        amount: 29,
+        currency: 'USD',
+        providerInvoiceId: 'invoice-1',
+        checkoutUrl: 'https://pay.example/checkout',
+        checkoutExpiresAt: '2026-08-15T12:00:00Z',
+        createdAt: '2026-08-15T10:00:00Z',
+      },
+    ],
+    page: 1,
+    pageSize: 10,
+    total: 1,
+    totalPages: 1,
+  })
+  renderScreen(<PaymentsScreen />)
+
+  const checkout = await screen.findByRole('link', {
+    name: 'Продовжити оплату',
+  })
+  expect(checkout).toHaveAttribute('href', 'https://pay.example/checkout')
+  expect(checkout).toHaveAttribute('target', '_blank')
+  expect(checkout).toHaveAttribute('rel', 'noopener noreferrer')
+})
+
+it('prevents stale-authorized pending checkout navigation', async () => {
+  vi.mocked(billingApi.getPayments).mockResolvedValue({
+    items: [
+      {
+        id: 'payment-1',
+        type: 'checkout',
+        status: 'pending',
+        amount: 29,
+        currency: 'USD',
+        providerInvoiceId: 'invoice-1',
+        checkoutUrl: 'https://pay.example/checkout',
+        checkoutExpiresAt: '2026-08-15T12:00:00Z',
+        createdAt: '2026-08-15T10:00:00Z',
+      },
+    ],
+    page: 1,
+    pageSize: 10,
+    total: 1,
+    totalPages: 1,
+  })
+  const currentCabinet = cabinet()
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  renderScreen(<PaymentsScreen />)
+  const checkout = await screen.findByRole('link', {
+    name: 'Продовжити оплату',
+  })
+  currentCabinet.snapshot?.permissions.delete('billing.manage')
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+
+  checkout.dispatchEvent(event)
+
+  expect(event.defaultPrevented).toBe(true)
+})

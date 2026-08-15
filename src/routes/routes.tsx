@@ -1,6 +1,8 @@
-import { Navigate, Outlet, type RouteObject } from 'react-router'
+import { Navigate, type RouteObject } from 'react-router'
+import type { ComponentType } from 'react'
 import App from '@/App'
 import { RedirectIfAuth, RequireAuth } from '@/auth/guards'
+import type { CabinetModuleScreenProps } from '@/cabinet/ModuleBoundary'
 import {
   cabinetModules,
   type CabinetModuleKey,
@@ -21,11 +23,47 @@ const cabinetModuleRoute = (module: CabinetModuleKey): RouteObject => ({
   },
 })
 
+const cabinetScreenRoute = (
+  module: CabinetModuleKey,
+  loadScreen: () => Promise<ComponentType<CabinetModuleScreenProps>>,
+): RouteObject => ({
+  path: cabinetModules[module].routeSegment.slice(1),
+  hydrateFallbackElement,
+  lazy: async () => {
+    const [{ ModuleBoundary }, Screen] = await Promise.all([
+      import('@/cabinet/ModuleBoundary'),
+      loadScreen(),
+    ])
+    return { element: <ModuleBoundary module={module} screen={Screen} /> }
+  },
+})
+
+const releasedCabinetRoutes: Partial<Record<CabinetModuleKey, RouteObject>> = {
+  dashboard: cabinetScreenRoute('dashboard', async () => {
+    const { CabinetHomeScreen } = await import('@/cabinet/screens/cabinet-home')
+    return CabinetHomeScreen
+  }),
+  billing: cabinetScreenRoute('billing', async () => {
+    const { SubscriptionScreen } =
+      await import('@/cabinet/billing/subscription-screen')
+    return SubscriptionScreen
+  }),
+  plans: cabinetScreenRoute('plans', async () => {
+    const { PlansScreen } = await import('@/cabinet/billing/plans-screen')
+    return PlansScreen
+  }),
+  payments: cabinetScreenRoute('payments', async () => {
+    const { PaymentsScreen } = await import('@/cabinet/billing/payments-screen')
+    return PaymentsScreen
+  }),
+}
+
 const cabinetChildren = (): RouteObject[] => [
   { index: true, element: <Navigate to="dashboard" replace /> },
-  ...Object.keys(cabinetModules).map((module) =>
-    cabinetModuleRoute(module as CabinetModuleKey),
-  ),
+  ...Object.keys(cabinetModules).map((module) => {
+    const key = module as CabinetModuleKey
+    return releasedCabinetRoutes[key] ?? cabinetModuleRoute(key)
+  }),
   {
     path: '*',
     hydrateFallbackElement,
@@ -83,12 +121,15 @@ export function createAppRoutes(
       hydrateFallbackElement,
       children: cabinetChildren(),
       lazy: async () => {
-        const { CabinetProvider } = await import('@/cabinet/CabinetContext')
+        const [{ CabinetProvider }, { CabinetShell }] = await Promise.all([
+          import('@/cabinet/CabinetContext'),
+          import('@/cabinet/CabinetShell'),
+        ])
         return {
           element: (
             <RequireAuth>
               <CabinetProvider>
-                <Outlet />
+                <CabinetShell />
               </CabinetProvider>
             </RequireAuth>
           ),

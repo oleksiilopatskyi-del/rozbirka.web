@@ -56,15 +56,6 @@ export function PaymentsScreen() {
     }
   }
 
-  const continueCheckout = (checkoutUrl: string) => {
-    try {
-      const scope = requireLatestMutation()
-      if (!scope.signal.aborted) window.location.assign(checkoutUrl)
-    } catch {
-      // The latest snapshot no longer permits checkout.
-    }
-  }
-
   if (loading) {
     return (
       <p role="status" className="text-[14px] text-neutral-500">
@@ -113,13 +104,21 @@ export function PaymentsScreen() {
                 <div className="flex items-center gap-3">
                   {item.status === 'pending' && item.checkoutUrl && (
                     <BillingMutationGate decision={controlDecision}>
-                      <button
-                        type="button"
-                        onClick={() => continueCheckout(item.checkoutUrl!)}
+                      <a
+                        href={item.checkoutUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(event) => {
+                          try {
+                            requireLatestMutation()
+                          } catch {
+                            event.preventDefault()
+                          }
+                        }}
                         className="rounded-full bg-white/[0.06] px-3 py-1 text-[12px] font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.10]"
                       >
                         Продовжити оплату
-                      </button>
+                      </a>
                     </BillingMutationGate>
                   )}
                   {item.status === 'pending' && (

@@ -1,5 +1,5 @@
 import { useMemo, type ComponentProps } from 'react'
-import { Ellipsis, X } from 'lucide-react'
+import { Ellipsis, LogOut, X } from 'lucide-react'
 import { Dialog } from 'radix-ui'
 import { NavLink } from 'react-router'
 import type { Tenant } from '../api/types'
@@ -28,6 +28,7 @@ export interface CabinetNavigationProps {
   tenants: readonly Tenant[]
   snapshot: TenantAccessSnapshot
   onSwitchTenant: (tenantId: string) => Promise<void>
+  onLogout: () => Promise<void>
 }
 
 export function CabinetNavigation({
@@ -35,6 +36,7 @@ export function CabinetNavigation({
   tenants,
   snapshot,
   onSwitchTenant,
+  onLogout,
 }: CabinetNavigationProps) {
   const entries = useMemo(
     () =>
@@ -71,18 +73,21 @@ export function CabinetNavigation({
         tenant={tenant}
         tenants={tenants}
         onSwitchTenant={onSwitchTenant}
+        onLogout={onLogout}
       />
       <TabletNavigation
         entries={entries}
         tenant={tenant}
         tenants={tenants}
         onSwitchTenant={onSwitchTenant}
+        onLogout={onLogout}
       />
       <MobileNavigation
         entries={entries}
         tenant={tenant}
         tenants={tenants}
         onSwitchTenant={onSwitchTenant}
+        onLogout={onLogout}
       />
     </>
   )
@@ -93,6 +98,7 @@ interface PresentationProps {
   tenant: Tenant
   tenants: readonly Tenant[]
   onSwitchTenant: (tenantId: string) => Promise<void>
+  onLogout: () => Promise<void>
 }
 
 function DesktopNavigation({
@@ -100,6 +106,7 @@ function DesktopNavigation({
   tenant,
   tenants,
   onSwitchTenant,
+  onLogout,
 }: PresentationProps) {
   const primary = entries.filter((entry) => entry.placement === 'primary')
   const account = entries.filter((entry) => entry.placement === 'account')
@@ -124,6 +131,7 @@ function DesktopNavigation({
           tenants={tenants}
           onSwitch={onSwitchTenant}
         />
+        <LogoutButton onLogout={onLogout} presentation="desktop" />
       </div>
     </aside>
   )
@@ -134,6 +142,7 @@ function TabletNavigation({
   tenant,
   tenants,
   onSwitchTenant,
+  onLogout,
 }: PresentationProps) {
   const primary = entries.filter((entry) => entry.placement === 'primary')
   const account = entries.filter((entry) => entry.placement === 'account')
@@ -161,6 +170,7 @@ function TabletNavigation({
           tenants={tenants}
           onSwitch={onSwitchTenant}
         />
+        <LogoutButton onLogout={onLogout} presentation="rail" />
       </div>
     </aside>
   )
@@ -171,6 +181,7 @@ function MobileNavigation({
   tenant,
   tenants,
   onSwitchTenant,
+  onLogout,
 }: PresentationProps) {
   const mobileEntries = entries
     .filter((entry) => entry.placement === 'primary')
@@ -228,10 +239,41 @@ function MobileNavigation({
               tenants={tenants}
               onSwitch={onSwitchTenant}
             />
+            <Dialog.Close asChild>
+              <LogoutButton onLogout={onLogout} presentation="dialog" />
+            </Dialog.Close>
           </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  )
+}
+
+function LogoutButton({
+  onLogout,
+  presentation,
+}: {
+  onLogout: () => Promise<void>
+  presentation: 'desktop' | 'rail' | 'dialog'
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={presentation === 'rail' ? 'Вийти' : undefined}
+      title={presentation === 'rail' ? 'Вийти' : undefined}
+      onClick={() => void onLogout()}
+      className={cn(
+        'min-h-11 min-w-11 rounded-xl text-neutral-400 transition-colors hover:bg-white/[0.05] hover:text-white',
+        presentation === 'desktop' &&
+          'mt-3 flex w-full items-center gap-3 px-4 text-sm',
+        presentation === 'rail' && 'mt-3 grid place-items-center',
+        presentation === 'dialog' &&
+          'mt-3 flex w-full items-center gap-3 px-3 py-2 text-sm',
+      )}
+    >
+      <LogOut aria-hidden className="size-5 shrink-0" />
+      {presentation !== 'rail' && <span>Вийти</span>}
+    </button>
   )
 }
 

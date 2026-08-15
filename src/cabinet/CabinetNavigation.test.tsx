@@ -62,7 +62,10 @@ const snapshot = (permissions: string[]): TenantAccessSnapshot => ({
   subscription,
 })
 
-const renderNavigation = (permissions = ['billing.view']) =>
+const renderNavigation = (
+  permissions = ['billing.view'],
+  onLogout = vi.fn<() => Promise<void>>(),
+) =>
   render(
     <MemoryRouter initialEntries={['/app/koval/settings/billing/overview']}>
       <CabinetNavigation
@@ -70,6 +73,7 @@ const renderNavigation = (permissions = ['billing.view']) =>
         tenants={[activeTenant, otherTenant]}
         snapshot={snapshot(permissions)}
         onSwitchTenant={vi.fn()}
+        onLogout={onLogout}
       />
     </MemoryRouter>,
   )
@@ -132,4 +136,19 @@ it('opens the mobile More dialog by keyboard and restores trigger focus', async 
     screen.queryByRole('dialog', { name: 'Меню кабінету' }),
   ).not.toBeInTheDocument()
   expect(more).toHaveFocus()
+})
+
+it('exposes logout in the keyboard-accessible mobile menu', async () => {
+  const onLogout = vi.fn<() => Promise<void>>().mockResolvedValue()
+  const user = userEvent.setup()
+  renderNavigation(['billing.view'], onLogout)
+
+  screen.getByRole('button', { name: 'Ще' }).focus()
+  await user.keyboard('{Enter}')
+  const dialog = screen.getByRole('dialog', { name: 'Меню кабінету' })
+  const logout = within(dialog).getByRole('button', { name: 'Вийти' })
+  logout.focus()
+  await user.keyboard('{Enter}')
+
+  expect(onLogout).toHaveBeenCalledOnce()
 })
