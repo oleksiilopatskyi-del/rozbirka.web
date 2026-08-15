@@ -223,15 +223,39 @@ async function installApiBoundary(
     }
 
     const tenantId = request.headers()['x-tenant-id'] ?? null
+    const tenantScopedPaths = new Set([
+      '/api/v1/me/permissions',
+      '/api/v1/billing/subscription',
+      '/api/v1/billing/payments',
+    ])
+    if (tenantScopedPaths.has(path)) {
+      state.tenantRequests.push({ path, tenantId })
+      state.protectedAttempts[path] = (state.protectedAttempts[path] ?? 0) + 1
+      if (tenantId === null) {
+        await fulfillData(
+          route,
+          { error: { code: 'TENANT_REQUIRED', message: 'Tenant required' } },
+          400,
+        )
+        return
+      }
+      if (!(tenantId in accessByTenant)) {
+        await fulfillData(
+          route,
+          {
+            error: { code: 'TENANT_NOT_FOUND', message: 'Tenant not found' },
+          },
+          404,
+        )
+        return
+      }
+    }
+
     const protectedResponses: Record<string, unknown> = {
       '/api/v1/me/permissions':
-        tenantId && tenantId in accessByTenant
-          ? accessByTenant[tenantId as keyof typeof accessByTenant]
-          : { role: 'none', permissions: [], features: [] },
+        accessByTenant[tenantId as keyof typeof accessByTenant],
       '/api/v1/billing/subscription':
-        tenantId && tenantId in subscriptionByTenant
-          ? subscriptionByTenant[tenantId as keyof typeof subscriptionByTenant]
-          : subscription,
+        subscriptionByTenant[tenantId as keyof typeof subscriptionByTenant],
       '/api/v1/billing/payments': {
         items: [],
         page: 1,
@@ -242,8 +266,9 @@ async function installApiBoundary(
       '/api/v1/billing/plans': [],
     }
     if (path in protectedResponses) {
-      state.tenantRequests.push({ path, tenantId })
-      state.protectedAttempts[path] = (state.protectedAttempts[path] ?? 0) + 1
+      if (!tenantScopedPaths.has(path)) {
+        state.protectedAttempts[path] = (state.protectedAttempts[path] ?? 0) + 1
+      }
       await fulfillData(route, protectedResponses[path])
       return
     }
@@ -314,8 +339,85 @@ async function logoutFromCabinet(page: Page) {
   await logout.click()
 }
 
+async function fixtureGet(page: Page, path: string, tenantId?: string) {
+  return page.evaluate(
+    async ({ requestPath, requestedTenant }) => {
+      const response = await fetch(requestPath, {
+        headers: requestedTenant
+          ? { 'X-Tenant-Id': requestedTenant }
+          : undefined,
+      })
+      return {
+        status: response.status,
+        body: await response.json(),
+      }
+    },
+    { requestPath: path, requestedTenant: tenantId },
+  )
+}
+
 test.beforeEach(async ({ request }) => {
   await resetUpstream(request)
+})
+
+test('auth fixture rejects missing and unknown tenant headers on scoped endpoints', async ({
+  page,
+}) => {
+  await installApiBoundary(page)
+  await page.goto('/login')
+
+  for (const path of [
+    '/api/v1/me/permissions',
+    '/api/v1/billing/subscription',
+    '/api/v1/billing/payments',
+  ]) {
+    expect(await fixtureGet(page, path), `${path} missing tenant`).toEqual({
+      status: 400,
+      body: {
+        error: { code: 'TENANT_REQUIRED', message: 'Tenant required' },
+      },
+    })
+    expect(
+      await fixtureGet(page, path, 'tenant-unknown'),
+      `${path} unknown tenant`,
+    ).toEqual({
+      status: 404,
+      body: {
+        error: { code: 'TENANT_NOT_FOUND', message: 'Tenant not found' },
+      },
+    })
+  }
+})
+
+test('auth fixture returns known tenant data only for the matching header', async ({
+  page,
+}) => {
+  const state = await installApiBoundary(page)
+  await page.goto('/login')
+
+  expect(
+    await fixtureGet(page, '/api/v1/me/permissions', 'tenant-1'),
+  ).toMatchObject({
+    status: 200,
+    body: {
+      data: {
+        role: 'owner',
+        permissions: expect.arrayContaining(['cars.view']),
+      },
+    },
+  })
+  expect(
+    await fixtureGet(page, '/api/v1/billing/subscription', 'tenant-2'),
+  ).toMatchObject({
+    status: 200,
+    body: { data: { state: 'blocked', planCode: 'starter' } },
+  })
+  expect(state.tenantRequests).toEqual(
+    expect.arrayContaining([
+      { path: '/api/v1/me/permissions', tenantId: 'tenant-1' },
+      { path: '/api/v1/billing/subscription', tenantId: 'tenant-2' },
+    ]),
+  )
 })
 
 test('OTP login stores refresh only in HttpOnly cookie and no credentials in storage @auth-smoke', async ({
@@ -510,7 +612,7 @@ test('logout expires the cookie and leaves the user as guest @auth-smoke', async
   await expect(page).toHaveURL(/\/login$/)
 })
 
-test('invitation resumes after OTP and optional name', async ({
+test('invitation resumes after OTP and optional name into the accepted tenant', async ({
   page,
   request,
 }) => {
@@ -531,7 +633,15 @@ test('invitation resumes after OTP and optional name', async ({
 
   await expect(page).toHaveURL('/invite/INVITE123')
   await page.getByRole('button', { name: 'Прийняти запрошення' }).click()
-  await expect(page).toHaveURL('/account')
+  await expect(page).toHaveURL('/app/sobol/dashboard')
+  const staleLoginNavigation = page
+    .waitForURL('/invite/INVITE123', { timeout: 1_200 })
+    .then(
+      () => true,
+      () => false,
+    )
+  expect(await staleLoginNavigation).toBe(false)
+  await expect(page).toHaveURL('/app/sobol/dashboard')
   expect(state.invitationAccepted).toBe(true)
 })
 

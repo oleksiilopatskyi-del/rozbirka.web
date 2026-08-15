@@ -103,11 +103,16 @@ interface CabinetRequest {
   tenantId: string | null
 }
 
+type DelayedDeliveryOutcome =
+  | { kind: 'fulfilled' }
+  | { kind: 'aborted'; error: string }
+  | { kind: 'failed'; error: string }
+
 interface CabinetFixtureState {
   requests: CabinetRequest[]
   delayNextPermissions(tenantId: string): void
   waitForDelayedPermissions(): Promise<void>
-  releaseDelayedPermissions(): Promise<void>
+  releaseDelayedPermissions(): Promise<DelayedDeliveryOutcome>
 }
 
 async function fulfillData(route: Route, data: unknown, status = 200) {
@@ -122,15 +127,16 @@ async function installCabinetApiBoundary(
   let delayedTenantId: string | null = null
   let resolveStarted: () => void = () => undefined
   let resolveRelease: () => void = () => undefined
-  let resolveSettled: () => void = () => undefined
+  let resolveDelivery: (outcome: DelayedDeliveryOutcome) => void = () =>
+    undefined
   let started = new Promise<void>((resolve) => {
     resolveStarted = resolve
   })
   let release = new Promise<void>((resolve) => {
     resolveRelease = resolve
   })
-  let settled = new Promise<void>((resolve) => {
-    resolveSettled = resolve
+  let delivery = new Promise<DelayedDeliveryOutcome>((resolve) => {
+    resolveDelivery = resolve
   })
 
   await page.route('**/*', async (route) => {
@@ -148,8 +154,45 @@ async function installCabinetApiBoundary(
     }
     if (path.startsWith('/api/v1/')) requests.push({ path, tenantId })
 
+    const tenantScopedPaths = new Set([
+      '/api/v1/me/permissions',
+      '/api/v1/billing/subscription',
+    ])
+    if (tenantScopedPaths.has(path)) {
+      if (tenantId === null) {
+        await fulfillData(
+          route,
+          { error: { code: 'TENANT_REQUIRED', message: 'Tenant required' } },
+          400,
+        )
+        return
+      }
+      const tenant = tenants.find(({ id }) => id === tenantId)
+      if (!tenant) {
+        await fulfillData(
+          route,
+          {
+            error: { code: 'TENANT_NOT_FOUND', message: 'Tenant not found' },
+          },
+          404,
+        )
+        return
+      }
+      if (!tenant.isActive) {
+        await fulfillData(
+          route,
+          {
+            error: { code: 'TENANT_INACTIVE', message: 'Tenant inactive' },
+          },
+          403,
+        )
+        return
+      }
+    }
+
     if (path === '/api/v1/me/permissions' && request.method() === 'GET') {
-      const wasDelayed = tenantId === delayedTenantId
+      const wasDelayed =
+        delayedTenantId !== null && tenantId === delayedTenantId
       if (wasDelayed) {
         delayedTenantId = null
         resolveStarted()
@@ -177,15 +220,38 @@ async function installCabinetApiBoundary(
       }
       const access = tenantId ? accessByTenant[tenantId] : undefined
       if (!access) {
-        await fulfillData(
-          route,
-          { error: { code: 'TENANT_REQUIRED', message: 'Tenant required' } },
-          400,
+        throw new Error(`Missing permission fixture for ${tenantId}`)
+      }
+      if (wasDelayed) {
+        const failure = request.failure()
+        if (failure) {
+          resolveDelivery({ kind: 'aborted', error: failure.errorText })
+          return
+        }
+      }
+      try {
+        await fulfillData(route, access)
+      } catch (error) {
+        if (!wasDelayed) throw error
+        const failure = request.failure()
+        resolveDelivery(
+          failure
+            ? { kind: 'aborted', error: failure.errorText }
+            : {
+                kind: 'failed',
+                error: error instanceof Error ? error.message : String(error),
+              },
         )
         return
       }
-      await fulfillData(route, access).catch(() => undefined)
-      if (wasDelayed) resolveSettled()
+      if (wasDelayed) {
+        const failure = request.failure()
+        resolveDelivery(
+          failure
+            ? { kind: 'aborted', error: failure.errorText }
+            : { kind: 'fulfilled' },
+        )
+      }
       return
     }
     if (path === '/api/v1/billing/subscription') {
@@ -209,14 +275,14 @@ async function installCabinetApiBoundary(
       release = new Promise<void>((resolve) => {
         resolveRelease = resolve
       })
-      settled = new Promise<void>((resolve) => {
-        resolveSettled = resolve
+      delivery = new Promise<DelayedDeliveryOutcome>((resolve) => {
+        resolveDelivery = resolve
       })
     },
     waitForDelayedPermissions: () => started,
     releaseDelayedPermissions: async () => {
       resolveRelease()
-      await settled
+      return delivery
     },
   }
 }
@@ -232,6 +298,33 @@ async function upstreamStats(request: APIRequestContext) {
   const response = await request.get(`${upstreamOrigin}/_test/stats`)
   expect(response.ok()).toBeTruthy()
   return (await response.json()) as { logoutRequests: number }
+}
+
+async function armDelayedLogout(request: APIRequestContext) {
+  const response = await request.post(`${upstreamOrigin}/_test/logout/delay`)
+  expect(response.ok()).toBeTruthy()
+}
+
+async function releaseDelayedLogout(request: APIRequestContext) {
+  const response = await request.post(`${upstreamOrigin}/_test/logout/release`)
+  expect(response.ok()).toBeTruthy()
+}
+
+async function fixtureGet(page: Page, path: string, tenantId?: string) {
+  return page.evaluate(
+    async ({ requestPath, requestedTenant }) => {
+      const response = await fetch(requestPath, {
+        headers: requestedTenant
+          ? { 'X-Tenant-Id': requestedTenant }
+          : undefined,
+      })
+      return {
+        status: response.status,
+        body: await response.json(),
+      }
+    },
+    { requestPath: path, requestedTenant: tenantId },
+  )
 }
 
 async function completeOtpLogin(page: Page) {
@@ -280,9 +373,54 @@ test.beforeEach(async ({ request }) => {
   await resetUpstream(request)
 })
 
-test('never renders former tenant access after a delayed response is released @cabinet-smoke', async ({
+test('tenant fixture rejects missing tenant headers for every scoped endpoint', async ({
   page,
 }) => {
+  await installCabinetApiBoundary(page)
+  await page.goto('/login')
+
+  for (const path of [
+    '/api/v1/me/permissions',
+    '/api/v1/billing/subscription',
+  ]) {
+    expect(await fixtureGet(page, path), path).toEqual({
+      status: 400,
+      body: {
+        error: { code: 'TENANT_REQUIRED', message: 'Tenant required' },
+      },
+    })
+  }
+})
+
+test('tenant fixture rejects unknown and inactive tenant headers', async ({
+  page,
+}) => {
+  await installCabinetApiBoundary(page)
+  await page.goto('/login')
+
+  for (const path of [
+    '/api/v1/me/permissions',
+    '/api/v1/billing/subscription',
+  ]) {
+    expect(await fixtureGet(page, path, 'tenant-unknown'), path).toEqual({
+      status: 404,
+      body: {
+        error: { code: 'TENANT_NOT_FOUND', message: 'Tenant not found' },
+      },
+    })
+    expect(await fixtureGet(page, path, 'tenant-3'), path).toEqual({
+      status: 403,
+      body: {
+        error: { code: 'TENANT_INACTIVE', message: 'Tenant inactive' },
+      },
+    })
+  }
+})
+
+test('aborts former tenant access before it can render after B commits @cabinet-smoke', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
   const fixture = await installCabinetApiBoundary(page)
   await loginFrom(page)
   await selectVisibleTenant(page, 'tenant-2')
@@ -294,6 +432,11 @@ test('never renders former tenant access after a delayed response is released @c
   await expect(page).toHaveURL('/app/sobol/settings/profile')
 
   fixture.delayNextPermissions('tenant-1')
+  const formerAccessRequestFailed = page.waitForEvent('requestfailed', {
+    predicate: (request) =>
+      new URL(request.url()).pathname === '/api/v1/me/permissions' &&
+      request.headers()['x-tenant-id'] === 'tenant-1',
+  })
   await selectVisibleTenant(page, 'tenant-1')
   await fixture.waitForDelayedPermissions()
   await page.goBack()
@@ -301,6 +444,8 @@ test('never renders former tenant access after a delayed response is released @c
   await expect(
     page.getByRole('heading', { name: 'Вітаємо в Розбірка Соболя' }),
   ).toBeVisible()
+  const abortedRequest = await formerAccessRequestFailed
+  expect(abortedRequest.failure()?.errorText).toMatch(/aborted|cancelled/i)
 
   const formerTenantHeadingAppeared = page
     .getByRole('heading', { name: 'Вітаємо в Розбірка Коваль' })
@@ -317,13 +462,24 @@ test('never renders former tenant access after a delayed response is released @c
       () => true,
       () => false,
     )
-  await fixture.releaseDelayedPermissions()
+  const deliveryOutcome: unknown = await fixture.releaseDelayedPermissions()
+  expect(deliveryOutcome).toMatchObject({ kind: 'aborted' })
   expect(await formerTenantHeadingAppeared).toBe(false)
   expect(await formerTenantAccessAppeared).toBe(false)
   await expect(
     page.getByRole('heading', { name: 'Вітаємо в Розбірка Коваль' }),
   ).not.toBeVisible()
   await expect(page.getByRole('link', { name: 'Підписка' })).not.toBeVisible()
+  await page.setViewportSize({ width: 320, height: 900 })
+  const mobileMore = page.getByRole('button', { name: 'Ще' })
+  await expect(mobileMore).toBeVisible()
+  await mobileMore.click()
+  await expect(
+    page
+      .getByRole('dialog', { name: 'Меню кабінету' })
+      .getByRole('link', { name: 'Підписка' }),
+  ).toHaveCount(0)
+  await page.keyboard.press('Escape')
   expect(
     fixture.requests.filter(
       ({ path, tenantId }) =>
@@ -412,10 +568,13 @@ test('opens More by keyboard, traps focus, and restores it on close @cabinet-smo
     dialog.getByRole('button', { name: 'Закрити меню' }),
   ).toBeFocused()
 
-  for (let index = 0; index < 12; index += 1) await page.keyboard.press('Tab')
-  expect(
-    await dialog.evaluate((node) => node.contains(document.activeElement)),
-  ).toBe(true)
+  for (let index = 0; index < 12; index += 1) {
+    await page.keyboard.press('Tab')
+    expect(
+      await dialog.evaluate((node) => node.contains(document.activeElement)),
+      `Tab traversal ${index + 1}`,
+    ).toBe(true)
+  }
   await page.keyboard.press('Escape')
   await expect(dialog).not.toBeVisible()
   await expect(more).toBeFocused()
@@ -564,11 +723,16 @@ test('logs out normally from the cabinet shell @cabinet-smoke', async ({
   await page.setViewportSize({ width: 1440, height: 900 })
   await installCabinetApiBoundary(page)
   await loginFrom(page)
+  await armDelayedLogout(request)
+  let logoutSettled = false
   const logoutResponse = page.waitForResponse(
     (response) =>
       response.request().method() === 'POST' &&
       new URL(response.url()).pathname === '/session/logout',
   )
+  void logoutResponse.then(() => {
+    logoutSettled = true
+  })
   await page
     .getByRole('navigation', { name: 'Навігація кабінету' })
     .locator('..')
@@ -576,6 +740,11 @@ test('logs out normally from the cabinet shell @cabinet-smoke', async ({
     .click()
 
   await expect(page).toHaveURL('/')
+  await expect
+    .poll(async () => (await upstreamStats(request)).logoutRequests)
+    .toBe(1)
+  expect(logoutSettled).toBe(false)
+  await releaseDelayedLogout(request)
   await logoutResponse
   expect((await upstreamStats(request)).logoutRequests).toBe(1)
   await page.goto('/app/koval/dashboard')
