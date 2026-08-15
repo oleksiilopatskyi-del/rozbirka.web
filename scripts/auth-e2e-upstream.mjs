@@ -15,8 +15,7 @@ let delayedLogout = null
 const refreshTokens = new Set()
 
 function reset(options = {}) {
-  delayedLogout?.resolve()
-  delayedLogout = null
+  releaseLogoutDelay()
   newUser = options.newUser === true
   tokenSequence = 0
   sendRequests = 0
@@ -24,6 +23,13 @@ function reset(options = {}) {
   refreshRequests = 0
   logoutRequests = 0
   refreshTokens.clear()
+}
+
+function releaseLogoutDelay() {
+  const pendingLogout = delayedLogout
+  delayedLogout = null
+  pendingLogout?.resolve()
+  return pendingLogout !== null
 }
 
 function armLogoutDelay() {
@@ -117,7 +123,7 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === 'POST' && url.pathname === '/_test/logout/release') {
-      if (!delayedLogout) {
+      if (!releaseLogoutDelay()) {
         sendProblem(
           response,
           409,
@@ -126,7 +132,6 @@ const server = createServer(async (request, response) => {
         )
         return
       }
-      delayedLogout.resolve()
       sendJson(response, 200, { released: true })
       return
     }
@@ -255,6 +260,7 @@ let closing = false
 function shutdown(signal) {
   if (closing) return
   closing = true
+  releaseLogoutDelay()
   server.close((error) => {
     if (error) {
       process.stderr.write(
@@ -263,6 +269,8 @@ function shutdown(signal) {
       process.exitCode = 1
     }
   })
+  server.closeIdleConnections()
+  setImmediate(() => server.closeAllConnections())
 }
 
 process.once('SIGINT', () => shutdown('SIGINT'))

@@ -724,29 +724,35 @@ test('logs out normally from the cabinet shell @cabinet-smoke', async ({
   await installCabinetApiBoundary(page)
   await loginFrom(page)
   await armDelayedLogout(request)
-  let logoutSettled = false
-  const logoutResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' &&
-      new URL(response.url()).pathname === '/session/logout',
-  )
-  void logoutResponse.then(() => {
-    logoutSettled = true
-  })
-  await page
-    .getByRole('navigation', { name: 'Навігація кабінету' })
-    .locator('..')
-    .getByRole('button', { name: 'Вийти' })
-    .click()
+  let delayReleased = false
+  try {
+    let logoutSettled = false
+    const logoutResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/session/logout',
+    )
+    void logoutResponse.then(() => {
+      logoutSettled = true
+    })
+    await page
+      .getByRole('navigation', { name: 'Навігація кабінету' })
+      .locator('..')
+      .getByRole('button', { name: 'Вийти' })
+      .click()
 
-  await expect(page).toHaveURL('/')
-  await expect
-    .poll(async () => (await upstreamStats(request)).logoutRequests)
-    .toBe(1)
-  expect(logoutSettled).toBe(false)
-  await releaseDelayedLogout(request)
-  await logoutResponse
-  expect((await upstreamStats(request)).logoutRequests).toBe(1)
-  await page.goto('/app/koval/dashboard')
-  await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL('/')
+    await expect
+      .poll(async () => (await upstreamStats(request)).logoutRequests)
+      .toBe(1)
+    expect(logoutSettled).toBe(false)
+    await releaseDelayedLogout(request)
+    delayReleased = true
+    await logoutResponse
+    expect((await upstreamStats(request)).logoutRequests).toBe(1)
+    await page.goto('/app/koval/dashboard')
+    await expect(page).toHaveURL(/\/login$/)
+  } finally {
+    if (!delayReleased) await releaseDelayedLogout(request)
+  }
 })
