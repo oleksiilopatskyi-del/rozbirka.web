@@ -9,6 +9,7 @@ import type { CabinetContextValue } from './CabinetContext'
 import { useCabinet } from './CabinetContext'
 import { CabinetShell } from './CabinetShell'
 import { CabinetHomeScreen } from './screens/cabinet-home'
+import cabinetStyles from '../index.css?raw'
 
 vi.mock('../auth/AuthContext', () => ({ useAuth: vi.fn() }))
 vi.mock('./CabinetContext', () => ({ useCabinet: vi.fn() }))
@@ -76,6 +77,12 @@ it('renders nested cabinet content in a responsive overflow-safe shell', () => {
 
   expect(screen.getByRole('main')).toHaveClass('min-w-0')
   expect(screen.getByText('Вміст модуля')).toBeVisible()
+  const shell = screen.getByRole('main').parentElement
+  expect(shell).not.toBeNull()
+  expect(shell).not.toHaveClass('overflow-x-clip', 'overflow-x-hidden')
+  expect(cabinetStyles).not.toMatch(
+    /\.cabinet-shell\s*\{[^}]*overflow-x\s*:\s*(?:clip|hidden)/s,
+  )
   expect(screen.getByLabelText('rozbirka — на головну')).toHaveAttribute(
     'href',
     '/app/koval/dashboard',

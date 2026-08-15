@@ -21,10 +21,12 @@ const activeTenant = tenants[0]!
 
 const deferred = () => {
   let resolve!: () => void
-  const promise = new Promise<void>((resolvePromise) => {
+  let reject!: (error: unknown) => void
+  const promise = new Promise<void>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
+    reject = rejectPromise
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 it('exposes tenant names and awaits one switch before accepting another', async () => {
@@ -57,4 +59,41 @@ it('exposes tenant names and awaits one switch before accepting another', async 
   pending.resolve()
 
   await waitFor(() => expect(switcher).toBeEnabled())
+})
+
+it('settles the guard after a rejected switch without leaking the rejection', async () => {
+  const rejected = deferred()
+  const onSwitch = vi
+    .fn<(tenantId: string) => Promise<void>>()
+    .mockReturnValueOnce(rejected.promise)
+    .mockResolvedValueOnce()
+  const unhandledRejection = vi.fn()
+  window.addEventListener('unhandledrejection', unhandledRejection)
+
+  try {
+    render(
+      <TenantSwitcher
+        tenant={activeTenant}
+        tenants={tenants}
+        onSwitch={onSwitch}
+      />,
+    )
+    const switcher = screen.getByRole('combobox', {
+      name: 'Перемкнути розбірку',
+    })
+
+    fireEvent.change(switcher, { target: { value: 'luxe' } })
+    expect(switcher).toBeDisabled()
+
+    rejected.reject(new Error('switch failed'))
+
+    await waitFor(() => expect(switcher).toBeEnabled())
+    fireEvent.change(switcher, { target: { value: 'luxe' } })
+    await waitFor(() => expect(onSwitch).toHaveBeenCalledTimes(2))
+    await Promise.resolve()
+
+    expect(unhandledRejection).not.toHaveBeenCalled()
+  } finally {
+    window.removeEventListener('unhandledrejection', unhandledRejection)
+  }
 })
