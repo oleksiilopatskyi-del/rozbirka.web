@@ -58,9 +58,6 @@ interface SwitchRouteIntent {
 const cabinetSuffixFor = (pathname: string) =>
   /^\/app\/[^/]+(?<rest>\/.*)?$/.exec(pathname)?.groups?.['rest'] ?? ''
 
-const tenantPathFor = (pathname: string, slug: string) =>
-  `/app/${encodeURIComponent(slug)}${cabinetSuffixFor(pathname)}`
-
 const cabinetPathFor = (
   pathname: string,
   slug: string,
@@ -293,15 +290,6 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
       }
 
       if (!target.isActive) {
-        void navigate(
-          {
-            pathname: tenantPathFor(location.pathname, target.slug),
-            search: location.search,
-            hash: location.hash,
-          },
-          { replace: true },
-        )
-        invalidateBoundary(`route:${target.slug}:inactive`)
         return
       }
 
@@ -320,7 +308,6 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
       location.pathname,
       location.search,
       invalidateBoundary,
-      navigate,
       publish,
       settleSwitchRoute,
       tenantSlug,

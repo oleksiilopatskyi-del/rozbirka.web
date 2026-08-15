@@ -313,6 +313,31 @@ it('does not load tenant access for an inactive tenant', async () => {
   expect(tenantPreference.get()).toBe(tenantA.id)
 })
 
+it('keeps the current tenant untouched when an inactive tenant is selected', async () => {
+  const preferenceSet = vi.spyOn(tenantPreference, 'set')
+
+  renderCabinet('/app/a/settings/profile?tab=security#phone')
+  expect(await screen.findByText('tenant:a access:a')).toBeVisible()
+  const readyCabinet = cabinet
+  if (!readyCabinet) throw new Error('Cabinet context was not exposed')
+  const sharedSignal = tenantRequestScope.signal
+  preferenceSet.mockClear()
+  vi.mocked(accessApi.get).mockClear()
+
+  await act(async () => readyCabinet.switchTenant(inactiveTenant.id))
+
+  expect(screen.getByText('tenant:a access:a')).toBeVisible()
+  expect(
+    screen.getByText('route:/app/a/settings/profile?tab=security#phone'),
+  ).toBeVisible()
+  expect(screen.queryByText('Розбірка неактивна')).not.toBeInTheDocument()
+  expect(tenantPreference.get()).toBe(tenantA.id)
+  expect(preferenceSet).not.toHaveBeenCalled()
+  expect(accessApi.get).not.toHaveBeenCalled()
+  expect(tenantRequestScope.signal).toBe(sharedSignal)
+  expect(sharedSignal.aborted).toBe(false)
+})
+
 it('commits only the last target during rapid switches', async () => {
   const accessB = deferred<MePermissionsDto>()
   const accessC = deferred<MePermissionsDto>()

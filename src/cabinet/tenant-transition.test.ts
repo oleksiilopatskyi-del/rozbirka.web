@@ -5,6 +5,7 @@ import {
   createTenantTransition,
   type TenantTransitionDependencies,
 } from './tenant-transition'
+import { tenantResetRegistry } from './tenant-reset-registry'
 
 const tenant = (id: string): Tenant => ({
   id,
@@ -212,6 +213,80 @@ it('settles a superseded reset before a newer target can persist or commit', asy
   expect(accessLoads).toEqual([tenantC.id])
   expect(commits).toEqual([tenantC.id])
   expect(ownedState).toBe(tenantC.id)
+})
+
+it('settles an old coordinator reset before a replacement coordinator commits', async () => {
+  const lateReset = deferred<void>()
+  const events: string[] = []
+  let resetCalls = 0
+  let ownedState = tenantA.id
+  const removeReset = tenantResetRegistry.register(async () => {
+    resetCalls += 1
+    const resetCall = resetCalls
+    events.push(`clear:${resetCall}:start`)
+    if (resetCall === 1) await lateReset.promise
+    ownedState = `reset:${resetCall}`
+    events.push(`clear:${resetCall}:end`)
+  })
+  const dependencies = (): TenantTransitionDependencies => ({
+    currentScope: () => ({ userId: 'u1', tenantId: tenantA.id }),
+    begin: vi.fn(),
+    rotateRequests: vi.fn(),
+    clear: (scope) => tenantResetRegistry.clear(scope),
+    persistTenant: (tenantId) => events.push(`persist:${tenantId}`),
+    loadAccess: () => Promise.resolve(access(['cars.view'])),
+    loadSubscription: vi.fn(),
+    commit: (target) => {
+      ownedState = target.id
+      events.push(`commit:${target.id}`)
+    },
+    fail: vi.fn(),
+  })
+  const oldCoordinator = createTenantTransition(dependencies())
+  const replacementCoordinator = createTenantTransition(dependencies())
+  let oldResult: Promise<unknown> | undefined
+  let replacementResult: Promise<unknown> | undefined
+
+  try {
+    oldResult = oldCoordinator.transition(tenantB)
+    await vi.waitFor(() => expect(events).toContain('clear:1:start'))
+    oldCoordinator.invalidate()
+    replacementResult = replacementCoordinator.transition(tenantC)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const eventsBeforeRelease = [...events]
+    const ownerBeforeRelease = ownedState
+
+    lateReset.resolve()
+    const [settledOld, settledReplacement] = await Promise.all([
+      oldResult,
+      replacementResult,
+    ])
+
+    expect(eventsBeforeRelease).toEqual(['clear:1:start'])
+    expect(ownerBeforeRelease).toBe(tenantA.id)
+    expect(settledOld).toEqual({ kind: 'superseded', target: tenantB })
+    expect(settledReplacement).toMatchObject({
+      kind: 'committed',
+      target: tenantC,
+    })
+    expect(events).toEqual([
+      'clear:1:start',
+      'clear:1:end',
+      'clear:2:start',
+      'clear:2:end',
+      'persist:c',
+      'commit:c',
+    ])
+    expect(ownedState).toBe(tenantC.id)
+  } finally {
+    lateReset.resolve()
+    removeReset()
+    await Promise.allSettled(
+      [oldResult, replacementResult].filter(
+        (result): result is Promise<unknown> => result !== undefined,
+      ),
+    )
+  }
 })
 
 it('does not restore A content when B bootstrap fails', async () => {
