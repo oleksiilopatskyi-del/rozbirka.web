@@ -196,6 +196,8 @@ describe('edge routing', () => {
   )
 
   it.each([
+    '/app/a',
+    '/app/koval/',
     '/app/a/dashboard',
     '/app/koval/dashboard',
     `/app/${'a'.repeat(63)}/settings/billing/plans`,
@@ -213,7 +215,6 @@ describe('edge routing', () => {
   })
 
   it.each([
-    '/app/koval',
     '/app//dashboard',
     '/app/-koval/dashboard',
     '/app/Koval/dashboard',

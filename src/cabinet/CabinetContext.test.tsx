@@ -1,7 +1,13 @@
 import { useEffect } from 'react'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes, useNavigate } from 'react-router'
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { authApi } from '@/api/auth'
 import { billingApi } from '@/api/billing'
@@ -50,9 +56,12 @@ const tenantC = tenant('c')
 const inactiveTenant = tenant('inactive', false)
 const tenants = [tenantA, tenantB, tenantC, inactiveTenant]
 
-const access = (id: string): MePermissionsDto => ({
+const access = (
+  id: string,
+  permissions: string[] = ['cars.view'],
+): MePermissionsDto => ({
   role: id,
-  permissions: ['cars.view'],
+  permissions,
   features: [],
 })
 
@@ -105,6 +114,13 @@ function RouteChangeButton({ slug }: { slug: string }) {
   )
 }
 
+function LocationProbe() {
+  const location = useLocation()
+  return (
+    <span>{`route:${location.pathname}${location.search}${location.hash}`}</span>
+  )
+}
+
 function SignOutButton() {
   const auth = useAuth()
   return (
@@ -131,6 +147,7 @@ function CabinetRoute() {
       <RouteChangeButton slug="inactive" />
       <SignOutButton />
       <ReauthenticateButton />
+      <LocationProbe />
       <CabinetProvider>
         <CabinetProbe />
       </CabinetProvider>
@@ -200,6 +217,71 @@ it('renders no A children after switching begins and commits B atomically', asyn
   expect(await screen.findByText('tenant:b access:b')).toBeVisible()
 })
 
+it('preserves a registered suffix after the target view policy allows it', async () => {
+  const userEventApi = userEvent.setup()
+
+  renderCabinet('/app/a/settings/profile?tab=security#phone')
+  expect(await screen.findByText('tenant:a access:a')).toBeVisible()
+
+  await userEventApi.click(screen.getByRole('button', { name: 'Розбірка B' }))
+
+  expect(await screen.findByText('tenant:b access:b')).toBeVisible()
+  expect(
+    screen.getByText('route:/app/b/settings/profile?tab=security#phone'),
+  ).toBeVisible()
+})
+
+it('falls back to the target dashboard when the target view policy denies the suffix', async () => {
+  const userEventApi = userEvent.setup()
+
+  renderCabinet('/app/a/settings/billing/overview?tab=plans#invoice')
+  expect(await screen.findByText('tenant:a access:a')).toBeVisible()
+
+  await userEventApi.click(screen.getByRole('button', { name: 'Розбірка B' }))
+
+  expect(await screen.findByText('tenant:b access:b')).toBeVisible()
+  expect(
+    screen.getByText('route:/app/b/dashboard?tab=plans#invoice'),
+  ).toBeVisible()
+})
+
+it('keeps a failed selection on the current route and navigates its successful retry', async () => {
+  const offline = new Error('offline')
+  let bAttempts = 0
+  vi.mocked(accessApi.get).mockImplementation(() => {
+    const target = tenantPreference.get() ?? 'none'
+    if (target === tenantB.id) {
+      bAttempts += 1
+      return bAttempts === 1
+        ? Promise.reject(offline)
+        : Promise.resolve(access(target))
+    }
+    return Promise.resolve(access(target))
+  })
+  const userEventApi = userEvent.setup()
+
+  renderCabinet('/app/a/settings/profile?tab=security#phone')
+  expect(await screen.findByText('tenant:a access:a')).toBeVisible()
+
+  await userEventApi.click(screen.getByRole('button', { name: 'Розбірка B' }))
+
+  expect(
+    await screen.findByRole('button', { name: 'Спробувати ще раз' }),
+  ).toBeVisible()
+  expect(
+    screen.getByText('route:/app/a/settings/profile?tab=security#phone'),
+  ).toBeVisible()
+
+  await userEventApi.click(
+    screen.getByRole('button', { name: 'Спробувати ще раз' }),
+  )
+
+  expect(await screen.findByText('tenant:b access:b')).toBeVisible()
+  expect(
+    screen.getByText('route:/app/b/settings/profile?tab=security#phone'),
+  ).toBeVisible()
+})
+
 it('shows an honest retry state for an access network failure', async () => {
   vi.mocked(accessApi.get)
     .mockRejectedValueOnce(new Error('offline'))
@@ -256,11 +338,13 @@ it('commits only the last target during rapid switches', async () => {
   accessC.resolve(access('c'))
   await act(async () => switchC)
   expect(await screen.findByText('tenant:c access:c')).toBeVisible()
+  expect(screen.getByText('route:/app/c/dashboard')).toBeVisible()
 
   accessB.resolve(access('b'))
   await act(async () => switchB)
   expect(screen.queryByText('tenant:b access:b')).not.toBeInTheDocument()
   expect(screen.getByText('tenant:c access:c')).toBeVisible()
+  expect(screen.getByText('route:/app/c/dashboard')).toBeVisible()
 })
 
 it('supersedes an in-flight URL tenant when the route changes', async () => {
@@ -418,4 +502,5 @@ it('keeps an already-ready tenant mounted without starting a transition', async 
   expect(screen.queryByText('Перемикаємо розбірку…')).not.toBeInTheDocument()
   expect(accessApi.get).toHaveBeenCalledOnce()
   expect(sharedSignal.aborted).toBe(false)
+  expect(screen.getByText('route:/app/a/dashboard')).toBeVisible()
 })

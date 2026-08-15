@@ -507,6 +507,22 @@ test('loads tenant-specific subscription data from tenant-scoped requests @cabin
   )
 })
 
+test('falls back to the target dashboard when its policy denies the current module @cabinet-smoke', async ({
+  page,
+}) => {
+  await installCabinetApiBoundary(page)
+  await loginFrom(page)
+  await clickVisibleCabinetLink(page, 'Підписка')
+  await expect(page).toHaveURL('/app/koval/settings/billing/overview')
+
+  await selectVisibleTenant(page, 'tenant-2')
+
+  await expect(page).toHaveURL('/app/sobol/dashboard')
+  await expect(
+    page.getByRole('heading', { name: 'Вітаємо в Розбірка Соболя' }),
+  ).toBeVisible()
+})
+
 for (const width of [320, 768, 1024, 1440]) {
   test(`has no document overflow at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
@@ -596,6 +612,24 @@ test('direct cabinet URL matches visible navigation state @cabinet-smoke', async
   await page.goto('/app/koval/settings/billing/overview')
   await expect(page.getByRole('heading', { name: 'Підписка' })).toBeVisible()
   await expect(subscriptionLink).toHaveAttribute('aria-current', 'page')
+})
+
+test('canonical tenant roots reach the private SPA and redirect to the dashboard @cabinet-smoke', async ({
+  page,
+}) => {
+  await installCabinetApiBoundary(page)
+  await loginFrom(page)
+
+  for (const path of ['/app/koval', '/app/koval/']) {
+    const response = await page.goto(path)
+
+    expect(response?.status(), path).toBe(200)
+    expect(response?.headers()['x-robots-tag'], path).toBe('noindex')
+    await expect(page, path).toHaveURL('/app/koval/dashboard')
+    await expect(
+      page.getByRole('heading', { name: 'Вітаємо в Розбірка Коваль' }),
+    ).toBeVisible()
+  }
 })
 
 test('shows a truthful unavailable state for an unreleased module', async ({

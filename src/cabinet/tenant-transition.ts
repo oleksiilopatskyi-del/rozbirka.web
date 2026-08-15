@@ -105,6 +105,7 @@ export const createTenantTransition = (
 ) => {
   let generation = 0
   let active: ActiveTransition | null = null
+  let resetBarrier = Promise.resolve()
 
   const transition = (target: Tenant): Promise<TenantTransitionResult> => {
     if (active?.targetId === target.id) {
@@ -125,14 +126,21 @@ export const createTenantTransition = (
         dependencies.begin(target, transitionGeneration)
         dependencies.rotateRequests()
 
-        if (scope.tenantId !== null) {
-          await dependencies.clear({
-            userId: scope.userId,
-            tenantId: scope.tenantId,
-          })
-          if (!isCurrent()) {
-            return { kind: 'superseded', target }
-          }
+        const reset = resetBarrier.then(() =>
+          scope.tenantId === null
+            ? undefined
+            : dependencies.clear({
+                userId: scope.userId,
+                tenantId: scope.tenantId,
+              }),
+        )
+        resetBarrier = reset.then(
+          () => undefined,
+          () => undefined,
+        )
+        await reset
+        if (!isCurrent()) {
+          return { kind: 'superseded', target }
         }
 
         dependencies.persistTenant(target.id)

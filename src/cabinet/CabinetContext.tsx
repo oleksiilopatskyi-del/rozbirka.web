@@ -15,6 +15,9 @@ import type { Tenant } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { accessApi } from './access-api'
 import type { TenantAccessSnapshot } from './access-types'
+import { cabinetPath } from './cabinet-paths'
+import { cabinetModules } from './module-registry'
+import { evaluateModuleAccess } from './policy'
 import { tenantRequestScope } from './tenant-request-scope'
 import { tenantResetRegistry } from './tenant-reset-registry'
 import {
@@ -45,9 +48,38 @@ const initialState: CabinetState = {
 
 const CabinetContext = createContext<CabinetContextValue | null>(null)
 
-const cabinetPathFor = (pathname: string, slug: string) => {
-  const match = /^\/app\/[^/]+(?<rest>\/.*)?$/.exec(pathname)
-  return `/app/${encodeURIComponent(slug)}${match?.groups?.['rest'] ?? ''}`
+interface SwitchRouteIntent {
+  targetId: string
+  pathname: string
+  search: string
+  hash: string
+}
+
+const cabinetSuffixFor = (pathname: string) =>
+  /^\/app\/[^/]+(?<rest>\/.*)?$/.exec(pathname)?.groups?.['rest'] ?? ''
+
+const tenantPathFor = (pathname: string, slug: string) =>
+  `/app/${encodeURIComponent(slug)}${cabinetSuffixFor(pathname)}`
+
+const cabinetPathFor = (
+  pathname: string,
+  slug: string,
+  snapshot: TenantAccessSnapshot,
+) => {
+  const suffix = cabinetSuffixFor(pathname).replace(/\/$/, '')
+  const definition = Object.values(cabinetModules).find(
+    (candidate) => candidate.routeSegment === suffix,
+  )
+  const module =
+    definition !== undefined &&
+    evaluateModuleAccess(
+      definition,
+      { status: 'ready', snapshot, error: null },
+      'view',
+    ).kind === 'allowed'
+      ? definition.key
+      : 'dashboard'
+  return cabinetPath(slug, module)
 }
 
 export function CabinetProvider({ children }: { children: ReactNode }) {
@@ -60,6 +92,7 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state)
   const authRef = useRef(auth)
   const invalidatedBoundaryRef = useRef<string | null>(null)
+  const switchRouteIntentRef = useRef<SwitchRouteIntent | null>(null)
   const transitionRef = useRef<ReturnType<
     typeof createTenantTransition
   > | null>(null)
@@ -73,6 +106,7 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
     (boundary: string) => {
       if (invalidatedBoundaryRef.current === boundary) return
       invalidatedBoundaryRef.current = boundary
+      switchRouteIntentRef.current = null
       transitionRef.current?.invalidate()
       tenantRequestScope.rotate()
       publish(initialState)
@@ -149,6 +183,32 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const settleSwitchRoute = useCallback(
+    (result: TenantTransitionResult | undefined, intent: SwitchRouteIntent) => {
+      if (switchRouteIntentRef.current !== intent) return
+      if (result?.kind === 'committed') {
+        switchRouteIntentRef.current = null
+        void navigate(
+          {
+            pathname: cabinetPathFor(
+              intent.pathname,
+              result.target.slug,
+              result.snapshot,
+            ),
+            search: intent.search,
+            hash: intent.hash,
+          },
+          { replace: true },
+        )
+        return
+      }
+      if (result?.kind !== 'error') {
+        switchRouteIntentRef.current = null
+      }
+    },
+    [navigate],
+  )
+
   useEffect(() => {
     if (auth.status === 'loading') {
       if (
@@ -198,8 +258,13 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
 
   const retry = useCallback(async () => {
     if (stateRef.current.targetTenant === null) return
-    await transitionTo(stateRef.current.targetTenant)
-  }, [transitionTo])
+    const target = stateRef.current.targetTenant
+    const intent = switchRouteIntentRef.current
+    const result = await transitionTo(target)
+    if (intent?.targetId === target.id) {
+      settleSwitchRoute(result, intent)
+    }
+  }, [settleSwitchRoute, transitionTo])
 
   const switchTenant = useCallback(
     async (tenantId: string) => {
@@ -227,21 +292,28 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      void navigate(
-        {
-          pathname: cabinetPathFor(location.pathname, target.slug),
-          search: location.search,
-          hash: location.hash,
-        },
-        { replace: true },
-      )
-
       if (!target.isActive) {
+        void navigate(
+          {
+            pathname: tenantPathFor(location.pathname, target.slug),
+            search: location.search,
+            hash: location.hash,
+          },
+          { replace: true },
+        )
         invalidateBoundary(`route:${target.slug}:inactive`)
         return
       }
 
-      await transitionTo(target)
+      const intent: SwitchRouteIntent = {
+        targetId: target.id,
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+      }
+      switchRouteIntentRef.current = intent
+      const result = await transitionTo(target)
+      settleSwitchRoute(result, intent)
     },
     [
       location.hash,
@@ -250,6 +322,7 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
       invalidateBoundary,
       navigate,
       publish,
+      settleSwitchRoute,
       tenantSlug,
       transitionTo,
     ],
@@ -291,6 +364,7 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
     }
     if (
       state.status !== 'switching' &&
+      state.status !== 'error' &&
       state.targetTenant?.id !== routeTarget.id
     ) {
       return {

@@ -163,6 +163,57 @@ it('never commits B when a newer C transition wins', async () => {
   expect(commits).toEqual(['c'])
 })
 
+it('settles a superseded reset before a newer target can persist or commit', async () => {
+  const lateReset = deferred<void>()
+  const persisted: string[] = []
+  const accessLoads: string[] = []
+  const commits: string[] = []
+  let resetCalls = 0
+  let ownedState = tenantA.id
+  const transition = createTenantTransition({
+    currentScope: () => ({ userId: 'u1', tenantId: tenantA.id }),
+    begin: vi.fn(),
+    rotateRequests: vi.fn(),
+    clear: async () => {
+      resetCalls += 1
+      const resetCall = resetCalls
+      if (resetCall === 1) await lateReset.promise
+      ownedState = `reset:${resetCall}`
+    },
+    persistTenant: (tenantId) => persisted.push(tenantId),
+    loadAccess: () => {
+      accessLoads.push(persisted.at(-1) ?? 'none')
+      return Promise.resolve(access(['cars.view']))
+    },
+    loadSubscription: vi.fn(),
+    commit: (target) => {
+      commits.push(target.id)
+      ownedState = target.id
+    },
+    fail: vi.fn(),
+  })
+
+  const b = transition.transition(tenantB)
+  await vi.waitFor(() => expect(resetCalls).toBe(1))
+  const c = transition.transition(tenantC)
+  await Promise.resolve()
+
+  expect(persisted).toEqual([])
+  expect(accessLoads).toEqual([])
+  expect(commits).toEqual([])
+  expect(ownedState).toBe(tenantA.id)
+
+  lateReset.resolve()
+
+  await expect(b).resolves.toEqual({ kind: 'superseded', target: tenantB })
+  await expect(c).resolves.toMatchObject({ kind: 'committed', target: tenantC })
+  expect(resetCalls).toBe(2)
+  expect(persisted).toEqual([tenantC.id])
+  expect(accessLoads).toEqual([tenantC.id])
+  expect(commits).toEqual([tenantC.id])
+  expect(ownedState).toBe(tenantC.id)
+})
+
 it('does not restore A content when B bootstrap fails', async () => {
   const offline = new Error('offline')
   const commits: string[] = []
@@ -478,10 +529,10 @@ it('suppresses a stale cleanup failure after a newer transition commits', async 
   const b = transition.transition(tenantB)
   await vi.waitFor(() => expect(cleanupCalls).toBe(1))
   const c = transition.transition(tenantC)
-  await expect(c).resolves.toMatchObject({ kind: 'committed', target: tenantC })
   staleCleanup.reject(staleFailure)
 
   await expect(b).resolves.toEqual({ kind: 'superseded', target: tenantB })
+  await expect(c).resolves.toMatchObject({ kind: 'committed', target: tenantC })
   expect(persisted).toEqual(['c'])
   expect(commits).toEqual(['c'])
   expect(failures).toEqual([])
