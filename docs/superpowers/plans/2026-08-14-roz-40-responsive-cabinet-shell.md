@@ -819,3 +819,124 @@ review finds nothing, record that result in the task report.
 After explicit authorization, push the branch, create one draft PR targeting
 `develop`, wait for checks, deploy the verified QA artifact, and run the
 authenticated QA smoke flow. Production deployment remains out of scope.
+
+---
+
+### Task 11: Review Fix — Canonical Tenant Root and Serialized Switching
+
+**Files:**
+- Modify: `worker/router.ts`
+- Modify: `worker/router.test.ts`
+- Modify: `src/cabinet/tenant-transition.ts`
+- Modify: `src/cabinet/tenant-transition.test.ts`
+- Modify: `src/cabinet/CabinetContext.tsx`
+- Modify: `src/cabinet/CabinetContext.test.tsx`
+- Modify: `e2e/cabinet-shell.spec.ts`
+
+- [ ] **Step 1: Add RED regressions**
+
+Add tests proving `/app/<valid-slug>` and `/app/<valid-slug>/` reach the
+noindex SPA and redirect client-side to the tenant dashboard; a delayed B reset
+cannot finish after C commits or mutate C-owned state; and tenant switching
+preserves the current suffix only when the target snapshot's shared view policy
+allows it, otherwise replacing the route with the target dashboard.
+
+- [ ] **Step 2: Implement the minimal architecture fix**
+
+Allow an optional child path in the Worker tenant-route matcher. Serialize
+destructive reset work across generations before any newer transition can
+persist/load/commit. After a committed tenant transition, resolve the current
+registered suffix against the committed target snapshot with the central policy
+and apply the allowed-route-or-dashboard fallback without duplicating access
+rules.
+
+- [ ] **Step 3: Verify and commit**
+
+Run focused Worker/transition/context tests, focused Chromium cabinet routing,
+`npm run check`, QA build/artifact, Worker dry-run, and `git diff --check`.
+
+```bash
+git add -- worker/router.ts worker/router.test.ts src/cabinet/tenant-transition.ts src/cabinet/tenant-transition.test.ts src/cabinet/CabinetContext.tsx src/cabinet/CabinetContext.test.tsx e2e/cabinet-shell.spec.ts
+git commit -m "fix(web): serialize tenant route transitions"
+```
+
+---
+
+### Task 12: Review Fix — Truthful Billing Failures and Mobile Payments
+
+**Files:**
+- Modify: `src/cabinet/billing/plans-screen.tsx`
+- Modify: `src/cabinet/billing/subscription-screen.tsx`
+- Modify: `src/cabinet/billing/payments-screen.tsx`
+- Modify: `src/cabinet/billing/billing-screens.test.tsx`
+- Modify: `e2e/cabinet-shell.spec.ts`
+
+- [ ] **Step 1: Add RED error and responsive regressions**
+
+Cover plans/payments load network failures, backend 403/409 mutation failures,
+subscription cancellation rejection, and scope-rotation aborts. Add populated
+pending-payment browser coverage at 320 and 768 pixels that measures document
+overflow and every action target.
+
+- [ ] **Step 2: Implement truthful state and layout behavior**
+
+Use discriminated loading/empty/error/mutation-error states; ignore only
+recognized scope-cancellation; normalize backend problems into truthful,
+retryable or policy-specific feedback. Keep immediate latest-snapshot policy
+rechecks. Stack or wrap pending payment content below `sm`, retain `min-w-0`,
+and make every released payment action at least 44 by 44 pixels.
+
+- [ ] **Step 3: Verify and commit**
+
+Run focused billing tests, focused Chromium widths/errors, `npm run check`, QA
+build/artifact, and `git diff --check`.
+
+```bash
+git add -- src/cabinet/billing/plans-screen.tsx src/cabinet/billing/subscription-screen.tsx src/cabinet/billing/payments-screen.tsx src/cabinet/billing/billing-screens.test.tsx e2e/cabinet-shell.spec.ts
+git commit -m "fix(web): surface cabinet billing failures"
+```
+
+---
+
+### Task 13: Review Fix — Cabinet Recovery Actions and Rail Labels
+
+**Files:**
+- Modify: `src/cabinet/CabinetContext.tsx`
+- Modify: `src/cabinet/CabinetContext.test.tsx`
+- Modify: `src/cabinet/CabinetNavigation.tsx`
+- Modify: `src/cabinet/CabinetNavigation.test.tsx`
+- Modify: `src/cabinet/screens/module-unavailable.tsx`
+- Modify: `src/cabinet/ModuleBoundary.test.tsx`
+- Modify: `src/index.css`
+
+- [ ] **Step 1: Add RED accessibility/recovery regressions**
+
+Cover dashboard recovery from unreleased modules, usable tenant/home recovery
+from unknown and inactive tenant states, and visible tablet-rail labels on both
+keyboard focus and pointer hover for navigation, tenant switch, and logout.
+
+- [ ] **Step 2: Implement accessible recovery affordances**
+
+Reuse canonical cabinet paths and active tenant membership; never fall back to
+an unauthorized tenant. Add focus/hover tooltips that complement existing
+accessible names without duplicating policy or breaking dialog/focus behavior.
+
+- [ ] **Step 3: Verify and commit**
+
+Run focused context/navigation/module tests, accessibility lint, `npm run check`,
+build, and `git diff --check`.
+
+```bash
+git add -- src/cabinet/CabinetContext.tsx src/cabinet/CabinetContext.test.tsx src/cabinet/CabinetNavigation.tsx src/cabinet/CabinetNavigation.test.tsx src/cabinet/screens/module-unavailable.tsx src/cabinet/ModuleBoundary.test.tsx src/index.css
+git commit -m "fix(web): add cabinet recovery affordances"
+```
+
+---
+
+### Task 14: Repeat Full Verification, Review, and Authorized Delivery
+
+Re-run every Task 10 repository and browser command after Tasks 11–13, request
+a new independent full-branch read-only review, resolve any Critical or
+Important findings with RED tests, and update the ignored final report. Push,
+draft PR creation, QA deployment, and authenticated QA validation still require
+explicit user authorization. Production deployment remains out of scope.
