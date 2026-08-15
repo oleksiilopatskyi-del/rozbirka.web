@@ -9,7 +9,7 @@ import type { CabinetContextValue } from './CabinetContext'
 import { useCabinet } from './CabinetContext'
 import { CabinetShell } from './CabinetShell'
 import { CabinetHomeScreen } from './screens/cabinet-home'
-import cabinetStyles from '../index.css?raw'
+import cabinetStyles from '../index.css?inline'
 
 vi.mock('../auth/AuthContext', () => ({ useAuth: vi.fn() }))
 vi.mock('./CabinetContext', () => ({ useCabinet: vi.fn() }))
@@ -65,28 +65,37 @@ beforeEach(() => {
 })
 
 it('renders nested cabinet content in a responsive overflow-safe shell', () => {
-  render(
-    <MemoryRouter initialEntries={['/app/koval/dashboard']}>
-      <Routes>
-        <Route path="/app/:tenant" element={<CabinetShell />}>
-          <Route path="dashboard" element={<p>Вміст модуля</p>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
-  )
+  const style = document.createElement('style')
+  style.dataset['testCabinetShellStyles'] = 'true'
+  style.textContent = Array.from(
+    cabinetStyles.matchAll(/\.cabinet-shell(?![_a-zA-Z0-9-])[^{}]*\{[^{}]*\}/g),
+    ([rule]) => rule,
+  ).join('\n')
+  document.head.append(style)
 
-  expect(screen.getByRole('main')).toHaveClass('min-w-0')
-  expect(screen.getByText('Вміст модуля')).toBeVisible()
-  const shell = screen.getByRole('main').parentElement
-  expect(shell).not.toBeNull()
-  expect(shell).not.toHaveClass('overflow-x-clip', 'overflow-x-hidden')
-  expect(cabinetStyles).not.toMatch(
-    /\.cabinet-shell\s*\{[^}]*overflow-x\s*:\s*(?:clip|hidden)/s,
-  )
-  expect(screen.getByLabelText('rozbirka — на головну')).toHaveAttribute(
-    'href',
-    '/app/koval/dashboard',
-  )
+  try {
+    render(
+      <MemoryRouter initialEntries={['/app/koval/dashboard']}>
+        <Routes>
+          <Route path="/app/:tenant" element={<CabinetShell />}>
+            <Route path="dashboard" element={<p>Вміст модуля</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('main')).toHaveClass('min-w-0')
+    expect(screen.getByText('Вміст модуля')).toBeVisible()
+    const shell = screen.getByRole('main').parentElement
+    expect(shell).not.toBeNull()
+    expect(getComputedStyle(shell!).overflowX).not.toMatch(/clip|hidden/)
+    expect(screen.getByLabelText('rozbirka — на головну')).toHaveAttribute(
+      'href',
+      '/app/koval/dashboard',
+    )
+  } finally {
+    style.remove()
+  }
 })
 
 it('renders the minimal tenant dashboard home', () => {
