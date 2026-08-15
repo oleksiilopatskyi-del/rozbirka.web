@@ -5,6 +5,7 @@ import { invitationsApi, type InvitationInfo } from '@/api/invitations'
 import { normalizeApiProblem } from '@/api/errors'
 import { tenantPreference } from '@/api/tenant-preference'
 import { useAuth } from '@/auth/AuthContext'
+import { cabinetPath } from '@/cabinet/cabinet-paths'
 import { BrandLogo } from '@/components/site/brand-logo'
 
 type InvitationState =
@@ -80,6 +81,22 @@ export function InviteScreen() {
   const [load, setLoad] = useState<InvitationLoad | null>(null)
   const [acceptingCode, setAcceptingCode] = useState<string | null>(null)
   const [acceptError, setAcceptError] = useState<string | null>(null)
+  const [acceptedResume, setAcceptedResume] = useState<{
+    code: string
+    tenantId: string
+  } | null>(null)
+
+  useEffect(() => {
+    if (acceptedResume?.code !== code) return
+    const acceptedTenant = auth.tenants.find(
+      (tenant) => tenant.id === acceptedResume.tenantId,
+    )
+    if (acceptedTenant) {
+      void navigate(cabinetPath(acceptedTenant.slug, 'dashboard'), {
+        replace: true,
+      })
+    }
+  }, [acceptedResume, auth.tenants, code, navigate])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -147,7 +164,7 @@ export function InviteScreen() {
       if (!isCurrent()) return
       await auth.hydrate()
       if (!isCurrent()) return
-      void navigate('/account', { replace: true })
+      setAcceptedResume({ code, tenantId: result.tenantId })
     } catch (error) {
       if (!isCurrent()) return
       const problem = normalizeApiProblem(error)

@@ -239,6 +239,40 @@ it('hydrates before navigating after verify', async () => {
   )
 })
 
+it('uses the hydrated selected tenant for a cabinet plan destination', async () => {
+  otpSend.mockResolvedValueOnce({ cooldownSeconds: 0, retryAfterSeconds: 0 })
+  vi.mocked(auth.hydrate).mockImplementation(() => {
+    const tenant = {
+      id: 'tenant-1',
+      name: 'Koval Auto',
+      slug: 'koval',
+      plan: 'active' as const,
+      planTier: 'pro',
+      city: null,
+      logoUrl: null,
+      isActive: true,
+      createdAt: '2026-08-01T00:00:00Z',
+      roleName: 'owner',
+    }
+    auth.tenant = tenant
+    auth.tenants = [tenant]
+    return Promise.resolve()
+  })
+  const user = userEvent.setup()
+  renderLogin('/login?plan=pro_monthly')
+  await reachOtpStep(user)
+  await enterOtp(user)
+
+  await user.click(screen.getByRole('button', { name: 'Підтвердити' }))
+
+  expect(
+    await screen.findByRole('link', { name: 'Продовжити' }),
+  ).toHaveAttribute(
+    'href',
+    '/app/koval/settings/billing/plans?plan=pro_monthly',
+  )
+})
+
 it('asks a new user for a name and stores the rotated access response', async () => {
   otpSend.mockResolvedValueOnce({ cooldownSeconds: 0, retryAfterSeconds: 0 })
   otpVerify.mockResolvedValue({

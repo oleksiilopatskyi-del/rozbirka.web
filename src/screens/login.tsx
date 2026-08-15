@@ -66,6 +66,7 @@ export function LoginScreen() {
   const returnTo = resolvePostLoginDestination(
     location.search,
     fallbackReturnTo ?? '/account',
+    auth.tenant,
   )
   const [step, setStep] = useState<Step>(() =>
     auth.status === 'authenticated' &&

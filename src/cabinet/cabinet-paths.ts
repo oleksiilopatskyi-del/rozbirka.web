@@ -45,7 +45,12 @@ export function resolveAccountDestination(
     case 'payment':
     case 'billing':
       return cabinetPath(tenant.slug, 'payments')
-    default:
-      return cabinetPath(tenant.slug, 'profile')
+    default: {
+      const destination = cabinetPath(tenant.slug, 'dashboard')
+      const scan = params.get('scan')
+      return scan !== null && /^[A-Za-z0-9._~-]{1,256}$/.test(scan)
+        ? `${destination}?scan=${encodeURIComponent(scan)}`
+        : destination
+    }
   }
 }

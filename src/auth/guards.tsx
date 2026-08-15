@@ -37,7 +37,7 @@ export function RedirectIfAuth({
   children: ReactNode
   to?: string
 }) {
-  const { status, user } = useAuth()
+  const { status, user, tenant } = useAuth()
   const location = useLocation()
 
   if (status === 'loading') return <FullScreenLoader />
@@ -47,7 +47,7 @@ export function RedirectIfAuth({
     const fallback = (location.state as { from?: string } | null)?.from ?? to
     return (
       <Navigate
-        to={resolvePostLoginDestination(location.search, fallback)}
+        to={resolvePostLoginDestination(location.search, fallback, tenant)}
         replace
       />
     )

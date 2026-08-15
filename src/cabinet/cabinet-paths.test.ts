@@ -47,8 +47,8 @@ describe('resolveAccountDestination', () => {
     ['?section=subscription', '/app/koval/settings/billing/overview'],
     ['?section=payment', '/app/koval/settings/billing/payments'],
     ['?section=billing', '/app/koval/settings/billing/payments'],
-    ['', '/app/koval/settings/profile'],
-    ['?section=unknown', '/app/koval/settings/profile'],
+    ['', '/app/koval/dashboard'],
+    ['?section=unknown', '/app/koval/dashboard'],
   ])('maps legacy search %s to %s', (search, expected) => {
     expect(resolveAccountDestination(tenant, search)).toBe(expected)
   })
@@ -57,5 +57,14 @@ describe('resolveAccountDestination', () => {
     expect(
       resolveAccountDestination(tenant, '?section=plans&plan=%2Fcheckout'),
     ).toBe('/app/koval/settings/billing/plans')
+  })
+
+  it('preserves only a safe scan intent on the dashboard destination', () => {
+    expect(resolveAccountDestination(tenant, '?scan=QR-123~part')).toBe(
+      '/app/koval/dashboard?scan=QR-123~part',
+    )
+    expect(resolveAccountDestination(tenant, '?scan=%5Cevil')).toBe(
+      '/app/koval/dashboard',
+    )
   })
 })
