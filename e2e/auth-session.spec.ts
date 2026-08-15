@@ -77,6 +77,31 @@ const subscription = {
   features: [],
 }
 
+const subscriptionByTenant = {
+  'tenant-1': subscription,
+  'tenant-2': {
+    ...subscription,
+    state: 'blocked',
+    planCode: 'starter',
+    planName: 'Starter',
+    nextChargeAt: null,
+    canCancel: false,
+  },
+} as const
+
+const accessByTenant = {
+  'tenant-1': {
+    role: 'owner',
+    permissions: ['cars.view', 'billing.view', 'billing.manage'],
+    features: [],
+  },
+  'tenant-2': {
+    role: 'manager',
+    permissions: [],
+    features: [],
+  },
+} as const
+
 interface RouteOptions {
   newUser?: boolean
   parallel401?: boolean
@@ -85,6 +110,7 @@ interface RouteOptions {
 interface RouteState {
   protectedAttempts: Record<string, number>
   invitationAccepted: boolean
+  tenantRequests: { path: string; tenantId: string | null }[]
 }
 
 function containsRefreshCredential(value: unknown): boolean {
@@ -120,6 +146,7 @@ async function installApiBoundary(
   const state: RouteState = {
     protectedAttempts: {},
     invitationAccepted: false,
+    tenantRequests: [],
   }
 
   await page.route('**/*', async (route) => {
@@ -128,6 +155,19 @@ async function installApiBoundary(
     const path = url.pathname
 
     if (path === '/auth/me' && request.method() === 'GET') {
+      state.protectedAttempts[path] = (state.protectedAttempts[path] ?? 0) + 1
+      if (
+        options.parallel401 &&
+        request.headers().authorization === 'Bearer access-1'
+      ) {
+        await route.fulfill({
+          status: 401,
+          json: {
+            error: { code: 'ACCESS_EXPIRED', message: 'Access expired' },
+          },
+        })
+        return
+      }
       await fulfillData(route, {
         ...namedUser,
         displayName: options.newUser
@@ -145,6 +185,19 @@ async function installApiBoundary(
       return
     }
     if (path === '/api/v1/tenants') {
+      state.protectedAttempts[path] = (state.protectedAttempts[path] ?? 0) + 1
+      if (
+        options.parallel401 &&
+        request.headers().authorization === 'Bearer access-1'
+      ) {
+        await route.fulfill({
+          status: 401,
+          json: {
+            error: { code: 'ACCESS_EXPIRED', message: 'Access expired' },
+          },
+        })
+        return
+      }
       await fulfillData(route, tenants)
       return
     }
@@ -169,8 +222,16 @@ async function installApiBoundary(
       return
     }
 
+    const tenantId = request.headers()['x-tenant-id'] ?? null
     const protectedResponses: Record<string, unknown> = {
-      '/api/v1/billing/subscription': subscription,
+      '/api/v1/me/permissions':
+        tenantId && tenantId in accessByTenant
+          ? accessByTenant[tenantId as keyof typeof accessByTenant]
+          : { role: 'none', permissions: [], features: [] },
+      '/api/v1/billing/subscription':
+        tenantId && tenantId in subscriptionByTenant
+          ? subscriptionByTenant[tenantId as keyof typeof subscriptionByTenant]
+          : subscription,
       '/api/v1/billing/payments': {
         items: [],
         page: 1,
@@ -181,17 +242,8 @@ async function installApiBoundary(
       '/api/v1/billing/plans': [],
     }
     if (path in protectedResponses) {
+      state.tenantRequests.push({ path, tenantId })
       state.protectedAttempts[path] = (state.protectedAttempts[path] ?? 0) + 1
-      const authorization = request.headers().authorization ?? ''
-      if (options.parallel401 && authorization === 'Bearer access-1') {
-        await route.fulfill({
-          status: 401,
-          json: {
-            error: { code: 'ACCESS_EXPIRED', message: 'Access expired' },
-          },
-        })
-        return
-      }
       await fulfillData(route, protectedResponses[path])
       return
     }
@@ -235,11 +287,31 @@ async function completeOtpLogin(page: Page) {
 async function loginFrom(
   page: Page,
   path = '/login',
-  destination: string | RegExp = /\/account$/,
+  destination: string | RegExp = /\/app\/koval\/dashboard$/,
 ) {
   await page.goto(path)
   await completeOtpLogin(page)
   await expect(page).toHaveURL(destination)
+  if (new URL(page.url()).pathname === '/app/koval/dashboard') {
+    await expect(
+      page.getByRole('heading', {
+        name: 'Вітаємо в Розбірка Коваль',
+      }),
+    ).toBeVisible()
+  }
+}
+
+async function logoutFromCabinet(page: Page) {
+  let logout = page
+    .getByRole('button', { name: 'Вийти' })
+    .filter({ visible: true })
+  if ((await logout.count()) === 0) {
+    await page.getByRole('button', { name: 'Ще' }).click()
+    logout = page
+      .getByRole('dialog', { name: 'Меню кабінету' })
+      .getByRole('button', { name: 'Вийти' })
+  }
+  await logout.click()
 }
 
 test.beforeEach(async ({ request }) => {
@@ -351,7 +423,7 @@ test('invalid OTP reaches the Ukrainian login error through the Worker without l
   await expect(page).toHaveURL('/login')
 })
 
-test('reload restores the account session through one refresh request @auth-smoke', async ({
+test('reload restores the cabinet session through one refresh request @auth-smoke', async ({
   page,
   request,
 }) => {
@@ -360,7 +432,9 @@ test('reload restores the account session through one refresh request @auth-smok
 
   const beforeReload = await upstreamStats(request)
   await page.reload()
-  await expect(page.getByRole('button', { name: 'Вийти' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Вітаємо в Розбірка Коваль' }),
+  ).toBeVisible()
   const afterReload = await upstreamStats(request)
   expect(afterReload.refreshRequests - beforeReload.refreshRequests).toBe(1)
 })
@@ -371,12 +445,15 @@ test('parallel protected 401 responses trigger one refresh and successful replay
 }) => {
   const state = await installApiBoundary(page, { parallel401: true })
   await loginFrom(page)
-  await expect(page.getByRole('button', { name: 'Вийти' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Вітаємо в Розбірка Коваль' }),
+  ).toBeVisible()
 
   expect(state.protectedAttempts).toMatchObject({
-    '/api/v1/billing/subscription': 2,
-    '/api/v1/billing/payments': 2,
-    '/api/v1/billing/plans': 1,
+    '/auth/me': 2,
+    '/api/v1/tenants': 2,
+    '/api/v1/me/permissions': 1,
+    '/api/v1/billing/subscription': 1,
   })
   expect((await upstreamStats(request)).refreshRequests).toBe(1)
 })
@@ -393,7 +470,7 @@ test('expired refresh redirects to login and preserves a safe cabinet return @au
   await expect(page).toHaveURL(/\/login$/)
 
   await completeOtpLogin(page)
-  await expect(page).toHaveURL('/account?section=plans')
+  await expect(page).toHaveURL('/app/koval/settings/billing/plans')
 })
 
 test('logout expires the cookie and leaves the user as guest @auth-smoke', async ({
@@ -416,7 +493,7 @@ test('logout expires the cookie and leaves the user as guest @auth-smoke', async
       new URL(response.url()).pathname === '/session/logout'
     )
   })
-  await page.getByRole('button', { name: 'Вийти' }).click()
+  await logoutFromCabinet(page)
 
   await expect(page).toHaveURL('/')
   await logoutResponse
@@ -468,6 +545,6 @@ test('scan deep link resumes after OTP without accepting an external return URL'
   await expect(page).toHaveURL(/\/login$/)
 
   await completeOtpLogin(page)
-  await expect(page).toHaveURL('/account?scan=QR-123~part')
+  await expect(page).toHaveURL('/app/koval/dashboard?scan=QR-123~part')
   expect(new URL(page.url()).origin).toBe(appOrigin)
 })
