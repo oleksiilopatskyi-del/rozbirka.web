@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { StrictMode, useEffect } from 'react'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
@@ -194,6 +194,20 @@ function renderCabinet(path: string, previousPath?: string) {
         </Routes>
       </AuthProvider>
     </MemoryRouter>,
+  )
+}
+
+function renderStrictCabinet(path: string) {
+  return render(
+    <StrictMode>
+      <MemoryRouter initialEntries={[path]}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/app/:tenant/*" element={<CabinetRoute />} />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>
+    </StrictMode>,
   )
 }
 
@@ -639,6 +653,22 @@ it('clears an invite-style unmounted scope instead of the replacement tenant', a
   next.unmount()
 })
 
+it('clears the committed scope once through StrictMode logout and unmount', async () => {
+  const userEventApi = userEvent.setup()
+  const rendered = renderStrictCabinet('/app/a/dashboard')
+  expect(await screen.findByText('tenant:a access:a')).toBeVisible()
+  const reset = vi.fn()
+  registerTenantReset(reset)
+
+  await userEventApi.click(
+    screen.getByRole('button', { name: 'sign out cabinet' }),
+  )
+  rendered.unmount()
+
+  await waitFor(() => expect(reset).toHaveBeenCalledOnce())
+  expect(reset).toHaveBeenCalledWith({ userId: 'user-1', tenantId: 'a' })
+})
+
 it('aborts the shared tenant request scope on unmount', async () => {
   const rendered = renderCabinet('/app/a/dashboard')
   expect(await screen.findByText('tenant:a access:a')).toBeVisible()
@@ -701,4 +731,40 @@ it('keeps an already-ready tenant mounted without starting a transition', async 
   expect(accessApi.get).toHaveBeenCalledOnce()
   expect(sharedSignal.aborted).toBe(false)
   expect(screen.getByText('route:/app/a/dashboard')).toBeVisible()
+})
+
+it('fails closed with a safe restart when departed cleanup rejects', async () => {
+  const cleanupFailure = new Error('cache cleanup failed')
+  const unhandled = vi.fn()
+  window.addEventListener('unhandledrejection', unhandled)
+
+  const rendered = renderCabinet('/app/a/dashboard')
+  expect(await screen.findByText('tenant:a access:a')).toBeVisible()
+  const reset = vi.fn().mockRejectedValue(cleanupFailure)
+  registerTenantReset(reset)
+
+  rendered.unmount()
+  tenantPreference.set(tenantB.id)
+  const next = renderCabinet('/app/b/dashboard')
+
+  expect(
+    await screen.findByText(
+      'Не вдалося безпечно очистити дані попередньої розбірки.',
+    ),
+  ).toBeVisible()
+  expect(
+    screen.getByRole('button', { name: 'Перезапустити застосунок' }),
+  ).toBeVisible()
+  expect(
+    screen.queryByRole('button', { name: 'Спробувати ще раз' }),
+  ).not.toBeInTheDocument()
+  expect(screen.queryByText('tenant:b access:b')).not.toBeInTheDocument()
+  expect(accessApi.get).toHaveBeenCalledTimes(1)
+  expect(reset).toHaveBeenCalledOnce()
+  expect(reset).toHaveBeenCalledWith({ userId: 'user-1', tenantId: 'a' })
+  await act(async () => Promise.resolve())
+  expect(unhandled).not.toHaveBeenCalled()
+
+  window.removeEventListener('unhandledrejection', unhandled)
+  next.unmount()
 })

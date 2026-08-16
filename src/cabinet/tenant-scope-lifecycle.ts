@@ -8,6 +8,13 @@ export interface TenantScopeLease {
   departure: Promise<void> | null
 }
 
+export class TenantDepartureError extends Error {
+  constructor(cause: unknown) {
+    super('Tenant departure cleanup failed', { cause })
+    this.name = 'TenantDepartureError'
+  }
+}
+
 class TenantScopeLifecycle {
   #current: TenantScopeLease | null = null
 
@@ -24,7 +31,11 @@ class TenantScopeLifecycle {
   depart(lease: TenantScopeLease | null): Promise<void> {
     if (lease === null) return Promise.resolve()
     if (lease.departure === null) {
-      lease.departure = tenantResetRegistry.clear(lease.scope)
+      lease.departure = tenantResetRegistry
+        .clear(lease.scope)
+        .catch((cause: unknown) => {
+          throw new TenantDepartureError(cause)
+        })
       void lease.departure.catch(() => undefined)
     }
     return lease.departure

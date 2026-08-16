@@ -20,6 +20,7 @@ import { cabinetModules } from './module-registry'
 import { evaluateModuleAccess } from './policy'
 import { tenantRequestScope } from './tenant-request-scope'
 import {
+  TenantDepartureError,
   tenantScopeLifecycle,
   type TenantScopeLease,
 } from './tenant-scope-lifecycle'
@@ -414,23 +415,40 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
       content = stateMessage('Перемикаємо розбірку…')
       break
     case 'error':
-      content = (
-        <div
-          className="bg-background grid min-h-dvh place-items-center px-4 text-center text-white"
-          role="alert"
-        >
-          <div className="grid max-w-md justify-items-center gap-4">
-            <p>Не вдалося завантажити розбірку.</p>
-            <button
-              type="button"
-              className="bg-brand text-brand-foreground min-h-11 rounded-full px-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-              onClick={() => void retry()}
-            >
-              Спробувати ще раз
-            </button>
+      content =
+        state.error instanceof TenantDepartureError ? (
+          <div
+            className="bg-background grid min-h-dvh place-items-center px-4 text-center text-white"
+            role="alert"
+          >
+            <div className="grid max-w-md justify-items-center gap-4">
+              <p>Не вдалося безпечно очистити дані попередньої розбірки.</p>
+              <button
+                type="button"
+                className="bg-brand text-brand-foreground min-h-11 min-w-11 rounded-full px-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                onClick={() => window.location.reload()}
+              >
+                Перезапустити застосунок
+              </button>
+            </div>
           </div>
-        </div>
-      )
+        ) : (
+          <div
+            className="bg-background grid min-h-dvh place-items-center px-4 text-center text-white"
+            role="alert"
+          >
+            <div className="grid max-w-md justify-items-center gap-4">
+              <p>Не вдалося завантажити розбірку.</p>
+              <button
+                type="button"
+                className="bg-brand text-brand-foreground min-h-11 rounded-full px-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                onClick={() => void retry()}
+              >
+                Спробувати ще раз
+              </button>
+            </div>
+          </div>
+        )
       break
     case 'not-found':
       content = tenantRecoveryState('Розбірку не знайдено', recoveryTenant)
