@@ -26,6 +26,10 @@ const access = (
   role: 'owner',
   permissions,
   features: ['inventory'],
+  entitlement: {
+    state: subscription.state,
+    usage: structuredClone(subscription.usage),
+  },
 })
 
 const subscription: SubscriptionDto = {
@@ -67,6 +71,34 @@ const deferred = <T>() => {
 const tenantA = tenant('a')
 const tenantB = tenant('b')
 const tenantC = tenant('c')
+
+const MANAGER_PERMISSIONS = [
+  'cars.view',
+  'cars.manage',
+  'parts.view',
+  'parts.manage',
+  'orders.view',
+  'orders.manage',
+  'customers.view',
+  'customers.manage',
+  'finance.view',
+  'team.view',
+  'intakes.view',
+  'intakes.manage',
+  'stickers.manage',
+  'reports.view',
+  'reports.manage',
+]
+
+const managerAccess: MePermissionsDto = {
+  role: 'manager',
+  permissions: MANAGER_PERMISSIONS,
+  features: ['inventory'],
+  entitlement: {
+    state: 'active',
+    usage: structuredClone(subscription.usage),
+  },
+}
 
 it('clears A before persisting or loading B', async () => {
   const events: string[] = []
@@ -312,7 +344,7 @@ it('does not restore A content when B bootstrap fails', async () => {
   expect(failures).toEqual([{ target: tenantB, error: offline }])
 })
 
-it('skips subscription loading without billing.view', async () => {
+it('commits Manager entitlement without loading the detailed subscription', async () => {
   let subscriptionLoads = 0
   const transition = createTenantTransition({
     currentScope: () => ({ userId: 'u1', tenantId: tenantA.id }),
@@ -320,7 +352,7 @@ it('skips subscription loading without billing.view', async () => {
     rotateRequests: vi.fn(),
     clear: vi.fn().mockResolvedValue(undefined),
     persistTenant: vi.fn(),
-    loadAccess: vi.fn().mockResolvedValue(access(['cars.view'])),
+    loadAccess: vi.fn().mockResolvedValue(managerAccess),
     loadSubscription: () => {
       subscriptionLoads += 1
       return Promise.resolve(subscription)
@@ -333,7 +365,11 @@ it('skips subscription loading without billing.view', async () => {
 
   expect(result).toMatchObject({
     kind: 'committed',
-    snapshot: { subscription: null },
+    snapshot: {
+      role: 'manager',
+      entitlement: managerAccess.entitlement,
+      subscription: null,
+    },
   })
   expect(subscriptionLoads).toBe(0)
 })
@@ -470,6 +506,48 @@ it('prevents runtime mutation of committed permission and feature sets', async (
 
   expect([...result.snapshot.permissions]).toEqual(['cars.view'])
   expect([...result.snapshot.features]).toEqual(['inventory'])
+})
+
+it('defensively clones and deeply freezes the entitlement snapshot', async () => {
+  const loadedAccess = access(['cars.view'])
+  const transition = createTenantTransition({
+    currentScope: () => ({ userId: 'u1', tenantId: tenantA.id }),
+    begin: vi.fn(),
+    rotateRequests: vi.fn(),
+    clear: vi.fn().mockResolvedValue(undefined),
+    persistTenant: vi.fn(),
+    loadAccess: vi.fn().mockResolvedValue(loadedAccess),
+    loadSubscription: vi.fn(),
+    commit: vi.fn(),
+    fail: vi.fn(),
+  })
+
+  const result = await transition.transition(tenantB)
+  if (result.kind !== 'committed' || result.snapshot.entitlement === null) {
+    throw new Error('Expected a committed transition with entitlement')
+  }
+  const entitlement = result.snapshot.entitlement
+
+  expect(() => {
+    ;(entitlement as { state: string }).state = 'blocked'
+  }).toThrow(TypeError)
+  expect(() => {
+    ;(entitlement.usage.cars as { used: number }).used = 999
+  }).toThrow(TypeError)
+
+  if (
+    loadedAccess.entitlement === null ||
+    loadedAccess.entitlement === undefined
+  ) {
+    throw new Error('Expected source entitlement')
+  }
+  loadedAccess.entitlement.state = 'blocked'
+  loadedAccess.entitlement.usage.cars.used = 500
+
+  expect(entitlement).toMatchObject({
+    state: 'active',
+    usage: { cars: { used: 1, max: 100 } },
+  })
 })
 
 it('defensively clones and deeply freezes the subscription snapshot', async () => {

@@ -150,6 +150,10 @@ const cabinet = (
       role: 'custom-role',
       permissions: new Set(permissions),
       features: new Set<string>(),
+      entitlement: {
+        state: currentSubscription.state,
+        usage: currentSubscription.usage,
+      },
       subscription: currentSubscription,
     },
     error: null,

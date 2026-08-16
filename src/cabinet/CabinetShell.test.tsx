@@ -35,6 +35,7 @@ const snapshot: TenantAccessSnapshot = {
   role: 'owner',
   permissions: new Set(['billing.view']),
   features: new Set(),
+  entitlement: null,
   subscription: null,
 }
 

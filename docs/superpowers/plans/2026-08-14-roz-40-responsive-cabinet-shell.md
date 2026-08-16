@@ -940,3 +940,64 @@ a new independent full-branch read-only review, resolve any Critical or
 Important findings with RED tests, and update the ignored final report. Push,
 draft PR creation, QA deployment, and authenticated QA validation still require
 explicit user authorization. Production deployment remains out of scope.
+
+---
+
+### Task 15: Review Fix — Non-Sensitive Member Entitlements
+
+**Core files (isolated `vsobol/roz-40-core-entitlement-summary` worktree):**
+- Modify: `src/Rozbirka.Application/Billing/DTOs/SubscriptionDto.cs`
+- Modify: `src/Rozbirka.Application/Billing/ISubscriptionService.cs`
+- Modify: `src/Rozbirka.Application/Billing/SubscriptionService.cs`
+- Modify: `src/Rozbirka.API/Controllers/MeController.cs`
+- Modify: `src/Rozbirka.API/Middleware/TenantMiddleware.cs`
+- Modify: `tests/Rozbirka.Tests/Auth/MeControllerTests.cs`
+- Create: `tests/Rozbirka.Tests/Auth/TenantMiddlewareEntitlementTests.cs`
+- Modify: `tests/Rozbirka.Tests/Billing/SubscriptionServiceTests.cs`
+- Modify interface fakes required by the new read method.
+
+**Web files:**
+- Modify: `src/cabinet/access-types.ts`
+- Modify: `src/cabinet/access-api.test.ts`
+- Modify: `src/cabinet/tenant-transition.ts`
+- Modify: `src/cabinet/tenant-transition.test.ts`
+- Modify: `src/cabinet/policy.ts`
+- Modify: `src/cabinet/policy.test.ts`
+- Modify access fixtures in `src/cabinet/CabinetContext.test.tsx`,
+  `e2e/auth-session.spec.ts`, and `e2e/cabinet-shell.spec.ts`.
+
+- [x] **Step 1: Add RED backend contract and scope regressions**
+
+Prove `GET /api/v1/me/permissions` returns an entitlement summary containing
+only billing state and quota usage for real built-in Manager/Master permission
+sets, without prices, card data, payment data, billing-account IDs, or provider
+customer IDs. Prove a blocked active member can reach this endpoint, while an
+inactive or non-member tenant remains forbidden. Add a service regression that
+the summary is mapped from the backend subscription/limit source of truth.
+
+- [x] **Step 2: Add RED web policy and transport regressions**
+
+Prove an active Manager can view an entitled cars module without
+`billing.view`; a blocked entitlement returns `subscription-blocked`; a
+quota-full Master retains read access but receives `quota-exhausted` for a
+consuming mutation; and a transition without `billing.view` never calls the
+detailed `/billing/subscription` loader. Use the exact built-in Manager/Master
+permission sets, not role-name authorization.
+
+- [x] **Step 3: Implement the minimal secure contract**
+
+Extend `/me/permissions` additively with `entitlement: { state, usage }` for an
+exact authenticated tenant member. Map it through `ISubscriptionService`
+without exposing the detailed `SubscriptionDto`; keep the billing controller
+and `billing.view` rules unchanged. Permit this one access endpoint through the
+blocked-plan middleware gate only, preserving inactive/member checks. On web,
+store a separately immutable entitlement snapshot and make shared module policy
+consume it; retain the detailed subscription only for billing-authorized UI.
+Missing entitlement from an older backend remains fail-closed.
+
+- [x] **Step 4: Verify and commit both repositories**
+
+Run focused core/web regressions, full core tests, `npm run check`, QA build and
+artifact verification, asset budget, Worker QA dry-run, affected Playwright in
+all five projects, and `git diff --check` in both repositories. Commit the core
+and web changes separately; do not push, create a PR, or deploy.

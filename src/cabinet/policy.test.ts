@@ -1,6 +1,10 @@
 import { FEATURES, type SubscriptionDto } from '../api/types'
 import { cabinetModules, type CabinetModuleDefinition } from './module-registry'
-import type { TenantAccessSnapshot, TenantAccessState } from './access-types'
+import type {
+  TenantAccessSnapshot,
+  TenantAccessState,
+  TenantEntitlementDto,
+} from './access-types'
 import { evaluateModuleAccess } from './policy'
 
 const subscription = (
@@ -36,13 +40,24 @@ const ready = ({
   permissions = ['cars.view', 'cars.manage', 'reports.view'],
   features = [FEATURES.AdvancedReports],
   subscription: tenantSubscription = subscription(),
+  entitlement: tenantEntitlement,
   role = 'owner',
 }: {
   permissions?: string[]
   features?: string[]
   subscription?: SubscriptionDto | null
+  entitlement?: TenantEntitlementDto | null
   role?: string
 } = {}): TenantAccessState => {
+  const entitlement =
+    tenantEntitlement === undefined
+      ? tenantSubscription === null
+        ? null
+        : {
+            state: tenantSubscription.state,
+            usage: tenantSubscription.usage,
+          }
+      : tenantEntitlement
   const snapshot: TenantAccessSnapshot = {
     userId: 'user-1',
     tenantId: 'tenant-1',
@@ -50,6 +65,7 @@ const ready = ({
     role,
     permissions: new Set(permissions),
     features: new Set(features),
+    entitlement,
     subscription: tenantSubscription,
   }
 
@@ -82,6 +98,62 @@ const unreleasedModule: CabinetModuleDefinition = {
   released: false,
 }
 
+const intakesModule: CabinetModuleDefinition = {
+  key: 'intakes',
+  routeSegment: '/intakes',
+  released: true,
+  viewPermission: 'intakes.view',
+  mutationPermission: 'intakes.manage',
+  allowedSubscriptionStates: ['trial', 'active', 'pastDue', 'cancelled'],
+  quotaResource: 'intakes',
+}
+
+const MANAGER_PERMISSIONS = [
+  'cars.view',
+  'cars.manage',
+  'parts.view',
+  'parts.manage',
+  'orders.view',
+  'orders.manage',
+  'customers.view',
+  'customers.manage',
+  'finance.view',
+  'team.view',
+  'intakes.view',
+  'intakes.manage',
+  'stickers.manage',
+  'reports.view',
+  'reports.manage',
+]
+
+const MASTER_PERMISSIONS = [
+  'parts.view',
+  'orders.view',
+  'orders.manage',
+  'intakes.view',
+  'intakes.manage',
+  'stickers.manage',
+]
+
+const readyWithEntitlement = ({
+  role,
+  permissions,
+  state = 'active',
+  usage = subscription().usage,
+}: {
+  role: string
+  permissions: string[]
+  state?: SubscriptionDto['state']
+  usage?: SubscriptionDto['usage']
+}): TenantAccessState => {
+  return ready({
+    role,
+    permissions,
+    subscription: null,
+    entitlement: { state, usage },
+  })
+}
+
 const loadingAccess: TenantAccessState = {
   status: 'loading',
   snapshot: null,
@@ -95,6 +167,57 @@ const failedAccess: TenantAccessState = {
 }
 
 describe('evaluateModuleAccess', () => {
+  it('allows an active built-in Manager to view cars without billing.view', () => {
+    expect(MANAGER_PERMISSIONS).not.toContain('billing.view')
+
+    expect(
+      evaluateModuleAccess(
+        carsModule,
+        readyWithEntitlement({
+          role: 'manager',
+          permissions: MANAGER_PERMISSIONS,
+        }),
+        'view',
+      ),
+    ).toEqual({ kind: 'allowed' })
+  })
+
+  it('reports a blocked Manager entitlement without billing.view', () => {
+    expect(
+      evaluateModuleAccess(
+        carsModule,
+        readyWithEntitlement({
+          role: 'manager',
+          permissions: MANAGER_PERMISSIONS,
+          state: 'blocked',
+        }),
+        'view',
+      ),
+    ).toEqual({ kind: 'subscription-blocked', state: 'blocked' })
+  })
+
+  it('lets a quota-full built-in Master read but denies a consuming mutation', () => {
+    expect(MASTER_PERMISSIONS).not.toContain('billing.view')
+    const access = readyWithEntitlement({
+      role: 'master',
+      permissions: MASTER_PERMISSIONS,
+      usage: {
+        ...subscription().usage,
+        intakes: { used: 25, max: 25 },
+      },
+    })
+
+    expect(evaluateModuleAccess(intakesModule, access, 'view')).toEqual({
+      kind: 'allowed',
+    })
+    expect(evaluateModuleAccess(intakesModule, access, 'mutation')).toEqual({
+      kind: 'quota-exhausted',
+      resource: 'intakes',
+      used: 25,
+      max: 25,
+    })
+  })
+
   it.each([
     [
       'loading access before checking release',
@@ -283,9 +406,9 @@ describe('evaluateModuleAccess', () => {
     )
   })
 
-  it('fails closed when subscription data required by a module is absent', () => {
+  it('fails closed when entitlement data required by a module is absent', () => {
     expect(
-      evaluateModuleAccess(carsModule, ready({ subscription: null }), 'view'),
+      evaluateModuleAccess(carsModule, ready({ entitlement: null }), 'view'),
     ).toEqual({ kind: 'access-error' })
   })
 

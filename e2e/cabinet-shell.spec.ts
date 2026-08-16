@@ -136,6 +136,7 @@ const pendingPaymentPage = {
 
 interface CabinetFixtureOptions {
   sobolBilling?: boolean
+  sobolEntitlementState?: 'active' | 'blocked'
   pendingPayment?: boolean
   subscribeFailureStatus?: 403 | 409
   cancelSubscriptionFailureStatus?: 403 | 409
@@ -262,7 +263,15 @@ async function installCabinetApiBoundary(
       }
       const accessByTenant: Record<
         string,
-        { role: string; permissions: string[]; features: string[] }
+        {
+          role: string
+          permissions: string[]
+          features: string[]
+          entitlement: {
+            state: string
+            usage: typeof activeSubscription.usage
+          }
+        }
       > = {
         'tenant-1': {
           role: 'owner',
@@ -273,11 +282,36 @@ async function installCabinetApiBoundary(
             'billing.manage',
           ],
           features: ['reports.advanced', 'team_collaboration'],
+          entitlement: {
+            state: activeSubscription.state,
+            usage: activeSubscription.usage,
+          },
         },
         'tenant-2': {
           role: 'manager',
-          permissions: options.sobolBilling ? ['billing.view'] : [],
+          permissions: [
+            'cars.view',
+            'cars.manage',
+            'parts.view',
+            'parts.manage',
+            'orders.view',
+            'orders.manage',
+            'customers.view',
+            'customers.manage',
+            'finance.view',
+            'team.view',
+            'intakes.view',
+            'intakes.manage',
+            'stickers.manage',
+            'reports.view',
+            'reports.manage',
+            ...(options.sobolBilling ? ['billing.view'] : []),
+          ],
           features: [],
+          entitlement: {
+            state: options.sobolEntitlementState ?? blockedSubscription.state,
+            usage: blockedSubscription.usage,
+          },
         },
       }
       const access = tenantId ? accessByTenant[tenantId] : undefined
@@ -783,6 +817,34 @@ test('falls back to the target dashboard when its policy denies the current modu
   await expect(
     page.getByRole('heading', { name: 'Вітаємо в Розбірка Соболя' }),
   ).toBeVisible()
+})
+
+test('boots an active Manager entitlement without requesting detailed billing @cabinet-smoke', async ({
+  page,
+}) => {
+  const fixture = await installCabinetApiBoundary(page, {
+    sobolEntitlementState: 'active',
+  })
+  await loginFrom(page)
+
+  await selectVisibleTenant(page, 'tenant-2')
+
+  await expect(page).toHaveURL('/app/sobol/dashboard')
+  await expect(
+    page.getByRole('heading', { name: 'Вітаємо в Розбірка Соболя' }),
+  ).toBeVisible()
+  expect(
+    fixture.requests.filter(
+      ({ path, tenantId }) =>
+        path === '/api/v1/me/permissions' && tenantId === 'tenant-2',
+    ).length,
+  ).toBeGreaterThan(0)
+  expect(
+    fixture.requests.filter(
+      ({ path, tenantId }) =>
+        path === '/api/v1/billing/subscription' && tenantId === 'tenant-2',
+    ),
+  ).toHaveLength(0)
 })
 
 for (const width of [320, 768, 1024, 1440]) {

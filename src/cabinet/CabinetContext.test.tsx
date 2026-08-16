@@ -63,6 +63,16 @@ const access = (
   role: id,
   permissions,
   features: [],
+  entitlement: {
+    state: 'active',
+    usage: {
+      cars: { used: 1, max: 20 },
+      intakes: { used: 1, max: 25 },
+      parts: { used: 1, max: 2_000 },
+      users: { used: 1, max: 5 },
+      cashRegisters: { used: 1, max: 2 },
+    },
+  },
 })
 
 const deferred = <T,>() => {

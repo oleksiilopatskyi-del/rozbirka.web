@@ -1,4 +1,4 @@
-import type { SubscriptionDto } from '../api/types'
+import type { BillingState, PlanUsageDto, SubscriptionDto } from '../api/types'
 
 export const ALL_PERMISSIONS = [
   'cars.view',
@@ -29,6 +29,13 @@ export interface MePermissionsDto {
   role: string
   permissions: string[]
   features: string[]
+  /** Additive backend contract; optional only while older deployments roll out. */
+  entitlement?: TenantEntitlementDto | null
+}
+
+export interface TenantEntitlementDto {
+  state: BillingState
+  usage: PlanUsageDto
 }
 
 type DeepReadonly<T> = T extends readonly (infer Item)[]
@@ -38,6 +45,7 @@ type DeepReadonly<T> = T extends readonly (infer Item)[]
     : T
 
 export type TenantSubscriptionSnapshot = DeepReadonly<SubscriptionDto>
+export type TenantEntitlementSnapshot = DeepReadonly<TenantEntitlementDto>
 
 /** Effective tenant-scoped access, preserving permissions unknown to this client. */
 export interface TenantAccessSnapshot {
@@ -47,6 +55,7 @@ export interface TenantAccessSnapshot {
   readonly role: string
   readonly permissions: ReadonlySet<string>
   readonly features: ReadonlySet<string>
+  readonly entitlement: TenantEntitlementSnapshot | null
   readonly subscription: TenantSubscriptionSnapshot | null
 }
 

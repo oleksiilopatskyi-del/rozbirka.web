@@ -70,23 +70,23 @@ export const evaluateModuleAccess = (
   }
 
   if (definition.allowedSubscriptionStates !== undefined) {
-    const { subscription } = access.snapshot
-    if (subscription === null) {
+    const { entitlement } = access.snapshot
+    if (entitlement === null) {
       return { kind: 'access-error' }
     }
 
-    if (!definition.allowedSubscriptionStates.includes(subscription.state)) {
-      return { kind: 'subscription-blocked', state: subscription.state }
+    if (!definition.allowedSubscriptionStates.includes(entitlement.state)) {
+      return { kind: 'subscription-blocked', state: entitlement.state }
     }
   }
 
   if (consumesResource && definition.quotaResource !== undefined) {
-    const subscription = access.snapshot.subscription
-    if (subscription === null) {
+    const entitlement = access.snapshot.entitlement
+    if (entitlement === null) {
       return { kind: 'access-error' }
     }
 
-    const usage = subscription.usage[definition.quotaResource]
+    const usage = entitlement.usage[definition.quotaResource]
     if (usage.max !== null && usage.used >= usage.max) {
       return {
         kind: 'quota-exhausted',

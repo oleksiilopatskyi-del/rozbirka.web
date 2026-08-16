@@ -91,6 +91,7 @@ const cabinet = (
     role: 'owner',
     permissions: new Set(permissions),
     features: new Set(),
+    entitlement: { state: subscription.state, usage: subscription.usage },
     subscription,
   },
   error: null,

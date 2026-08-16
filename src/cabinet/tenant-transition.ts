@@ -2,6 +2,7 @@ import type { SubscriptionDto, Tenant } from '../api/types'
 import type {
   MePermissionsDto,
   TenantAccessSnapshot,
+  TenantEntitlementSnapshot,
   TenantSubscriptionSnapshot,
 } from './access-types'
 
@@ -71,6 +72,11 @@ const freezeSubscription = (
   subscription: SubscriptionDto,
 ): TenantSubscriptionSnapshot =>
   cloneAndFreeze(subscription) as TenantSubscriptionSnapshot
+
+const freezeEntitlement = (
+  entitlement: NonNullable<MePermissionsDto['entitlement']>,
+): TenantEntitlementSnapshot =>
+  cloneAndFreeze(entitlement) as TenantEntitlementSnapshot
 
 export type TenantTransitionResult =
   | {
@@ -166,6 +172,10 @@ export const createTenantTransition = (
           role: loadedAccess.role,
           permissions: new ImmutableSet(loadedAccess.permissions),
           features: new ImmutableSet(loadedAccess.features),
+          entitlement:
+            loadedAccess.entitlement == null
+              ? null
+              : freezeEntitlement(loadedAccess.entitlement),
           subscription:
             loadedSubscription === null
               ? null

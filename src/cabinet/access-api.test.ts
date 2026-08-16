@@ -7,6 +7,16 @@ const accessDto: MePermissionsDto = {
   role: 'manager',
   permissions: ['cars.view', 'future.permission'],
   features: ['reports.advanced'],
+  entitlement: {
+    state: 'active',
+    usage: {
+      cars: { used: 2, max: 20 },
+      intakes: { used: 1, max: 25 },
+      parts: { used: 8, max: 2_000 },
+      users: { used: 2, max: 5 },
+      cashRegisters: { used: 1, max: 2 },
+    },
+  },
 }
 
 describe('accessApi', () => {

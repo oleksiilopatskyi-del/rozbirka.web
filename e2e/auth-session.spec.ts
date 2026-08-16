@@ -94,11 +94,19 @@ const accessByTenant = {
     role: 'owner',
     permissions: ['cars.view', 'billing.view', 'billing.manage'],
     features: [],
+    entitlement: {
+      state: subscriptionByTenant['tenant-1'].state,
+      usage: subscriptionByTenant['tenant-1'].usage,
+    },
   },
   'tenant-2': {
     role: 'manager',
     permissions: [],
     features: [],
+    entitlement: {
+      state: subscriptionByTenant['tenant-2'].state,
+      usage: subscriptionByTenant['tenant-2'].usage,
+    },
   },
 } as const
 

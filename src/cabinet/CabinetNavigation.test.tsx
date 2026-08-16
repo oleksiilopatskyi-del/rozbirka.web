@@ -59,6 +59,7 @@ const snapshot = (permissions: string[]): TenantAccessSnapshot => ({
   role: 'owner',
   permissions: new Set(permissions),
   features: new Set(),
+  entitlement: { state: subscription.state, usage: subscription.usage },
   subscription,
 })
 

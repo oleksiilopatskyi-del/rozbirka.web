@@ -30,8 +30,9 @@ implement the dashboard or ERP business modules owned by ROZ-41 through ROZ-51.
 - Add the authenticated `/app/:tenant` route tree and canonical redirects from
   `/account`.
 - Add desktop sidebar, tablet rail, and mobile bottom navigation shells.
-- Load and expose a tenant access snapshot from `/api/v1/me/permissions` and,
-  when `billing.view` is granted, `/api/v1/billing/subscription`.
+- Load permissions, features, and the non-sensitive entitlement state/quota
+  summary from `/api/v1/me/permissions`; load detailed subscription data from
+  `/api/v1/billing/subscription` only when `billing.view` is granted.
 - Add central route, control, and mutation policy evaluation.
 - Make tenant switching an ordered, generation-safe transition that cancels
   old requests and resets tenant-scoped client state before the target tenant
@@ -144,14 +145,18 @@ The access layer stores one immutable snapshot associated with an exact
 role
 permissions
 features
+entitlement: state + quota usage
 subscription (optional when billing.view is absent)
 status: loading | ready | error
 ```
 
 `GET /me/permissions` is always loaded for the target tenant. It supplies role,
-effective permissions, and backend features. Subscription is loaded only when
-the returned permissions include `billing.view`; lack of billing permission is
-not converted into a fake blocked subscription.
+effective permissions, backend features, and a non-sensitive entitlement
+summary that is available to Manager/Master members without granting billing
+access. Detailed subscription data is loaded only when the returned permissions
+include `billing.view`; lack of billing permission is not converted into a fake
+blocked subscription. Module state/quota policy consumes the entitlement
+summary, while billing screens consume the separately protected subscription.
 
 Access loading and network failure are distinct from denial. While access is
 loading, protected module content is not rendered. A failed access bootstrap
@@ -168,7 +173,8 @@ It performs these steps in order:
    queues, and registered tenant-scoped caches.
 4. Remove old tenant-scoped cache entries.
 5. Persist the target tenant ID for `X-Tenant-Id`.
-6. Load the target permission/feature snapshot and optional subscription.
+6. Load the target permission/feature/entitlement snapshot and optional detailed
+   subscription.
 7. Commit the target tenant and its access snapshot together.
 8. Navigate to the equivalent allowed route, or the target dashboard when the
    previous module is unavailable.
@@ -243,6 +249,8 @@ agree before module content renders.
 
 - Registry and policy truth tables for release, permission, feature,
   subscription, and quota gates.
+- Built-in Manager/Master policy regressions without `billing.view`, including
+  blocked entitlement and quota-full read-versus-mutation behavior.
 - Compatibility redirects and tenant slug resolution.
 - Transition coordinator ordering, cleanup, generation invalidation, abort, and
   failure behavior.
