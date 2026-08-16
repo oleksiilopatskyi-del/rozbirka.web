@@ -326,7 +326,7 @@ function UsageBlock({
           <button
             type="button"
             onClick={onUpgrade}
-            className="bg-brand hover:bg-brand-hover text-brand-foreground inline-flex h-10 shrink-0 items-center justify-center rounded-full px-5 text-[13px] transition-colors"
+            className="bg-brand hover:bg-brand-hover text-brand-foreground inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full px-5 text-[13px] transition-colors"
           >
             Підвищити тариф
           </button>

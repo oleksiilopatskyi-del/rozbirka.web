@@ -1031,14 +1031,14 @@ registry clear synchronously on every invalidation/unmount, reuse the same
 promise for duplicate cleanup, and make replacement transitions await the
 captured lease rather than reading mutable replacement auth state.
 
-- [ ] **Step 3: Add RED fixture and computed-target regressions**
+- [x] **Step 3: Add RED fixture and computed-target regressions**
 
 Probe recognized auth fixture routes with unsupported methods and require 405,
 while preserving the real session Worker flow. At 320 and 768 widths, prove the
 over-quota upgrade and onboarding logout controls compute to at least 44 by 44
 pixels.
 
-- [ ] **Step 4: Implement minimal fixture/a11y hardening**
+- [x] **Step 4: Implement minimal fixture/a11y hardening**
 
 Dispatch fixture responses by explicit route and method, return 405 for known
 unsupported methods, and add `min-h-11 min-w-11` to the two compact controls.

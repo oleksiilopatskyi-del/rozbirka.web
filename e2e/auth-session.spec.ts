@@ -112,6 +112,7 @@ const accessByTenant = {
 
 interface RouteOptions {
   newUser?: boolean
+  noTenants?: boolean
   parallel401?: boolean
 }
 
@@ -147,6 +148,25 @@ async function fulfillData(route: Route, data: unknown, status = 200) {
   await route.fulfill({ status, json: status < 400 ? { data } : data })
 }
 
+const fixtureMethodFor = (path: string): string | null => {
+  if (path === '/auth/me') return 'GET'
+  if (path === '/auth/me/name') return 'PATCH'
+  if (path === '/api/v1/tenants') return 'GET'
+  if (/^\/api\/v1\/invitations\/[^/]+\/info$/.test(path)) return 'GET'
+  if (path === '/api/v1/invitations/accept') return 'POST'
+  if (
+    [
+      '/api/v1/me/permissions',
+      '/api/v1/billing/subscription',
+      '/api/v1/billing/payments',
+      '/api/v1/billing/plans',
+    ].includes(path)
+  ) {
+    return 'GET'
+  }
+  return null
+}
+
 async function installApiBoundary(
   page: Page,
   options: RouteOptions = {},
@@ -161,8 +181,24 @@ async function installApiBoundary(
     const request = route.request()
     const url = new URL(request.url())
     const path = url.pathname
+    const method = request.method()
+    const fixtureMethod = fixtureMethodFor(path)
 
-    if (path === '/auth/me' && request.method() === 'GET') {
+    if (fixtureMethod !== null && method !== fixtureMethod) {
+      await fulfillData(
+        route,
+        {
+          error: {
+            code: 'FIXTURE_METHOD_NOT_ALLOWED',
+            message: 'Auth fixture method not allowed',
+          },
+        },
+        405,
+      )
+      return
+    }
+
+    if (path === '/auth/me' && method === 'GET') {
       state.protectedAttempts[path] = (state.protectedAttempts[path] ?? 0) + 1
       if (
         options.parallel401 &&
@@ -184,7 +220,7 @@ async function installApiBoundary(
       })
       return
     }
-    if (path === '/auth/me/name' && request.method() === 'PATCH') {
+    if (path === '/auth/me/name' && method === 'PATCH') {
       await fulfillData(route, {
         user: namedUser,
         accessToken: 'access-name',
@@ -192,7 +228,7 @@ async function installApiBoundary(
       })
       return
     }
-    if (path === '/api/v1/tenants') {
+    if (path === '/api/v1/tenants' && method === 'GET') {
       state.protectedAttempts[path] = (state.protectedAttempts[path] ?? 0) + 1
       if (
         options.parallel401 &&
@@ -206,10 +242,13 @@ async function installApiBoundary(
         })
         return
       }
-      await fulfillData(route, tenants)
+      await fulfillData(route, options.noTenants ? [] : tenants)
       return
     }
-    if (/^\/api\/v1\/invitations\/[^/]+\/info$/.test(path)) {
+    if (
+      /^\/api\/v1\/invitations\/[^/]+\/info$/.test(path) &&
+      method === 'GET'
+    ) {
       await fulfillData(route, {
         tenantName: 'Розбірка Соболя',
         roleName: 'Менеджер',
@@ -219,7 +258,7 @@ async function installApiBoundary(
       })
       return
     }
-    if (path === '/api/v1/invitations/accept') {
+    if (path === '/api/v1/invitations/accept' && method === 'POST') {
       state.invitationAccepted = true
       await fulfillData(route, {
         tenantId: 'tenant-2',
@@ -273,7 +312,7 @@ async function installApiBoundary(
       },
       '/api/v1/billing/plans': [],
     }
-    if (path in protectedResponses) {
+    if (path in protectedResponses && method === 'GET') {
       if (!tenantScopedPaths.has(path)) {
         state.protectedAttempts[path] = (state.protectedAttempts[path] ?? 0) + 1
       }
@@ -364,6 +403,26 @@ async function fixtureGet(page: Page, path: string, tenantId?: string) {
   )
 }
 
+async function fixtureRequest(
+  page: Page,
+  { path, method }: { path: string; method: string },
+) {
+  return page.evaluate(
+    async ({ requestPath, requestMethod }) => {
+      const response = await fetch(requestPath, { method: requestMethod })
+      const text = await response.text()
+      let body: unknown = text
+      try {
+        body = JSON.parse(text) as unknown
+      } catch {
+        // Preserve non-JSON responses so a route escape remains visible.
+      }
+      return { status: response.status, body }
+    },
+    { requestPath: path, requestMethod: method },
+  )
+}
+
 test.beforeEach(async ({ request }) => {
   await resetUpstream(request)
 })
@@ -427,6 +486,55 @@ test('auth fixture returns known tenant data only for the matching header', asyn
     ]),
   )
 })
+
+test('auth fixture fails closed for unsupported methods on recognized routes', async ({
+  page,
+}) => {
+  await installApiBoundary(page)
+  await page.goto('/login')
+
+  for (const request of [
+    { path: '/auth/me', method: 'POST' },
+    { path: '/auth/me/name', method: 'GET' },
+    { path: '/api/v1/tenants', method: 'POST' },
+    { path: '/api/v1/invitations/INVITE123/info', method: 'POST' },
+    { path: '/api/v1/invitations/accept', method: 'GET' },
+    { path: '/api/v1/me/permissions', method: 'POST' },
+    { path: '/api/v1/billing/subscription', method: 'POST' },
+    { path: '/api/v1/billing/payments', method: 'POST' },
+    { path: '/api/v1/billing/plans', method: 'POST' },
+  ]) {
+    expect(
+      await fixtureRequest(page, request),
+      `${request.method} ${request.path}`,
+    ).toEqual({
+      status: 405,
+      body: {
+        error: {
+          code: 'FIXTURE_METHOD_NOT_ALLOWED',
+          message: 'Auth fixture method not allowed',
+        },
+      },
+    })
+  }
+})
+
+for (const width of [320, 768]) {
+  test(`onboarding logout keeps a 44px computed target at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await installApiBoundary(page, { noTenants: true })
+    await loginFrom(page, '/login', '/account')
+
+    const logout = page.getByRole('button', { name: 'Вийти' })
+    await expect(logout).toBeVisible()
+    const box = await logout.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.width).toBeGreaterThanOrEqual(44)
+    expect(box!.height).toBeGreaterThanOrEqual(44)
+  })
+}
 
 test('OTP login stores refresh only in HttpOnly cookie and no credentials in storage @auth-smoke', async ({
   context,

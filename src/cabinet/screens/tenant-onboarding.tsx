@@ -111,7 +111,7 @@ export function TenantOnboardingScreen() {
         <button
           type="button"
           onClick={() => void handleLogout()}
-          className="inline-flex items-center gap-2 text-[13px] text-neutral-400 transition-colors hover:text-white"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 text-[13px] text-neutral-400 transition-colors hover:text-white"
         >
           <LogOut className="size-4" aria-hidden />
           Вийти

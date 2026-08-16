@@ -138,6 +138,7 @@ interface CabinetFixtureOptions {
   sobolBilling?: boolean
   sobolEntitlementState?: 'active' | 'blocked'
   pendingPayment?: boolean
+  overQuota?: boolean
   subscribeFailureStatus?: 403 | 409
   cancelSubscriptionFailureStatus?: 403 | 409
   cancelPaymentFailureStatus?: 403 | 409
@@ -351,9 +352,18 @@ async function installCabinetApiBoundary(
       return
     }
     if (path === '/api/v1/billing/subscription' && request.method() === 'GET') {
+      const kovalSubscription = options.overQuota
+        ? {
+            ...activeSubscription,
+            usage: {
+              ...activeSubscription.usage,
+              cars: { used: 101, max: 100 },
+            },
+          }
+        : activeSubscription
       await fulfillData(
         route,
-        tenantId === 'tenant-2' ? blockedSubscription : activeSubscription,
+        tenantId === 'tenant-2' ? blockedSubscription : kovalSubscription,
       )
       return
     }
@@ -1087,6 +1097,22 @@ test('visible mobile cabinet controls meet the 44px target minimum', async ({
 })
 
 for (const width of [320, 768]) {
+  test(`over-quota upgrade keeps a 44px computed target at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await installCabinetApiBoundary(page, { overQuota: true })
+    await loginFrom(page)
+    await page.goto('/app/koval/settings/billing/overview')
+
+    const upgrade = page.getByRole('button', { name: 'Підвищити тариф' })
+    await expect(upgrade).toBeVisible()
+    const box = await upgrade.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.width).toBeGreaterThanOrEqual(44)
+    expect(box!.height).toBeGreaterThanOrEqual(44)
+  })
+
   test(`pending payment wraps without overflow and keeps 44px actions at ${width}px`, async ({
     page,
   }) => {
