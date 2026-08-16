@@ -249,6 +249,7 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
     auth.tenant,
     auth.tenants,
     invalidateBoundary,
+    location.key,
     tenantSlug,
     transitionTo,
   ])

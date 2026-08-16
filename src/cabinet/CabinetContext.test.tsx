@@ -114,6 +114,15 @@ function RouteChangeButton({ slug }: { slug: string }) {
   )
 }
 
+function HistoryBackButton() {
+  const navigate = useNavigate()
+  return (
+    <button type="button" onClick={() => void navigate(-1)}>
+      history back
+    </button>
+  )
+}
+
 function LocationProbe() {
   const location = useLocation()
   return (
@@ -142,6 +151,7 @@ function ReauthenticateButton() {
 function CabinetRoute() {
   return (
     <>
+      <HistoryBackButton />
       <RouteChangeButton slug="c" />
       <RouteChangeButton slug="missing" />
       <RouteChangeButton slug="inactive" />
@@ -155,9 +165,9 @@ function CabinetRoute() {
   )
 }
 
-function renderCabinet(path: string) {
+function renderCabinet(path: string, previousPath?: string) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter initialEntries={previousPath ? [previousPath, path] : [path]}>
       <AuthProvider>
         <Routes>
           <Route path="/app/:tenant/*" element={<CabinetRoute />} />
@@ -400,6 +410,45 @@ it('commits only the last target during rapid switches', async () => {
   expect(screen.queryByText('tenant:b access:b')).not.toBeInTheDocument()
   expect(screen.getByText('tenant:c access:c')).toBeVisible()
   expect(screen.getByText('route:/app/c/dashboard')).toBeVisible()
+})
+
+it('supersedes a pending selection when same-tenant browser history changes', async () => {
+  const accessB = deferred<MePermissionsDto>()
+  let accessBSignal: AbortSignal | undefined
+  vi.mocked(accessApi.get).mockImplementation(({ signal } = {}) => {
+    const target = tenantPreference.get()
+    if (target === tenantB.id) {
+      accessBSignal = signal
+      return accessB.promise
+    }
+    return Promise.resolve(access(target ?? 'none'))
+  })
+  const userEventApi = userEvent.setup()
+
+  renderCabinet(
+    '/app/a/settings/profile?tab=security#phone',
+    '/app/a/dashboard?from=history#summary',
+  )
+  expect(await screen.findByText('tenant:a access:a')).toBeVisible()
+
+  await userEventApi.click(screen.getByRole('button', { name: 'Розбірка B' }))
+  await waitFor(() => expect(accessBSignal).toBeDefined())
+  expect(screen.getByText('Перемикаємо розбірку…')).toBeVisible()
+
+  await userEventApi.click(screen.getByRole('button', { name: 'history back' }))
+
+  const accessBWasAborted = accessBSignal?.aborted
+  await act(async () => {
+    accessB.resolve(access('b'))
+    await accessB.promise
+  })
+
+  expect(accessBWasAborted).toBe(true)
+  expect(screen.queryByText('tenant:b access:b')).not.toBeInTheDocument()
+  expect(await screen.findByText('tenant:a access:a')).toBeVisible()
+  expect(
+    screen.getByText('route:/app/a/dashboard?from=history#summary'),
+  ).toBeVisible()
 })
 
 it('supersedes an in-flight URL tenant when the route changes', async () => {

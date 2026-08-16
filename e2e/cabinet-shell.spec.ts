@@ -671,7 +671,7 @@ test('billing fixture handles subscription cancellation without route escape', a
   })
 })
 
-test('aborts former tenant access before it can render after B commits @cabinet-smoke', async ({
+test('same-slug Back aborts a pending tenant selection before it can commit @cabinet-smoke', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -924,7 +924,13 @@ test('rejects an unknown tenant before loading tenant access', async ({
   await loginFrom(page)
   const before = fixture.requests.length
   await page.goto('/app/unknown/dashboard')
-  await expect(page.getByRole('alert')).toHaveText('Розбірку не знайдено')
+  const unavailable = page.getByRole('alert')
+  await expect(
+    unavailable.getByText('Розбірку не знайдено', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    unavailable.getByRole('link', { name: 'До активної розбірки' }),
+  ).toHaveAttribute('href', '/app/koval/dashboard')
   expect(fixture.requests.slice(before)).not.toContainEqual(
     expect.objectContaining({ path: '/api/v1/me/permissions' }),
   )
@@ -937,7 +943,13 @@ test('rejects an inactive tenant before loading tenant access', async ({
   await loginFrom(page)
   const before = fixture.requests.length
   await page.goto('/app/archive/dashboard')
-  await expect(page.getByRole('alert')).toHaveText('Розбірка неактивна')
+  const unavailable = page.getByRole('alert')
+  await expect(
+    unavailable.getByText('Розбірка неактивна', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    unavailable.getByRole('link', { name: 'До активної розбірки' }),
+  ).toHaveAttribute('href', '/app/koval/dashboard')
   expect(fixture.requests.slice(before)).not.toContainEqual(
     expect.objectContaining({ path: '/api/v1/me/permissions' }),
   )
