@@ -1001,3 +1001,50 @@ Run focused core/web regressions, full core tests, `npm run check`, QA build and
 artifact verification, asset budget, Worker QA dry-run, affected Playwright in
 all five projects, and `git diff --check` in both repositories. Commit the core
 and web changes separately; do not push, create a PR, or deploy.
+
+---
+
+### Task 16: Final Review Fix — Serialized Departure and Fixture/A11y Hardening
+
+**Lifecycle files:**
+- Create: `src/cabinet/tenant-scope-lifecycle.ts`
+- Modify: `src/cabinet/CabinetContext.tsx`
+- Modify: `src/cabinet/CabinetContext.test.tsx`
+- Modify: `src/cabinet/tenant-transition.ts`
+
+**Fixture/accessibility files:**
+- Modify: `src/cabinet/billing/subscription-screen.tsx`
+- Modify: `src/cabinet/screens/tenant-onboarding.tsx`
+- Modify: `e2e/auth-session.spec.ts`
+- Modify: `e2e/cabinet-shell.spec.ts`
+
+- [x] **Step 1: Add RED departure regressions**
+
+Use scope-keyed registered cache resets to prove logout and invite-style
+provider replacement clear the captured committed A scope exactly once, never
+clear replacement B, and block B access/content until a delayed A clear settles.
+
+- [x] **Step 2: Serialize provider-owned departure**
+
+Track the last committed scope with an immutable lease handle. Start its shared
+registry clear synchronously on every invalidation/unmount, reuse the same
+promise for duplicate cleanup, and make replacement transitions await the
+captured lease rather than reading mutable replacement auth state.
+
+- [ ] **Step 3: Add RED fixture and computed-target regressions**
+
+Probe recognized auth fixture routes with unsupported methods and require 405,
+while preserving the real session Worker flow. At 320 and 768 widths, prove the
+over-quota upgrade and onboarding logout controls compute to at least 44 by 44
+pixels.
+
+- [ ] **Step 4: Implement minimal fixture/a11y hardening**
+
+Dispatch fixture responses by explicit route and method, return 405 for known
+unsupported methods, and add `min-h-11 min-w-11` to the two compact controls.
+
+- [ ] **Step 5: Verify and commit without publication**
+
+Run focused unit/browser tests, full `npm run check`, QA build/artifact and asset
+budget checks, Wrangler QA dry-run, diff checks, and sequential read-only review.
+Commit lifecycle and fixture/a11y changes logically; do not push or deploy.

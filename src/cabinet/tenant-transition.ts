@@ -87,11 +87,17 @@ export type TenantTransitionResult =
   | { kind: 'superseded'; target: Tenant }
   | { kind: 'error'; target: Tenant; error: unknown }
 
+export interface TenantTransitionScope {
+  userId: string
+  tenantId: string | null
+  departure?: () => Promise<void>
+}
+
 export interface TenantTransitionDependencies {
-  currentScope(): { userId: string; tenantId: string | null }
+  currentScope(): TenantTransitionScope
   begin(target: Tenant, generation: number): void
   rotateRequests(): void
-  clear(scope: { userId: string; tenantId: string }): Promise<void>
+  clear(scope: TenantTransitionScope & { tenantId: string }): Promise<void>
   persistTenant(tenantId: string): void
   loadAccess(signal: AbortSignal): Promise<MePermissionsDto>
   loadSubscription(signal: AbortSignal): Promise<SubscriptionDto>
@@ -129,16 +135,15 @@ export const createTenantTransition = (
     const run = async (): Promise<TenantTransitionResult> => {
       try {
         const scope = dependencies.currentScope()
+        const resetScope =
+          scope.tenantId === null
+            ? null
+            : { ...scope, tenantId: scope.tenantId }
         dependencies.begin(target, transitionGeneration)
         dependencies.rotateRequests()
 
         const reset = resetBarrier.then(() =>
-          scope.tenantId === null
-            ? undefined
-            : dependencies.clear({
-                userId: scope.userId,
-                tenantId: scope.tenantId,
-              }),
+          resetScope === null ? undefined : dependencies.clear(resetScope),
         )
         resetBarrier = reset.then(
           () => undefined,

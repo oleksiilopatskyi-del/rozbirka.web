@@ -19,7 +19,10 @@ import { cabinetPath } from './cabinet-paths'
 import { cabinetModules } from './module-registry'
 import { evaluateModuleAccess } from './policy'
 import { tenantRequestScope } from './tenant-request-scope'
-import { tenantResetRegistry } from './tenant-reset-registry'
+import {
+  tenantScopeLifecycle,
+  type TenantScopeLease,
+} from './tenant-scope-lifecycle'
 import {
   createTenantTransition,
   type TenantTransitionResult,
@@ -90,6 +93,7 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
   const authRef = useRef(auth)
   const invalidatedBoundaryRef = useRef<string | null>(null)
   const switchRouteIntentRef = useRef<SwitchRouteIntent | null>(null)
+  const committedLeaseRef = useRef<TenantScopeLease | null>(null)
   const transitionRef = useRef<ReturnType<
     typeof createTenantTransition
   > | null>(null)
@@ -99,16 +103,23 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
     setState(next)
   }, [])
 
+  const departCommittedScope = useCallback(() => {
+    const lease = committedLeaseRef.current
+    committedLeaseRef.current = null
+    void tenantScopeLifecycle.depart(lease)
+  }, [])
+
   const invalidateBoundary = useCallback(
     (boundary: string) => {
       if (invalidatedBoundaryRef.current === boundary) return
       invalidatedBoundaryRef.current = boundary
+      departCommittedScope()
       switchRouteIntentRef.current = null
       transitionRef.current?.invalidate()
       tenantRequestScope.rotate()
       publish(initialState)
     },
-    [publish],
+    [departCommittedScope, publish],
   )
 
   useEffect(() => {
@@ -117,10 +128,17 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const transition = createTenantTransition({
-      currentScope: () => ({
-        userId: authRef.current.user?.id ?? '',
-        tenantId: authRef.current.tenant?.id ?? null,
-      }),
+      currentScope: () => {
+        const lease = tenantScopeLifecycle.currentLease()
+        const userId = authRef.current.user?.id ?? ''
+        return lease === null
+          ? { userId, tenantId: null }
+          : {
+              userId,
+              tenantId: lease.scope.tenantId,
+              departure: () => tenantScopeLifecycle.depart(lease),
+            }
+      },
       begin: (target) => {
         invalidatedBoundaryRef.current = null
         publish({
@@ -135,7 +153,7 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
         })
       },
       rotateRequests: () => tenantRequestScope.rotate(),
-      clear: (scope) => tenantResetRegistry.clear(scope),
+      clear: (scope) => scope.departure?.() ?? Promise.resolve(),
       persistTenant: (tenantId) => tenantPreference.set(tenantId),
       loadAccess: (signal) => accessApi.get({ signal }),
       loadSubscription: (signal) => billingApi.getSubscription({ signal }),
@@ -146,6 +164,10 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
         ) {
           return
         }
+        committedLeaseRef.current = tenantScopeLifecycle.commit({
+          userId: snapshot.userId,
+          tenantId: snapshot.tenantId,
+        })
         authRef.current.commitTenant(target.id)
         publish({
           status: 'ready',
@@ -166,13 +188,14 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
     transitionRef.current = transition
 
     return () => {
+      departCommittedScope()
       transition.invalidate()
       tenantRequestScope.rotate()
       if (transitionRef.current === transition) {
         transitionRef.current = null
       }
     }
-  }, [publish])
+  }, [departCommittedScope, publish])
 
   const transitionTo = useCallback(
     async (target: Tenant): Promise<TenantTransitionResult | undefined> =>

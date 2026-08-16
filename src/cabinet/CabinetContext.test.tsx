@@ -20,6 +20,7 @@ import { AuthProvider, useAuth } from '@/auth/AuthContext'
 import { accessApi } from './access-api'
 import type { MePermissionsDto } from './access-types'
 import { tenantRequestScope } from './tenant-request-scope'
+import { tenantResetRegistry } from './tenant-reset-registry'
 import {
   CabinetProvider,
   useCabinet,
@@ -86,6 +87,15 @@ const deferred = <T,>() => {
 }
 
 let cabinet: CabinetContextValue | null = null
+const resetRemovals: (() => void)[] = []
+
+const registerTenantReset = (
+  reset: Parameters<typeof tenantResetRegistry.register>[0],
+) => {
+  const remove = tenantResetRegistry.register(reset)
+  resetRemovals.push(remove)
+  return remove
+}
 
 function CabinetProbe() {
   const auth = useAuth()
@@ -206,6 +216,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  for (const remove of resetRemovals.splice(0)) remove()
   vi.restoreAllMocks()
   credentials.clear()
   tenantPreference.clear()
@@ -553,6 +564,79 @@ it('reloads access after a different user signs in to the same tenant', async ()
     await secondAccess.promise
   })
   expect(await screen.findByText('snapshot-user:user-2')).toBeVisible()
+})
+
+it('clears the departed logout scope once and blocks the next user until it settles', async () => {
+  const secondUser: User = { ...user, id: 'user-2', displayName: 'Майстер' }
+  const releaseClear = deferred<void>()
+  const cache = new Map([
+    ['user-1:a', 'cached-a'],
+    ['user-2:b', 'cached-b'],
+  ])
+  const clearedScopes: string[] = []
+  const userEventApi = userEvent.setup()
+
+  const rendered = renderCabinet('/app/a/dashboard')
+  expect(await screen.findByText('snapshot-user:user-1')).toBeVisible()
+  registerTenantReset(async (scope) => {
+    const key = `${scope.userId}:${scope.tenantId}`
+    clearedScopes.push(key)
+    cache.delete(key)
+    if (key === 'user-1:a') await releaseClear.promise
+  })
+
+  await userEventApi.click(
+    screen.getByRole('button', { name: 'sign out cabinet' }),
+  )
+  rendered.unmount()
+  await waitFor(() => expect(clearedScopes).toEqual(['user-1:a']))
+
+  vi.mocked(authApi.me).mockResolvedValue(secondUser)
+  credentials.setAccess('second-access')
+  tenantPreference.set(tenantB.id)
+  const next = renderCabinet('/app/b/dashboard')
+
+  await act(async () => Promise.resolve())
+  expect(screen.getByText('Завантажуємо розбірку…')).toBeVisible()
+  expect(accessApi.get).toHaveBeenCalledTimes(1)
+  expect(cache.get('user-2:b')).toBe('cached-b')
+
+  await act(async () => {
+    releaseClear.resolve()
+    await releaseClear.promise
+  })
+
+  expect(await screen.findByText('snapshot-user:user-2')).toBeVisible()
+  expect(clearedScopes).toEqual(['user-1:a'])
+  expect(cache.has('user-1:a')).toBe(false)
+  expect(cache.get('user-2:b')).toBe('cached-b')
+  next.unmount()
+})
+
+it('clears an invite-style unmounted scope instead of the replacement tenant', async () => {
+  const cache = new Map([
+    ['user-1:a', 'cached-a'],
+    ['user-1:b', 'cached-b'],
+  ])
+  const clearedScopes: string[] = []
+
+  const rendered = renderCabinet('/app/a/dashboard')
+  expect(await screen.findByText('tenant:a access:a')).toBeVisible()
+  registerTenantReset((scope) => {
+    const key = `${scope.userId}:${scope.tenantId}`
+    clearedScopes.push(key)
+    cache.delete(key)
+  })
+
+  rendered.unmount()
+  tenantPreference.set(tenantB.id)
+  const next = renderCabinet('/app/b/dashboard')
+
+  expect(await screen.findByText('tenant:b access:b')).toBeVisible()
+  expect(clearedScopes).toEqual(['user-1:a'])
+  expect(cache.has('user-1:a')).toBe(false)
+  expect(cache.get('user-1:b')).toBe('cached-b')
+  next.unmount()
 })
 
 it('aborts the shared tenant request scope on unmount', async () => {
