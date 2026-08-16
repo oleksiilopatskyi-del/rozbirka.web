@@ -1043,7 +1043,7 @@ pixels.
 Dispatch fixture responses by explicit route and method, return 405 for known
 unsupported methods, and add `min-h-11 min-w-11` to the two compact controls.
 
-- [ ] **Step 5: Verify and commit without publication**
+- [x] **Step 5: Verify and commit without publication**
 
 Run focused unit/browser tests, full `npm run check`, QA build/artifact and asset
 budget checks, Wrangler QA dry-run, diff checks, and sequential read-only review.
