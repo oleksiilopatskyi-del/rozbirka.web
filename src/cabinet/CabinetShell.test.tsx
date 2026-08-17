@@ -63,6 +63,7 @@ beforeEach(() => {
     tenants: [tenant],
     hydrate: vi.fn(),
     commitTenant: vi.fn(),
+    updateName: vi.fn(),
     signOut,
   } satisfies AuthContextValue)
   vi.mocked(useCabinet).mockReturnValue({

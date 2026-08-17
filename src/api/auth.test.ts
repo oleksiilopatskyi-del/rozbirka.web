@@ -74,13 +74,16 @@ it('delegates logout to the browser session facade', async () => {
 })
 
 it('commits the access returned by update-name and returns the updated user', async () => {
+  const controller = new AbortController()
+  let requestSignal: AbortSignal | undefined
   const updatedUser = {
     id: 'user-1',
     phone: '+380501112233',
     displayName: 'Нове ім’я',
   }
-  identityClient.defaults.adapter = (config) =>
-    Promise.resolve(
+  identityClient.defaults.adapter = (config) => {
+    requestSignal = config.signal as AbortSignal | undefined
+    return Promise.resolve(
       response(config, {
         data: {
           user: updatedUser,
@@ -89,7 +92,11 @@ it('commits the access returned by update-name and returns the updated user', as
         },
       }),
     )
+  }
 
-  await expect(authApi.updateName('Нове ім’я')).resolves.toEqual(updatedUser)
+  await expect(
+    authApi.updateName('Нове ім’я', { signal: controller.signal }),
+  ).resolves.toEqual(updatedUser)
+  expect(requestSignal).toBe(controller.signal)
   expect(credentials.getAccess()).toBe('updated-access')
 })

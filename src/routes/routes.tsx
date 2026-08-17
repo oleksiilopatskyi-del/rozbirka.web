@@ -56,6 +56,10 @@ const releasedCabinetRoutes: Partial<Record<CabinetModuleKey, RouteObject>> = {
     const { PaymentsScreen } = await import('@/cabinet/billing/payments-screen')
     return PaymentsScreen
   }),
+  profile: cabinetScreenRoute('profile', async () => {
+    const { ProfileScreen } = await import('@/cabinet/profile/profile-screen')
+    return ProfileScreen
+  }),
 }
 
 const cabinetChildren = (): RouteObject[] => [

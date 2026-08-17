@@ -54,6 +54,7 @@ beforeEach(() => {
     tenants: [tenant],
     hydrate: vi.fn(),
     commitTenant: vi.fn(),
+    updateName: vi.fn(),
     signOut: vi.fn(),
   } satisfies AuthContextValue)
 })

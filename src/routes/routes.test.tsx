@@ -92,6 +92,7 @@ describe('production route boundary', () => {
     ['settings/billing/overview', 'SubscriptionScreen'],
     ['settings/billing/plans', 'PlansScreen'],
     ['settings/billing/payments', 'PaymentsScreen'],
+    ['settings/profile', 'ProfileScreen'],
   ])(
     'loads %s through its distinct released screen',
     async (path, screenName) => {
