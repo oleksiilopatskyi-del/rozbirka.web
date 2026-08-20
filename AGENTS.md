@@ -1,42 +1,48 @@
-# AI Knowledge: rozbirka.web
+# AI Agent Guide: `rozbirka.web`
 
-## Purpose
+## Scope
 
-Public Rozbirka web application and marketing surface. It includes authentication/tenant/billing flows, SEO-aware React routes, server rendering for prerendered output, production asset optimization, and Cloudflare deployment.
+This repository contains the public Rozbirka website, authentication and account flows, SEO-aware React routes, prerendered output, and the Cloudflare Worker that serves the application. Keep changes limited to this repository unless the task explicitly coordinates a contract change with `rozbirka.core` or `rozbirka.mobile`.
 
 ## Repository map
 
-- `src/routes/` — route definitions and router composition.
-- `src/components/site/` — marketing sections and navigation.
-- `src/api/` — auth, tenant, billing, and token clients.
-- `src/seo/` — metadata, structured data, and route SEO.
+- `src/routes/` — route declarations and router composition.
+- `src/screens/` — route-level screens, including login and account.
+- `src/components/site/` — public marketing sections and navigation.
+- `src/components/ui/` — shared UI primitives.
+- `src/auth/` — authentication context and route guards.
+- `src/api/` — API client, auth, tenant, billing, token, and shared API types.
+- `src/seo/` — page metadata and structured data.
 - `src/entry-server.tsx` — SSR entry used by prerendering.
-- `src/assets/` — source and optimized media.
-- `scripts/` — prerendering, route checks, asset composition/optimization, and budgets.
-- `e2e/` or Playwright configuration — browser coverage.
-- `wrangler.jsonc` — Cloudflare deployment.
+- `src/assets/` and `public/` — source, optimized, and static assets.
+- `worker/` — Cloudflare Worker entry and request handling.
+- `scripts/` — prerender, production-route, asset, and performance checks.
+- `e2e/` and `playwright.config.ts` — browser and accessibility coverage.
+- `wrangler.jsonc` — QA and production Cloudflare configuration.
 
-## Tooling
+## Stack and commands
 
-- React 19, React Router 7, and TypeScript 6.
-- Vite 8 for client and SSR builds.
-- Tailwind CSS 4, Radix UI, shadcn, and Lucide for UI.
-- Vitest + Testing Library for unit/component tests.
-- Playwright + axe-core for E2E and accessibility checks.
-- Prettier and ESLint for consistency.
-- Sharp and custom scripts for image generation/optimization and asset budgets.
-- Lighthouse CI for performance budgets.
-- Wrangler for Cloudflare validation/deployment.
+The app uses React 19, React Router 7, TypeScript 6, Vite 8, Tailwind CSS 4, Radix UI, Vitest, Playwright, and Wrangler. Use the committed lockfile and Node/npm versions expected by CI.
 
-## Commands
+- Install dependencies: `npm ci`
+- Start locally: `npm run dev`
+- Run the standard validation gate: `npm run check`
+- Build the default target: `npm run build`
+- Build environment variants: `npm run build:qa` and `npm run build:prod`
+- Check generated routes and prerender output: `npm run check:routes` and `npm run check:prerender`
+- Run browser tests: `npm run test:e2e`
+- Check asset and Lighthouse budgets: `npm run budget:assets` and `npm run audit:lhci`
+- Run the full production gate: `npm run verify:prod`
 
-- `npm install`
-- `npm run dev`
-- `npm run check` for typecheck, lint, formatting, and tests.
-- `npm run build:qa` / `npm run build:prod`
-- `npm run check:routes` and `npm run check:prerender`
-- `npm run test:e2e`
-- `npm run budget:assets` and `npm run audit:lhci`
-- `npm run verify:prod` for the full production gate.
+Before handing off a change, run `npm run check` and the build most relevant to the target environment. Add focused tests when behavior changes. `verify:prod` also runs browser, Lighthouse, asset-budget, and Wrangler dry-run checks and may require the environment expected by CI.
 
-When adding a route, update route configuration, SEO metadata, structured data when applicable, prerender coverage, navigation, and route tests together. Keep large source images out of runtime paths unless the asset pipeline generates optimized AVIF/WebP variants. Do not put secrets in `VITE_*`, client code, rendered HTML, or Wrangler configuration. Preserve keyboard navigation, semantic landmarks, focus states, contrast, reduced-motion behavior, and Core Web Vitals budgets.
+## Change guidelines
+
+- When adding or changing a route, update its route declaration, SEO metadata, structured data when applicable, prerender coverage, navigation, and route tests together.
+- Keep API calls in `src/api/`; reuse the shared client and types instead of creating screen-local HTTP code.
+- Treat authentication and tenant selection as security boundaries. Preserve token clearing on failed refresh or logout, send the selected tenant through the shared client, and never trust a client-selected tenant without server-side authorization.
+- Do not expose secrets in `VITE_*` variables, client bundles, rendered HTML, committed environment files, or `wrangler.jsonc`. Only values intentionally public to the browser belong in client environment variables.
+- Do not document or depend on unmerged feature branches. Confirm behavior against the target branch and generated API contract.
+- Preserve semantic landmarks, keyboard navigation, visible focus, contrast, reduced-motion behavior, and existing accessibility tests.
+- Keep large source images out of runtime paths. Use the asset pipeline and optimized AVIF/WebP variants, and respect asset and Core Web Vitals budgets.
+- Keep QA and production behavior aligned. Any Cloudflare route, Worker, or deployment change must be reflected in `wrangler.jsonc` and the relevant workflow, without committing credentials.
