@@ -8,7 +8,7 @@ import {
 } from './plan-selection'
 
 describe('plan selection', () => {
-  it.each(['lite_monthly', 'pro_monthly', 'enterprise_monthly'])(
+  it.each(['pro_monthly', 'enterprise_monthly'])(
     'accepts supported plan %s',
     (planCode) => {
       expect(isPlanCode(planCode)).toBe(true)
@@ -19,6 +19,7 @@ describe('plan selection', () => {
   it('rejects missing and unknown plan codes', () => {
     expect(readPlanCode('')).toBeNull()
     expect(readPlanCode('?plan=unknown')).toBeNull()
+    expect(readPlanCode('?plan=lite_monthly')).toBeNull()
   })
 
   it('builds stable login and account destinations', () => {
@@ -29,8 +30,8 @@ describe('plan selection', () => {
   })
 
   it('uses the account plans destination only for a valid requested plan', () => {
-    expect(postAuthPath('?plan=lite_monthly', '/account')).toBe(
-      '/account?section=plans&plan=lite_monthly',
+    expect(postAuthPath('?plan=pro_monthly', '/account')).toBe(
+      '/account?section=plans&plan=pro_monthly',
     )
     expect(postAuthPath('?plan=unknown', '/account')).toBe('/account')
   })

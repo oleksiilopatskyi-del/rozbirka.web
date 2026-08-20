@@ -1,10 +1,6 @@
 import { resolvePostLoginDestination } from '@/auth/post-login'
 
-export const planCodes = [
-  'lite_monthly',
-  'pro_monthly',
-  'enterprise_monthly',
-] as const
+export const planCodes = ['pro_monthly', 'enterprise_monthly'] as const
 
 export type PlanCode = (typeof planCodes)[number]
 

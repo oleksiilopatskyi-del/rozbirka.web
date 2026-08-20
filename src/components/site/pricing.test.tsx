@@ -135,11 +135,10 @@ describe('Pricing destinations', () => {
 
     const links = await screen.findAllByRole('link')
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
-      '/login?plan=lite_monthly',
       '/login?plan=pro_monthly',
       '/login?plan=enterprise_monthly',
     ])
-    expect(links).toHaveLength(3)
+    expect(links).toHaveLength(2)
     links.forEach((link) => expect(link).toHaveClass('min-h-11'))
   })
 
@@ -150,8 +149,10 @@ describe('Pricing destinations', () => {
         <Pricing />
       </MemoryRouter>,
     )
-    expect(await screen.findByText('3 авто')).toBeInTheDocument()
-    expect(screen.getAllByRole('link')).toHaveLength(3)
+    expect(
+      await screen.findByText('20 авто, 2 000 запчастин'),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('link')).toHaveLength(2)
   })
 
   it('renders a stable full monthly period label beside every price', async () => {
@@ -162,7 +163,7 @@ describe('Pricing destinations', () => {
     )
 
     const periods = await screen.findAllByText('/ місяць')
-    expect(periods).toHaveLength(3)
+    expect(periods).toHaveLength(2)
     periods.forEach((period) => {
       expect(period).toHaveClass(
         'font-visuelt',
@@ -177,7 +178,7 @@ describe('Pricing destinations', () => {
     })
   })
 
-  it('centers Enterprise on tablet and restores the third column on desktop', async () => {
+  it('renders the two plans in two columns on tablet and desktop', async () => {
     const { container } = render(
       <MemoryRouter>
         <Pricing />
@@ -186,16 +187,10 @@ describe('Pricing destinations', () => {
 
     await screen.findByText('Enterprise')
     const grid = container.querySelector('#pricing ul')
-    expect(grid).toHaveClass('md:grid-cols-2', 'lg:grid-cols-3')
+    expect(grid).toHaveClass('md:grid-cols-2')
+    expect(grid).not.toHaveClass('lg:grid-cols-3')
 
     const enterpriseCard = screen.getByText('Enterprise').closest('li')
-    expect(enterpriseCard).toHaveClass(
-      'md:col-span-2',
-      'md:mx-auto',
-      'md:w-[calc(50%-0.5rem)]',
-      'lg:col-span-1',
-      'lg:mx-0',
-      'lg:w-auto',
-    )
+    expect(enterpriseCard).not.toHaveClass('md:col-span-2')
   })
 })
