@@ -38,6 +38,7 @@ it('publishes the canonical trial and team limits', async () => {
       name: 'Скільки людей з команди можуть працювати одночасно?',
     }),
   )
-  expect(screen.getByText(/Lite — 1 користувач, Pro — 5/i)).toBeInTheDocument()
+  expect(screen.getByText(/Pro — 5 користувачів/i)).toBeInTheDocument()
+  expect(screen.queryByText(/Lite — 1 користувач/i)).toBeNull()
   expect(screen.queryByText(/Сім днів|7 днів/)).toBeNull()
 })

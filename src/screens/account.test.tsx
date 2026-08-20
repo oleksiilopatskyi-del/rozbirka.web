@@ -225,4 +225,39 @@ describe('AccountScreen subscription state', () => {
     ).toHaveTextContent(/^\/$/)
     finishLogout()
   })
+
+  it('filters removed and unknown plans from a stale account API response', async () => {
+    getSubscription.mockResolvedValue(subscription)
+    const plan = {
+      amount: 59,
+      currency: 'USD',
+      interval: '1m',
+      trialDays: 14,
+      limits: {
+        cars: 20,
+        intakes: 25,
+        parts: 2000,
+        users: 5,
+        cashRegisters: 2,
+        photosPerPart: null,
+      },
+      features: [],
+    }
+    getPlans.mockResolvedValue([
+      { ...plan, code: 'lite_monthly', name: 'Lite', amount: 19 },
+      { ...plan, code: 'pro_monthly', name: 'Pro' },
+      { ...plan, code: 'enterprise_monthly', name: 'Enterprise', amount: 299 },
+      { ...plan, code: 'unknown_monthly', name: 'Unknown' },
+    ])
+
+    render(
+      <MemoryRouter initialEntries={['/account?section=plans']}>
+        <AccountScreen />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Enterprise')).toBeInTheDocument()
+    expect(screen.queryByText('Lite')).toBeNull()
+    expect(screen.queryByText('Unknown')).toBeNull()
+  })
 })

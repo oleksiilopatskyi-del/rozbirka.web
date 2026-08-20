@@ -71,12 +71,6 @@ describe('landing plan contract', () => {
   it('maps the complete validated API catalog in canonical order', () => {
     expect(resolveLandingPlans([...apiPlans].reverse())).toEqual([
       expect.objectContaining({
-        code: 'lite_monthly',
-        price: '$19',
-        trialDays: 14,
-        perks: ['3 авто', '100 запчастин', '1 користувач, 1 каса'],
-      }),
-      expect.objectContaining({
         code: 'pro_monthly',
         price: '$59',
         trialDays: 14,
@@ -97,6 +91,7 @@ describe('landing plan contract', () => {
         ],
       }),
     ])
+    expect(resolveLandingPlans(apiPlans)).toHaveLength(2)
   })
 
   it('falls back when any required plan is missing or malformed', () => {
