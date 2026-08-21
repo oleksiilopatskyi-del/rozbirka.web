@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
-import { RouterProvider } from 'react-router'
+import { RouterProvider } from 'react-router/dom'
 import { AuthProvider } from '@/auth/AuthContext'
 import { router } from '@/routes/router'
 import './index.css'

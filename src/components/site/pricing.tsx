@@ -17,13 +17,6 @@ const variantStyles: Record<
   LandingPlan['variant'],
   { card: string; pill: string; description: string; cta: string; perk: string }
 > = {
-  lite: {
-    card: 'bg-surface-1 ring-1 ring-white/[0.05] text-white',
-    pill: 'bg-white/[0.06] text-white ring-1 ring-white/10',
-    description: 'text-neutral-400',
-    cta: 'text-white',
-    perk: 'text-neutral-300',
-  },
   pro: {
     card: 'bg-brand text-brand-foreground',
     pill: 'bg-black/15 text-black ring-1 ring-black/10',
@@ -66,10 +59,7 @@ export function Pricing() {
           <h2 className="mb-12 text-[40px] leading-[1] font-light tracking-[-0.02em] lg:mb-16 lg:text-[56px]">
             Тарифні плани
           </h2>
-          <ul
-            role="list"
-            className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
-          >
+          <ul role="list" className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {plans.map((plan) => {
               const destination =
                 status === 'authenticated'
@@ -100,15 +90,12 @@ function PlanCard({
 }) {
   const styles = variantStyles[plan.variant]
   const isPro = plan.variant === 'pro'
-  const isEnterprise = plan.variant === 'enterprise'
 
   return (
     <li
       className={cn(
         'group rounded-(--radius-card) relative flex min-h-[440px] flex-col gap-6 p-8 transition-all duration-500 ease-out hover:-translate-y-1 hover:shadow-2xl motion-reduce:transition-none motion-reduce:hover:translate-y-0 lg:p-10',
         styles.card,
-        isEnterprise &&
-          'md:col-span-2 md:mx-auto md:w-[calc(50%-0.5rem)] lg:col-span-1 lg:mx-0 lg:w-auto',
       )}
     >
       <div className="flex items-center justify-between gap-2">

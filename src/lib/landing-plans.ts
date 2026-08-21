@@ -3,28 +3,17 @@ import type { PlanCode } from '@/lib/plan-selection'
 
 export interface LandingPlan {
   code: PlanCode
-  name: 'Lite' | 'Pro' | 'Enterprise'
+  name: 'Pro' | 'Enterprise'
   price: string
   period: 'місяць'
   trialDays: 14
   description: string
   perks: string[]
   ctaLabel: string
-  variant: 'lite' | 'pro' | 'enterprise'
+  variant: 'pro' | 'enterprise'
 }
 
 export const FALLBACK_LANDING_PLANS: readonly LandingPlan[] = [
-  {
-    code: 'lite_monthly',
-    name: 'Lite',
-    price: '$19',
-    period: 'місяць',
-    trialDays: 14,
-    description: 'Старт для маленької розбірки',
-    perks: ['3 авто', '100 запчастин', '1 користувач, 1 каса'],
-    ctaLabel: 'Обрати',
-    variant: 'lite',
-  },
   {
     code: 'pro_monthly',
     name: 'Pro',
@@ -57,7 +46,7 @@ export const FALLBACK_LANDING_PLANS: readonly LandingPlan[] = [
   },
 ] as const
 
-const order: PlanCode[] = ['lite_monthly', 'pro_monthly', 'enterprise_monthly']
+const order: PlanCode[] = ['pro_monthly', 'enterprise_monthly']
 
 const featureContract = [
   'intake_management',
@@ -68,18 +57,6 @@ const featureContract = [
 ] as const
 
 const contracts = {
-  lite_monthly: {
-    amount: 19,
-    features: [] as string[],
-    limits: {
-      cars: 3,
-      intakes: 0,
-      parts: 100,
-      users: 1,
-      cashRegisters: 1,
-      photosPerPart: null,
-    },
-  },
   pro_monthly: {
     amount: 59,
     features: featureContract,

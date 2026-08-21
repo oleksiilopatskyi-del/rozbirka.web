@@ -14,10 +14,10 @@ import {
 import { cn } from '@/lib/utils'
 import { BrandLogo } from '@/components/site/brand-logo'
 import { billingApi } from '@/api/billing'
+import { tenantPreference } from '@/api/tenant-preference'
 import { tenantsApi } from '@/api/tenants'
-import { tokens } from '@/api/tokens'
 import { useAuth } from '@/auth/AuthContext'
-import { readPlanCode, type PlanCode } from '@/lib/plan-selection'
+import { isPlanCode, readPlanCode, type PlanCode } from '@/lib/plan-selection'
 import type {
   BillingState,
   LimitUsageDto,
@@ -31,6 +31,19 @@ import type {
 } from '@/api/types'
 
 type Section = 'subscription' | 'plans' | 'payment' | 'billing'
+type SupportedPublicPlanDto = PublicPlanDto & { code: PlanCode }
+
+function isSupportedPublicPlan(
+  plan: PublicPlanDto,
+): plan is SupportedPublicPlanDto {
+  return isPlanCode(plan.code)
+}
+
+function filterSupportedPublicPlans(
+  plans: readonly PublicPlanDto[],
+): SupportedPublicPlanDto[] {
+  return plans.filter(isSupportedPublicPlan)
+}
 
 interface NavEntry {
   id: Section
@@ -55,7 +68,7 @@ export function AccountScreen() {
     requestedSection === 'plans' ? 'plans' : 'subscription',
   )
   const [subscription, setSubscription] = useState<SubscriptionDto | null>(null)
-  const [plans, setPlans] = useState<PublicPlanDto[]>([])
+  const [plans, setPlans] = useState<SupportedPublicPlanDto[]>([])
   const [payments, setPayments] = useState<PagedResult<PaymentDto> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -73,7 +86,7 @@ export function AccountScreen() {
         if (cancelled) return
         setSubscription(sub)
         setPayments(pay)
-        setPlans(planList)
+        setPlans(filterSupportedPublicPlans(planList))
         if (sub === null && pay === null) {
           setError('Не вдалось завантажити дані. Спробуйте оновити сторінку.')
         }
@@ -87,8 +100,8 @@ export function AccountScreen() {
   }, [activeTenantId])
 
   const handleLogout = async () => {
+    void navigate('/', { replace: true, flushSync: true })
     await auth.signOut()
-    void navigate('/', { replace: true })
   }
 
   const refreshSubscription = async () => {
@@ -255,7 +268,7 @@ function OnboardingScreen({
         tenantName: name.trim(),
         ...(city.trim() ? { city: city.trim() } : {}),
       })
-      tokens.setTenant(res.tenantId)
+      tenantPreference.set(res.tenantId)
       await onCreated()
     } catch {
       setError('Не вдалося створити розбірку. Спробуйте ще раз.')
@@ -762,7 +775,7 @@ function PlansPanel({
   subscription,
   selectedPlanCode,
 }: {
-  plans: PublicPlanDto[]
+  plans: SupportedPublicPlanDto[]
   subscription: SubscriptionDto | null
   selectedPlanCode: PlanCode | null
 }) {
@@ -773,7 +786,7 @@ function PlansPanel({
   const currentCode = subscription?.planCode
   const recommendedCode = 'pro_monthly'
 
-  const handleSubscribe = async (planCode: string) => {
+  const handleSubscribe = async (planCode: PlanCode) => {
     setBusy(true)
     try {
       const { checkoutUrl } = await billingApi.subscribe({ planCode })
@@ -790,7 +803,7 @@ function PlansPanel({
         subtitle="Обери план, що підходить твоєму бізнесу"
       />
 
-      <ul role="list" className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <ul role="list" className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {plans.map((plan) => {
           const isCurrent = plan.code === currentCode
           const isSelected = plan.code === selectedPlanCode

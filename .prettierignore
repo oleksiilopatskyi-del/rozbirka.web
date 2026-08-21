@@ -9,5 +9,6 @@ package-lock.json
 playwright-report
 test-results
 worker-configuration.d.ts
+src/api/generated/*.ts
 
 docs/superpowers/

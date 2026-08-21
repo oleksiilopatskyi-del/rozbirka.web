@@ -58,6 +58,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      - run: npm install --global npm@11.16.0
+
       - run: npm ci
 
       - if: inputs.run_build
@@ -71,6 +73,7 @@ jobs:
           else
             npm run check
             npm run build:qa
+            npm run check:artifact:qa
             npm run budget:assets
             npm run test:e2e
             npx wrangler deploy --dry-run --env qa
@@ -115,6 +118,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      - run: npm install --global npm@11.16.0
+
       - run: |
           env_name="${{ inputs.auto_qa_deploy && 'qa' || inputs.environment }}"
           if [ "$env_name" = "prod" ]; then
@@ -130,7 +135,10 @@ jobs:
           fi
 
           if [ "$wrangler_env" = "production" ]; then
+            npm run check:artifact:prod
             npm run check:routes -- https://qa.rozbirka.pro https://qaapi.rozbirka.pro
+          else
+            npm run check:artifact:qa
           fi
 
           npx wrangler deploy --env "$wrangler_env"

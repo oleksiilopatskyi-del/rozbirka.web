@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { billingApi } from '@/api/billing'
 import type { SubscriptionDto } from '@/api/types'
@@ -27,6 +28,12 @@ const getPayments = vi.mocked(billingApi.getPayments)
 const getPlans = vi.mocked(billingApi.getPlans)
 /* eslint-enable @typescript-eslint/unbound-method */
 const mockedUseAuth = vi.mocked(useAuth)
+const signOut = vi.fn<() => Promise<void>>()
+
+function LocationProbe() {
+  const location = useLocation()
+  return <output aria-label="Поточний маршрут">{location.pathname}</output>
+}
 
 const subscription: SubscriptionDto = {
   state: 'trial',
@@ -65,6 +72,7 @@ function renderAccount() {
 describe('AccountScreen subscription state', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    signOut.mockResolvedValue()
     mockedUseAuth.mockReturnValue({
       status: 'authenticated',
       user: {
@@ -103,7 +111,7 @@ describe('AccountScreen subscription state', () => {
       ],
       hydrate: vi.fn(),
       switchTenant: vi.fn(),
-      signOut: vi.fn(),
+      signOut,
     })
     getPayments.mockResolvedValue({
       items: [],
@@ -193,5 +201,63 @@ describe('AccountScreen subscription state', () => {
 
     expect(await screen.findByText('Обрано')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Тарифи' })).toBeInTheDocument()
+  })
+
+  it('leaves the protected account route before waiting for logout', async () => {
+    getSubscription.mockResolvedValue(subscription)
+    let finishLogout!: () => void
+    signOut.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishLogout = resolve
+      }),
+    )
+    render(
+      <MemoryRouter initialEntries={['/account']}>
+        <AccountScreen />
+        <LocationProbe />
+      </MemoryRouter>,
+    )
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Вийти' }))
+
+    expect(
+      screen.getByRole('status', { name: 'Поточний маршрут' }),
+    ).toHaveTextContent(/^\/$/)
+    finishLogout()
+  })
+
+  it('filters removed and unknown plans from a stale account API response', async () => {
+    getSubscription.mockResolvedValue(subscription)
+    const plan = {
+      amount: 59,
+      currency: 'USD',
+      interval: '1m',
+      trialDays: 14,
+      limits: {
+        cars: 20,
+        intakes: 25,
+        parts: 2000,
+        users: 5,
+        cashRegisters: 2,
+        photosPerPart: null,
+      },
+      features: [],
+    }
+    getPlans.mockResolvedValue([
+      { ...plan, code: 'lite_monthly', name: 'Lite', amount: 19 },
+      { ...plan, code: 'pro_monthly', name: 'Pro' },
+      { ...plan, code: 'enterprise_monthly', name: 'Enterprise', amount: 299 },
+      { ...plan, code: 'unknown_monthly', name: 'Unknown' },
+    ])
+
+    render(
+      <MemoryRouter initialEntries={['/account?section=plans']}>
+        <AccountScreen />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Enterprise')).toBeInTheDocument()
+    expect(screen.queryByText('Lite')).toBeNull()
+    expect(screen.queryByText('Unknown')).toBeNull()
   })
 })

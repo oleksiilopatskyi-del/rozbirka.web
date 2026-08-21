@@ -47,6 +47,28 @@ export function createAppRoutes(
         }
       },
     },
+    {
+      path: '/invite/:code',
+      hydrateFallbackElement,
+      lazy: async () => {
+        const { InviteScreen } = await import('@/screens/invite')
+        return { element: <InviteScreen /> }
+      },
+    },
+    {
+      path: '/scan/:qrCode',
+      hydrateFallbackElement,
+      lazy: async () => {
+        const { ScanResumeScreen } = await import('@/screens/scan-resume')
+        return {
+          element: (
+            <RequireAuth>
+              <ScanResumeScreen />
+            </RequireAuth>
+          ),
+        }
+      },
+    },
   ]
 
   if (includePrototypeRoutes) {
