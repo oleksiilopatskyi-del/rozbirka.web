@@ -80,6 +80,7 @@
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12",
     "vitest": "^4.1.6",
-    "wrangler": "^4.107.0"
+    "wrangler": "^4.107.0",
+    "yaml": "^2.9.0"
   }
 }
