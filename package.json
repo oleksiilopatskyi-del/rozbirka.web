@@ -31,7 +31,9 @@
     "contracts:generate": "node scripts/generate-api-contracts.mjs",
     "contracts:check": "node scripts/check-api-contracts.mjs",
     "deps:check": "node scripts/check-dependency-health.mjs",
-    "verify:prod": "npm run check && npm run build:prod && npm run check:artifact:prod && npm run budget:assets && npm run test:e2e && npm run audit:lhci && wrangler deploy --dry-run --env production",
+    "verify:quality": "npm run check && npm run test:e2e",
+    "verify:release:prod": "npm run build:prod && npm run check:artifact:prod && npm run budget:assets && npm run audit:lhci && wrangler deploy --dry-run --env production",
+    "verify:release:qa": "npm run build:qa && npm run check:artifact:qa && npm run budget:assets && wrangler deploy --dry-run --env qa",
     "deploy:qa": "npm run check && npm run build:qa && npm run check:artifact:qa && npm run budget:assets && wrangler deploy --dry-run --env qa && wrangler deploy --env qa",
     "check": "npm run deps:check && npm run typecheck && npm run lint && npm run format:check && npm run test"
   },
