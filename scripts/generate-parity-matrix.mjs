@@ -447,15 +447,26 @@ export function validateParityDocument(value) {
 function escapeCell(value) {
   if (value === null || value === undefined || value === '') return '—'
   if (Array.isArray(value)) return value.map(escapeCell).join('<br>')
-  return String(value).replaceAll('|', '\\|').replaceAll('\n', '<br>')
+  return String(value)
+    .replaceAll('|', '\\|')
+    .replaceAll('\n', '<br>')
+    .replace(/(^|\/)_(?=[A-Za-z])/g, '$1\\_')
 }
 
 function table(headers, rows) {
-  const header = `| ${headers.join(' | ')} |`
-  const separator = `| ${headers.map(() => '---').join(' | ')} |`
-  const body = rows.map(
-    (row) => `| ${row.map((value) => escapeCell(value)).join(' | ')} |`,
+  const escapedRows = rows.map((row) => row.map(escapeCell))
+  const widths = headers.map((header, index) =>
+    Math.max(
+      3,
+      header.length,
+      ...escapedRows.map((row) => row[index]?.length ?? 0),
+    ),
   )
+  const renderRow = (row) =>
+    `| ${row.map((cell, index) => cell.padEnd(widths[index])).join(' | ')} |`
+  const header = renderRow(headers)
+  const separator = renderRow(widths.map((width) => '-'.repeat(width)))
+  const body = escapedRows.map(renderRow)
   return [header, separator, ...body].join('\n')
 }
 

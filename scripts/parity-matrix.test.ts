@@ -1,4 +1,10 @@
 // @vitest-environment node
+/*
+ * These tests deliberately mutate unvalidated YAML-shaped values and import a
+ * JavaScript validator. Keeping that boundary dynamic is the behavior under
+ * test, so the unsafe-value rules are disabled for this test module only.
+ */
+/* eslint-disable @typescript-eslint/consistent-type-definitions, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/unbound-method */
 import { execFile } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -412,6 +418,51 @@ describe('parity matrix generator', () => {
     expect(document.capabilities.length).toBeGreaterThan(0)
     expect(document.systemCapabilities.length).toBeGreaterThan(0)
     expect(document.excludedRoutes.length).toBeGreaterThan(0)
+    expect(
+      new Set(
+        [...document.capabilities, ...document.systemCapabilities].map(
+          ({ domain }) => domain,
+        ),
+      ),
+    ).toEqual(
+      new Set([
+        'auth',
+        'billing',
+        'cars',
+        'cash',
+        'customers',
+        'dashboard',
+        'intake',
+        'orders',
+        'parts',
+        'profile',
+        'reports',
+        'scanning',
+        'team',
+      ]),
+    )
+
+    type TrackedEntry = {
+      tracking:
+        | { status: 'existing'; issue: string }
+        | { status: 'proposed'; proposalKey: string }
+    }
+    const trackedEntries: TrackedEntry[] = [
+      ...document.capabilities,
+      ...document.systemCapabilities,
+      ...document.excludedRoutes.filter(
+        (entry: { tracking?: TrackedEntry['tracking'] }) => entry.tracking,
+      ),
+    ]
+    for (const { tracking } of trackedEntries) {
+      const reference =
+        tracking.status === 'existing' ? tracking.issue : tracking.proposalKey
+      expect(output).toContain(reference)
+    }
+
     expect(output).toBe(renderParityMarkdown(document))
+    expect(output).not.toMatch(/\/Users\/|[A-Z]:\\/)
+    expect(output).not.toContain('Generated at')
+    expect(output).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
   })
 })
