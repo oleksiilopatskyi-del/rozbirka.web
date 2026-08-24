@@ -14,10 +14,10 @@
 | Dimension | Value | Count |
 | --- | --- | --- |
 | Contract | not-applicable | 4 |
-| Contract | partial | 27 |
+| Contract | partial | 41 |
 | Contract | unsafe | 6 |
-| Disposition | browser-native | 17 |
-| Disposition | parity | 17 |
+| Disposition | browser-native | 26 |
+| Disposition | parity | 22 |
 | Excluded routes | total | 4 |
 
 ## User capabilities
@@ -47,6 +47,24 @@
 | cars.lifecycle.manage | Archive or delete a vehicle | /car/[id] | Archive or delete a tenant vehicle with explicit confirmation and server-enforced safety rules | partial | web | ROZ-109 |
 | cars.list.view | Browse and find vehicles | /(tabs)/(home)/cars | Search, filter, paginate, and open tenant vehicles through a stable URL | partial | core | ROZ-60 |
 
+### cash
+
+| ID | Capability | Mobile routes | Web outcome | Contract | Owner | Tracking |
+| --- | --- | --- | --- | --- | --- | --- |
+| cash.overview.view | View daily cash balances and registers | /(tabs)/(home)/cash | View timezone-correct daily finance totals and open a stable register URL | partial | web | ROZ-115 |
+| cash.register-manage | Create and manage cash registers | /(tabs)/(home)/cash<br>/cash/[id] | Manage tenant registers with server-enforced balance and lifecycle preconditions | partial | web | ROZ-115 |
+| cash.transactions | View and record cash transactions | /cash/[id] | Browse an auditable ledger and record validated manual movements without client-side balance authority | partial | web | ROZ-115 |
+| cash.transfer | Transfer value between registers and currencies | /cash/[id] | Create one atomic, balanced, and auditable cross-register transfer | partial | core | ROZ-123 |
+
+### customers
+
+| ID | Capability | Mobile routes | Web outcome | Contract | Owner | Tracking |
+| --- | --- | --- | --- | --- | --- | --- |
+| customers.create | Create or recover a customer | /customer/new<br>/order/new<br>/order/[id] | Create a customer from the directory or order flow with safe duplicate-phone resolution | partial | web | ROZ-113 |
+| customers.detail.view | View customer details and order history | /customer/[id] | Open a tenant customer with authoritative summary and order history | partial | web | ROZ-113 |
+| customers.edit-lifecycle | Edit, activate, deactivate, or delete a customer | /customer/[id]<br>/customer/[id]/edit | Manage a customer lifecycle with explicit confirmations and server-enforced order constraints | partial | web | ROZ-113 |
+| customers.list.view | Search and browse customers | /(tabs)/(orders)/customers | Search and paginate tenant customers through stable URL-backed controls | partial | web | ROZ-113 |
+
 ### dashboard
 
 | ID | Capability | Mobile routes | Web outcome | Contract | Owner | Tracking |
@@ -66,6 +84,15 @@
 | intake.list.view | Browse and find vehicle intake batches | /(tabs)/(home)/intake | Search, filter by status, paginate, and open tenant intake batches through a stable URL | partial | core | ROZ-60 |
 | intake.parts.create | Create and browse parts within an intake | /intake/[id] | Create a part with an immutable intake relationship and browse intake-scoped inventory | partial | web | ROZ-108 |
 
+### orders
+
+| ID | Capability | Mobile routes | Web outcome | Contract | Owner | Tracking |
+| --- | --- | --- | --- | --- | --- | --- |
+| orders.create | Create a pending order | /order/new | Create a canonical pending order with validated availability, pricing, customer, and reservation behavior | partial | web | ROZ-112 |
+| orders.detail-manage | View and edit a pending order | /order/[id]<br>/order/[id]/add-item | Open an auditable order URL and safely edit only lifecycle-eligible fields | partial | web | ROZ-112 |
+| orders.list.view | Browse and filter orders | /(tabs)/(orders) | Search, filter, and paginate tenant orders through stable URL-backed controls | partial | core | ROZ-60 |
+| orders.payment-lifecycle | Confirm payment, cancel, or refund an order | /order/[id] | Execute one atomic, auditable order transition with authoritative inventory and cash effects | partial | core | ROZ-123 |
+
 ### parts
 
 | ID | Capability | Mobile routes | Web outcome | Contract | Owner | Tracking |
@@ -76,6 +103,13 @@
 | parts.edit | Edit part inventory, commercial, compatibility, and media fields | /part/[id]/edit | Edit a tenant part with server validation and a safe media lifecycle | unsafe | core | ROZ-122 |
 | parts.history.view | View part inventory and order history | /part/[id] | View an auditable chronological part history and navigate to related orders | unsafe | core | ROZ-122 |
 | parts.list.view | Search and filter tenant inventory | /(tabs)/(parts) | Search, filter, paginate, and open tenant inventory through stable URLs | unsafe | core | ROZ-122 |
+
+### reports
+
+| ID | Capability | Mobile routes | Web outcome | Contract | Owner | Tracking |
+| --- | --- | --- | --- | --- | --- | --- |
+| reports.generate | Generate a car-sales report | /(tabs)/(home)/reports | Queue an authorized report job and expose clear asynchronous progress and failure states | partial | web | ROZ-114 |
+| reports.history-download | Browse and download generated reports | /(tabs)/(home)/reports | Browse report history and securely download or share a completed PDF before expiry | partial | web | ROZ-114 |
 
 ### scanning
 
@@ -127,6 +161,14 @@
 | cars.inventory.view | web | ROZ-110 |
 | cars.lifecycle.manage | web | ROZ-109 |
 | cars.list.view | core | ROZ-60 |
+| cash.overview.view | web | ROZ-115 |
+| cash.register-manage | web | ROZ-115 |
+| cash.transactions | web | ROZ-115 |
+| cash.transfer | core | ROZ-123 |
+| customers.create | web | ROZ-113 |
+| customers.detail.view | web | ROZ-113 |
+| customers.edit-lifecycle | web | ROZ-113 |
+| customers.list.view | web | ROZ-113 |
 | dashboard.analytics.view | web | ROZ-106 |
 | dashboard.navigation.use | web | ROZ-106 |
 | dashboard.summary.view | web | ROZ-106 |
@@ -136,12 +178,18 @@
 | intake.edit | web | ROZ-108 |
 | intake.list.view | core | ROZ-60 |
 | intake.parts.create | web | ROZ-108 |
+| orders.create | web | ROZ-112 |
+| orders.detail-manage | web | ROZ-112 |
+| orders.list.view | core | ROZ-60 |
+| orders.payment-lifecycle | core | ROZ-123 |
 | parts.create | core | ROZ-122 |
 | parts.delete | web | ROZ-110 |
 | parts.detail.view | core | ROZ-122 |
 | parts.edit | core | ROZ-122 |
 | parts.history.view | core | ROZ-122 |
 | parts.list.view | core | ROZ-122 |
+| reports.generate | web | ROZ-114 |
+| reports.history-download | web | ROZ-114 |
 | scanning.qr.lookup | core | ROZ-122 |
 | scanning.vin.decode | web | ROZ-111 |
 | stickers.generate-print-share | web | ROZ-111 |
