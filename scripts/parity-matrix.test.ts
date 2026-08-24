@@ -85,4 +85,196 @@ describe('parity matrix generator', () => {
       renderParityMarkdown(validateParityDocument(parseParityYaml(validYaml))),
     )
   })
+
+  it.each([
+    {
+      name: 'malformed audit commit',
+      mutate(document: any) {
+        document.audit.mobileCommit = 'ABC123'
+      },
+      message: 'audit.mobileCommit: expected a lowercase 40-character Git SHA',
+    },
+    {
+      name: 'duplicate capability id',
+      mutate(document: any) {
+        document.capabilities.push(structuredClone(document.capabilities[0]))
+      },
+      message: 'capabilities[1].id: duplicate capability id dashboard.view',
+    },
+    {
+      name: 'missing evidence',
+      mutate(document: any) {
+        document.capabilities[0].evidence = []
+      },
+      message: 'capabilities[0].evidence: expected at least one reference',
+    },
+    {
+      name: 'browser-native without equivalent',
+      mutate(document: any) {
+        document.capabilities[0].web.disposition = 'browser-native'
+      },
+      message:
+        'capabilities[0].web.browserEquivalent: required for browser-native',
+    },
+    {
+      name: 'ready without operations',
+      mutate(document: any) {
+        delete document.capabilities[0].contract.operations
+      },
+      message:
+        'capabilities[0].contract.operations: required when contract status is ready',
+    },
+    {
+      name: 'partial without notes',
+      mutate(document: any) {
+        document.capabilities[0].contract.status = 'partial'
+      },
+      message:
+        'capabilities[0].contract.notes: required when contract status is partial',
+    },
+    {
+      name: 'invalid existing issue',
+      mutate(document: any) {
+        document.capabilities[0].tracking.issue = 'dashboard-ticket'
+      },
+      message: 'capabilities[0].tracking.issue: expected ROZ-[0-9]+',
+    },
+    {
+      name: 'invalid proposal key',
+      mutate(document: any) {
+        document.capabilities[0].tracking = {
+          status: 'proposed',
+          proposalKey: 'Bad Key',
+        }
+      },
+      message:
+        'capabilities[0].tracking.proposalKey: expected stable kebab-case key',
+    },
+  ])('rejects $name', ({ mutate, message }) => {
+    const document = structuredClone(parseParityYaml(validYaml))
+    mutate(document)
+
+    expect(() => validateParityDocument(document)).toThrow(message)
+  })
+
+  it.each([
+    ['domain', 'unknown-domain', 'capabilities[0].domain: unsupported value'],
+    [
+      'web.disposition',
+      'native-copy',
+      'capabilities[0].web.disposition: unsupported value',
+    ],
+    [
+      'contract.service',
+      'mobile',
+      'capabilities[0].contract.service: unsupported value',
+    ],
+    [
+      'contract.status',
+      'mostly-ready',
+      'capabilities[0].contract.status: unsupported value',
+    ],
+    ['owner', 'product', 'capabilities[0].owner: unsupported value'],
+    [
+      'tracking.status',
+      'planned',
+      'capabilities[0].tracking.status: unsupported value',
+    ],
+  ])('rejects unsupported %s', (path, value, message) => {
+    const document: any = structuredClone(parseParityYaml(validYaml))
+    const segments = path.split('.')
+    let target = document.capabilities[0]
+    for (const segment of segments.slice(0, -1)) target = target[segment]
+    target[segments.at(-1)!] = value
+
+    expect(() => validateParityDocument(document)).toThrow(message)
+  })
+
+  it('rejects not-applicable contracts owned by a service', () => {
+    const document: any = structuredClone(parseParityYaml(validYaml))
+    document.capabilities[0].contract = {
+      service: 'core',
+      status: 'not-applicable',
+    }
+
+    expect(() => validateParityDocument(document)).toThrow(
+      'capabilities[0].contract.service: expected none when contract status is not-applicable',
+    )
+  })
+
+  it('rejects contradictory tracking fields', () => {
+    const document: any = structuredClone(parseParityYaml(validYaml))
+    document.capabilities[0].tracking.proposalKey = 'dashboard-gap'
+
+    expect(() => validateParityDocument(document)).toThrow(
+      'capabilities[0].tracking.proposalKey: not allowed when tracking status is existing',
+    )
+  })
+
+  it('rejects duplicate proposal keys across sections', () => {
+    const document: any = structuredClone(parseParityYaml(validYaml))
+    document.capabilities[0].tracking = {
+      status: 'proposed',
+      proposalKey: 'shared-gap',
+    }
+    document.systemCapabilities.push({
+      id: 'session.refresh',
+      domain: 'auth',
+      name: 'Refresh an authenticated session',
+      trigger: 'An access token expires',
+      mobileBehavior: 'Coordinates one refresh request',
+      webOutcome: 'Keeps the session active without duplicate refreshes',
+      contract: {
+        service: 'identity',
+        status: 'partial',
+        operations: ['POST /auth/refresh'],
+        notes: 'The immutable Identity contract is pending',
+      },
+      access: {
+        permissions: ['authenticated'],
+        tenant: 'not-applicable',
+        billing: 'not-applicable',
+      },
+      owner: 'identity',
+      tracking: { status: 'proposed', proposalKey: 'shared-gap' },
+      evidence: ['rozbirka.mobile:src/session/authRefreshCoordinator.ts'],
+    })
+
+    expect(() => validateParityDocument(document)).toThrow(
+      'systemCapabilities[0].tracking.proposalKey: duplicate proposal key shared-gap',
+    )
+  })
+
+  it('rejects exclusions without rationale and duplicate routes', () => {
+    const document: any = structuredClone(parseParityYaml(validYaml))
+    const exclusion = {
+      route: '/legacy-sale',
+      classification: 'obsolete',
+      reason: '',
+      evidence: ['rozbirka.mobile:src/api/sales.ts'],
+      webReplacement: '/cabinet/orders/new',
+    }
+    document.excludedRoutes.push(exclusion, {
+      ...exclusion,
+      reason: 'Canonical Orders replaces direct sale',
+    })
+
+    expect(() => validateParityDocument(document)).toThrow(
+      'excludedRoutes[0].reason: expected non-empty text',
+    )
+
+    document.excludedRoutes[0].reason = 'Canonical Orders replaces direct sale'
+    expect(() => validateParityDocument(document)).toThrow(
+      'excludedRoutes[1].route: duplicate excluded route /legacy-sale',
+    )
+  })
+
+  it('rejects unknown keys that could hide misspelled evidence', () => {
+    const document: any = structuredClone(parseParityYaml(validYaml))
+    document.capabilities[0].evidnce = document.capabilities[0].evidence
+
+    expect(() => validateParityDocument(document)).toThrow(
+      'capabilities[0].evidnce: unknown field',
+    )
+  })
 })
