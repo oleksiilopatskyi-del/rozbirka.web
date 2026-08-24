@@ -14,9 +14,9 @@
 | Dimension | Value | Count |
 | --- | --- | --- |
 | Contract | not-applicable | 2 |
-| Contract | partial | 12 |
-| Disposition | browser-native | 3 |
-| Disposition | parity | 8 |
+| Contract | partial | 25 |
+| Disposition | browser-native | 9 |
+| Disposition | parity | 15 |
 | Excluded routes | total | 1 |
 
 ## User capabilities
@@ -34,6 +34,18 @@
 | auth.tenant.list | List tenants available to the authenticated user | /(auth)/login<br>/(auth)/name<br>/(auth)/register | Resolve available tenant memberships before entering the authenticated cabinet | partial | core | ROZ-121 |
 | auth.welcome.view | View the authentication entry screen and legal links | /(auth)/welcome | Start authentication and open the applicable legal documents | not-applicable | web | ROZ-104 |
 
+### cars
+
+| ID | Capability | Mobile routes | Web outcome | Contract | Owner | Tracking |
+| --- | --- | --- | --- | --- | --- | --- |
+| cars.create | Create a vehicle with identification, media, and purchase data | /car/add | Create a tenant vehicle with browser-safe media input, explicit VIN fallback, financial data, and quota enforcement | partial | web | ROZ-109 |
+| cars.detail.view | View vehicle details, profitability, photos, and linked parts | /car/[id] | Open a permission-aware vehicle detail URL with authoritative totals and linked inventory | partial | web | ROZ-109 |
+| cars.edit | Edit vehicle identification and financial metadata | /car/[id]/edit | Edit a tenant vehicle through a validated form without replacing unrelated fields | partial | web | ROZ-109 |
+| cars.expenses.manage | Add, edit, and remove vehicle expenses | /car/add<br>/car/[id] | Manage vehicle expenses and display authoritative profitability without client-side financial rules | partial | core | ROZ-123 |
+| cars.inventory.view | Browse inventory produced from a vehicle | /(tabs)/(home)/warehouse/[carId] | Browse paginated vehicle-scoped inventory through a stable filterable URL | partial | web | ROZ-110 |
+| cars.lifecycle.manage | Archive or delete a vehicle | /car/[id] | Archive or delete a tenant vehicle with explicit confirmation and server-enforced safety rules | partial | web | ROZ-109 |
+| cars.list.view | Browse and find vehicles | /(tabs)/(home)/cars | Search, filter, paginate, and open tenant vehicles through a stable URL | partial | core | ROZ-60 |
+
 ### dashboard
 
 | ID | Capability | Mobile routes | Web outcome | Contract | Owner | Tracking |
@@ -41,6 +53,17 @@
 | dashboard.analytics.view | View dashboard analytics by period | /(tabs)/(home) | View URL-stable day, week, and month analytics from authoritative server data | partial | web | ROZ-106 |
 | dashboard.navigation.use | Navigate to permitted cabinet modules and quick actions | /(tabs)/(home) | Navigate to permission-aware cabinet modules through stable links and guarded create actions | not-applicable | web | ROZ-106 |
 | dashboard.summary.view | View the operational dashboard summary | /(tabs)/(home) | View permission-aware server totals and recent activity for the active tenant | partial | web | ROZ-106 |
+
+### intake
+
+| ID | Capability | Mobile routes | Web outcome | Contract | Owner | Tracking |
+| --- | --- | --- | --- | --- | --- | --- |
+| intake.create | Create a vehicle intake batch | /intake/batch | Create an intake batch with browser-safe media upload, complete financial fields, and quota enforcement | partial | web | ROZ-108 |
+| intake.delete | Delete an intake batch | /intake/[id] | Delete an intake only when server-enforced relationship and audit rules allow it | partial | web | ROZ-108 |
+| intake.detail.view | View intake details, cost, photos, and created parts | /intake/[id] | Open a permission-aware intake detail URL with server-derived totals and linked inventory | partial | web | ROZ-108 |
+| intake.edit | Edit intake metadata | /intake/[id]/edit | Edit intake metadata through a validated form while preserving omitted values | partial | web | ROZ-108 |
+| intake.list.view | Browse and find vehicle intake batches | /(tabs)/(home)/intake | Search, filter by status, paginate, and open tenant intake batches through a stable URL | partial | core | ROZ-60 |
+| intake.parts.create | Create and browse parts within an intake | /intake/[id] | Create a part with an immutable intake relationship and browse intake-scoped inventory | partial | web | ROZ-108 |
 
 ## System capabilities
 
@@ -71,9 +94,22 @@
 | auth.tenant.list | core | ROZ-121 |
 | auth.tenant.transition | core | ROZ-122 |
 | auth.welcome.view | web | ROZ-104 |
+| cars.create | web | ROZ-109 |
+| cars.detail.view | web | ROZ-109 |
+| cars.edit | web | ROZ-109 |
+| cars.expenses.manage | core | ROZ-123 |
+| cars.inventory.view | web | ROZ-110 |
+| cars.lifecycle.manage | web | ROZ-109 |
+| cars.list.view | core | ROZ-60 |
 | dashboard.analytics.view | web | ROZ-106 |
 | dashboard.navigation.use | web | ROZ-106 |
 | dashboard.summary.view | web | ROZ-106 |
+| intake.create | web | ROZ-108 |
+| intake.delete | web | ROZ-108 |
+| intake.detail.view | web | ROZ-108 |
+| intake.edit | web | ROZ-108 |
+| intake.list.view | core | ROZ-60 |
+| intake.parts.create | web | ROZ-108 |
 
 ## Proposed gaps
 

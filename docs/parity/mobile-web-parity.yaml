@@ -385,6 +385,464 @@ capabilities:
       - rozbirka.mobile:app/(tabs)/(home)/index.tsx
       - rozbirka.web:src/routes/routes.tsx
 
+  - id: cars.list.view
+    domain: cars
+    name: Browse and find vehicles
+    mobile:
+      routes:
+        - /(tabs)/(home)/cars
+      actions:
+        - View paginated vehicles and status
+        - Open a vehicle
+        - Start vehicle creation when permitted and within quota
+    web:
+      outcome: Search, filter, paginate, and open tenant vehicles through a stable URL
+      route: /cabinet/cars
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/cars?status={status}&page={page}&pageSize={pageSize}
+      notes: Runtime pagination and status exist, but server-side search and the versioned list contract are pending under ROZ-60 and ROZ-121
+    access:
+      permissions:
+        - cars.view
+      tenant: required
+      billing: cars-quota-for-create
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-60
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/cars/index.tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: cars.detail.view
+    domain: cars
+    name: View vehicle details, profitability, photos, and linked parts
+    mobile:
+      routes:
+        - /car/[id]
+      actions:
+        - View identity, VIN, purchase data, photos, totals, and ROI
+        - Copy the VIN
+        - Open linked parts
+    web:
+      outcome: Open a permission-aware vehicle detail URL with authoritative totals and linked inventory
+      route: /cabinet/cars/:id
+      disposition: browser-native
+      browserEquivalent: Use a responsive gallery, copy action, and stable links to filtered inventory
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/cars/{id}
+        - GET /api/v1/cars/{id}/parts?status={status}&page={page}&pageSize={pageSize}
+      notes: Runtime detail and parts endpoints exist, but immutable detail, profitability, media, and pagination contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - cars.view
+        - parts.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-109
+    evidence:
+      - rozbirka.mobile:app/car/[id]/index.tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: cars.create
+    domain: cars
+    name: Create a vehicle with identification, media, and purchase data
+    mobile:
+      routes:
+        - /car/add
+      actions:
+        - Select make, model, and year
+        - Capture or enter VIN
+        - Add photos, purchase price, notes, and initial expenses
+        - Respect vehicle quota before creating
+    web:
+      outcome: Create a tenant vehicle with browser-safe media input, explicit VIN fallback, financial data, and quota enforcement
+      route: /cabinet/cars/new
+      disposition: browser-native
+      browserEquivalent: Use browser camera or file upload with manual VIN entry and desktop-friendly step navigation
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/cars
+        - POST /api/v1/cars/{id}/expenses
+      notes: Runtime create and expense endpoints exist, but immutable media, quota, VIN, and financial contracts are pending under ROZ-121, ROZ-122, and ROZ-123
+    access:
+      permissions:
+        - cars.manage
+        - finance.manage
+      tenant: required
+      billing: cars-quota
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-109
+    evidence:
+      - rozbirka.mobile:app/car/add.tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.mobile:src/api/carCatalog.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: cars.edit
+    domain: cars
+    name: Edit vehicle identification and financial metadata
+    mobile:
+      routes:
+        - /car/[id]/edit
+      actions:
+        - Change make, model, year, VIN, purchase price, and notes
+        - Save and return to vehicle details
+    web:
+      outcome: Edit a tenant vehicle through a validated form without replacing unrelated fields
+      route: /cabinet/cars/:id/edit
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/cars/{id}
+        - PUT /api/v1/cars/{id}
+      notes: Runtime read/update endpoints exist, but immutable validation, concurrency, and financial-field contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - cars.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-109
+    evidence:
+      - rozbirka.mobile:app/car/[id]/edit.tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: cars.lifecycle.manage
+    domain: cars
+    name: Archive or delete a vehicle
+    mobile:
+      routes:
+        - /car/[id]
+      actions:
+        - Archive an active vehicle
+        - Delete a vehicle after confirmation
+    web:
+      outcome: Archive or delete a tenant vehicle with explicit confirmation and server-enforced safety rules
+      route: /cabinet/cars/:id
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - PATCH /api/v1/cars/{id}/archive
+        - DELETE /api/v1/cars/{id}
+      notes: Runtime mutations exist, but immutable deletion preconditions, audit behavior, and tenant-safety contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - cars.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-109
+    evidence:
+      - rozbirka.mobile:app/car/[id]/index.tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: cars.expenses.manage
+    domain: cars
+    name: Add, edit, and remove vehicle expenses
+    mobile:
+      routes:
+        - /car/add
+        - /car/[id]
+      actions:
+        - Add an expense
+        - Edit expense name and amount
+        - Delete an expense
+        - Observe updated profitability
+    web:
+      outcome: Manage vehicle expenses and display authoritative profitability without client-side financial rules
+      route: /cabinet/cars/:id/expenses
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/cars/{id}/expenses
+        - PUT /api/v1/cars/{id}/expenses/{expenseId}
+        - DELETE /api/v1/cars/{id}/expenses/{expenseId}
+      notes: Runtime mutations exist, but idempotency, currency precision, aggregate refresh, and immutable contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - finance.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-123
+    evidence:
+      - rozbirka.mobile:app/car/add.tsx
+      - rozbirka.mobile:app/car/[id]/index.tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: cars.inventory.view
+    domain: cars
+    name: Browse inventory produced from a vehicle
+    mobile:
+      routes:
+        - /(tabs)/(home)/warehouse/[carId]
+      actions:
+        - View parts linked to a vehicle
+        - Filter by part status
+        - Open a linked part
+    web:
+      outcome: Browse paginated vehicle-scoped inventory through a stable filterable URL
+      route: /cabinet/cars/:id/parts
+      disposition: browser-native
+      browserEquivalent: Use a URL-backed inventory table with status filters and stable part links
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/cars/{id}/parts?status={status}&page={page}&pageSize={pageSize}
+      notes: Runtime vehicle-scoped pagination exists, but immutable filter, list, and tenant contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - cars.view
+        - parts.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-110
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/warehouse/[carId].tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: intake.list.view
+    domain: intake
+    name: Browse and find vehicle intake batches
+    mobile:
+      routes:
+        - /(tabs)/(home)/intake
+      actions:
+        - View paginated intake batches
+        - Open an intake
+        - Start intake creation when permitted and within quota
+    web:
+      outcome: Search, filter by status, paginate, and open tenant intake batches through a stable URL
+      route: /cabinet/intakes
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/intakes?page={page}&pageSize={pageSize}
+      notes: Runtime pagination exists, but server-side search/status filtering and the immutable list contract are pending under ROZ-60 and ROZ-121
+    access:
+      permissions:
+        - intakes.view
+      tenant: required
+      billing: intakes-quota-for-create
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-60
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/intake/index.tsx
+      - rozbirka.mobile:src/api/intakes.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
+
+  - id: intake.detail.view
+    domain: intake
+    name: View intake details, cost, photos, and created parts
+    mobile:
+      routes:
+        - /intake/[id]
+      actions:
+        - View supplier, date, cost, notes, media, and profitability
+        - Open or add parts associated with the intake
+    web:
+      outcome: Open a permission-aware intake detail URL with server-derived totals and linked inventory
+      route: /cabinet/intakes/:id
+      disposition: browser-native
+      browserEquivalent: Use a responsive media gallery and stable links to create or filter parts
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/intakes/{id}
+      notes: Runtime detail exists, but immutable media, profitability, and linked-parts contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - intakes.view
+        - parts.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-108
+    evidence:
+      - rozbirka.mobile:app/intake/[id]/index.tsx
+      - rozbirka.mobile:src/api/intakes.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
+
+  - id: intake.create
+    domain: intake
+    name: Create a vehicle intake batch
+    mobile:
+      routes:
+        - /intake/batch
+      actions:
+        - Enter supplier, purchase date, total cost, and notes
+        - Add or remove photos
+        - Review and submit the batch
+    web:
+      outcome: Create an intake batch with browser-safe media upload, complete financial fields, and quota enforcement
+      route: /cabinet/intakes/new
+      disposition: browser-native
+      browserEquivalent: Use file upload or browser camera with desktop-friendly form steps and a review summary
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/intakes
+      notes: Runtime creation exists, but immutable media, quota, and financial contracts are pending under ROZ-121, ROZ-122, and ROZ-123
+    access:
+      permissions:
+        - intakes.manage
+      tenant: required
+      billing: intakes-quota
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-108
+    evidence:
+      - rozbirka.mobile:app/intake/batch.tsx
+      - rozbirka.mobile:src/api/intakes.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
+
+  - id: intake.edit
+    domain: intake
+    name: Edit intake metadata
+    mobile:
+      routes:
+        - /intake/[id]/edit
+      actions:
+        - Change name, supplier, purchase date, cost, and notes
+        - Save and return to intake details
+    web:
+      outcome: Edit intake metadata through a validated form while preserving omitted values
+      route: /cabinet/intakes/:id/edit
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/intakes/{id}
+        - PATCH /api/v1/intakes/{id}
+      notes: Runtime read/update endpoints exist, but immutable patch semantics, currency precision, and validation contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - intakes.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-108
+    evidence:
+      - rozbirka.mobile:app/intake/[id]/edit.tsx
+      - rozbirka.mobile:src/api/intakes.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
+
+  - id: intake.parts.create
+    domain: intake
+    name: Create and browse parts within an intake
+    mobile:
+      routes:
+        - /intake/[id]
+      actions:
+        - Start part creation linked to the intake
+        - Browse parts filtered by intake
+    web:
+      outcome: Create a part with an immutable intake relationship and browse intake-scoped inventory
+      route: /cabinet/intakes/:id/parts
+      disposition: browser-native
+      browserEquivalent: Use stable nested links to part creation and a server-filtered inventory view
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/intakes/{id}/parts
+      notes: Runtime creation exists, but immutable relationship, filtered list, and tenant-safety contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - intakes.manage
+        - parts.view
+      tenant: required
+      billing: parts-quota
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-108
+    evidence:
+      - rozbirka.mobile:app/intake/[id]/index.tsx
+      - rozbirka.mobile:src/api/intakes.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
+
+  - id: intake.delete
+    domain: intake
+    name: Delete an intake batch
+    mobile:
+      routes:
+        - /intake/[id]
+      actions:
+        - Delete an intake after explicit confirmation
+    web:
+      outcome: Delete an intake only when server-enforced relationship and audit rules allow it
+      route: /cabinet/intakes/:id
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - DELETE /api/v1/intakes/{id}
+      notes: Runtime deletion exists, but immutable deletion preconditions, linked-part behavior, and audit guarantees are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - intakes.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-108
+    evidence:
+      - rozbirka.mobile:app/intake/[id]/index.tsx
+      - rozbirka.mobile:src/api/intakes.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
+
 systemCapabilities:
   - id: auth.session.refresh
     domain: auth
