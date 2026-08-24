@@ -843,6 +843,373 @@ capabilities:
       - rozbirka.mobile:src/api/intakes.ts
       - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
 
+  - id: parts.list.view
+    domain: parts
+    name: Search and filter tenant inventory
+    mobile:
+      routes:
+        - /(tabs)/(parts)
+      actions:
+        - Search by text
+        - Filter by status, make, vehicle, and intake
+        - View summary counts and paginated parts
+        - Open a part or start creation
+    web:
+      outcome: Search, filter, paginate, and open tenant inventory through stable URLs
+      route: /cabinet/parts
+      disposition: browser-native
+      browserEquivalent: Use URL-backed filters and a responsive table or list with server pagination
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - GET /api/v1/parts
+        - GET /api/v1/parts/summary
+        - GET /api/v1/parts/makes
+      notes: Runtime filters exist, but immutable contracts are pending under ROZ-121 and the read endpoints lack an explicit Parts.View controller permission gate covered by ROZ-122
+    access:
+      permissions:
+        - parts.view
+      tenant: required
+      billing: parts-quota-for-create
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(parts)/index.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+
+  - id: parts.detail.view
+    domain: parts
+    name: View part details, compatibility, media, and source vehicle
+    mobile:
+      routes:
+        - /part/[id]
+      actions:
+        - View quantity, price, status, condition, OEM, notes, and photos
+        - View linked vehicle or intake
+        - Open related order history
+        - Share photos
+    web:
+      outcome: Open a tenant-safe part detail URL with authoritative availability, compatibility, history links, and media
+      route: /cabinet/parts/:id
+      disposition: browser-native
+      browserEquivalent: Use a responsive gallery with download, copy-link, and Web Share fallbacks
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - GET /api/v1/parts/{id}
+      notes: Runtime detail exists, but immutable compatibility/media contracts are pending under ROZ-121 and the read endpoint lacks an explicit Parts.View permission gate covered by ROZ-122
+    access:
+      permissions:
+        - parts.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/part/[id]/index.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+
+  - id: parts.history.view
+    domain: parts
+    name: View part inventory and order history
+    mobile:
+      routes:
+        - /part/[id]
+      actions:
+        - View quantity and status changes
+        - Open orders related to the part
+    web:
+      outcome: View an auditable chronological part history and navigate to related orders
+      route: /cabinet/parts/:id/history
+      disposition: parity
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - GET /api/v1/parts/{id}/history
+      notes: Runtime history exists, but immutable event semantics and an explicit Parts.View permission gate are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - parts.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/part/[id]/index.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+
+  - id: parts.create
+    domain: parts
+    name: Create a part from a vehicle, intake, VIN, or manual source
+    mobile:
+      routes:
+        - /part/add
+      actions:
+        - Select source vehicle or intake
+        - Scan or enter VIN
+        - Set name, OEM, compatibility, condition, quantity, and price
+        - Upload photos and create the part
+    web:
+      outcome: Create a tenant part with explicit source, browser-safe media input, VIN fallback, compatibility, and validated inventory fields
+      route: /cabinet/parts/new
+      disposition: browser-native
+      browserEquivalent: Use browser camera or file input with manual VIN/OEM entry and desktop-friendly source selection
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - GET /api/v1/parts/name-suggestions
+        - POST /api/v1/media/upload
+        - POST /api/v1/parts
+      notes: Runtime creation and media upload exist, but POST /parts lacks an explicit Parts.Manage gate and media ownership/cleanup plus immutable contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - parts.manage
+      tenant: required
+      billing: parts-quota
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/part/add.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.mobile:src/api/media.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/MediaController.cs
+
+  - id: parts.edit
+    domain: parts
+    name: Edit part inventory, commercial, compatibility, and media fields
+    mobile:
+      routes:
+        - /part/[id]/edit
+      actions:
+        - Edit part fields and compatibility
+        - Add or remove photos
+        - Save the part
+    web:
+      outcome: Edit a tenant part with server validation and a safe media lifecycle
+      route: /cabinet/parts/:id/edit
+      disposition: browser-native
+      browserEquivalent: Use browser file input and responsive compatibility controls
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - GET /api/v1/parts/{id}
+        - PUT /api/v1/parts/{id}
+        - POST /api/v1/media/upload
+        - DELETE /api/v1/media
+      notes: Parts.Manage protects update, but immutable compatibility contracts and media ownership/cleanup guarantees are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - parts.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/part/[id]/edit.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.mobile:src/api/media.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/MediaController.cs
+
+  - id: parts.delete
+    domain: parts
+    name: Delete a part
+    mobile:
+      routes:
+        - /part/[id]
+        - /part/[id]/edit
+      actions:
+        - Delete a part after explicit confirmation
+    web:
+      outcome: Delete a tenant part only when server-enforced reservation, order, media, and audit rules allow it
+      route: /cabinet/parts/:id
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - DELETE /api/v1/parts/{id}
+      notes: Parts.Manage protects runtime deletion, but immutable preconditions, audit behavior, and media cleanup are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - parts.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-110
+    evidence:
+      - rozbirka.mobile:app/part/[id]/index.tsx
+      - rozbirka.mobile:app/part/[id]/edit.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+
+  - id: scanning.qr.lookup
+    domain: scanning
+    name: Resolve a part from a QR code
+    mobile:
+      routes:
+        - /(tabs)/scan-tab
+        - /scan
+      actions:
+        - Request camera permission
+        - Scan a QR or scan deep link
+        - Resolve and open the matching part
+        - Recover from camera denial or lookup failure
+    web:
+      outcome: Resolve a tenant-safe QR through camera, manual input, uploaded image, or stable scan URL
+      route: /scan/:qrCode
+      disposition: browser-native
+      browserEquivalent: Use getUserMedia with manual code and file fallbacks plus a stable authenticated scan URL
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - GET /api/v1/parts/qr/{qrCode}
+      notes: Runtime QR lookup exists, but the endpoint lacks an explicit Parts.View gate and cross-tenant disclosure guarantees are pending under ROZ-122
+    access:
+      permissions:
+        - parts.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/(tabs)/scan-tab.tsx
+      - rozbirka.mobile:app/scan.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+      - rozbirka.web:src/routes/routes.tsx
+
+  - id: scanning.vin.decode
+    domain: scanning
+    name: Extract and decode a VIN for vehicle and part workflows
+    mobile:
+      routes:
+        - /car/add
+        - /part/add
+        - /part/[id]/edit
+      actions:
+        - Capture VIN text from the camera
+        - Validate manual VIN input
+        - Decode make, model, year, engine, and body data
+    web:
+      outcome: Capture or enter a VIN and decode it with explicit partial-result and failure states
+      route: null
+      disposition: browser-native
+      browserEquivalent: Use browser camera or image upload when available and always provide manual VIN entry
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - cars.manage-or-parts.manage
+      tenant: not-applicable
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-111
+    evidence:
+      - rozbirka.mobile:src/components/VinOcrScanner.tsx
+      - rozbirka.mobile:src/api/vinDecode.ts
+      - rozbirka.mobile:app/car/add.tsx
+      - rozbirka.mobile:app/part/add.tsx
+
+  - id: stickers.queue.manage
+    domain: scanning
+    name: Build and persist a tenant-scoped sticker queue
+    mobile:
+      routes:
+        - /(tabs)/(home)/stickers
+        - /part/[id]
+      actions:
+        - Add part quantities to the print queue
+        - Resume, discard, and mark queue batches as printed
+        - Prevent cross-tenant queue reuse
+    web:
+      outcome: Maintain a tenant-scoped sticker selection with explicit resume, discard, and print-confirmation behavior
+      route: /cabinet/stickers
+      disposition: browser-native
+      browserEquivalent: Use a persistent browser selection scoped to the active tenant and clear it on tenant/session transitions
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - stickers.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-111
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/stickers.tsx
+      - rozbirka.mobile:src/stores/printQueueStore.ts
+      - rozbirka.mobile:src/stores/printQueuePersistence.ts
+      - rozbirka.mobile:src/session/printQueuePersistence.test.mjs
+
+  - id: stickers.generate-print-share
+    domain: scanning
+    name: Generate, print, download, or share part stickers
+    mobile:
+      routes:
+        - /(tabs)/(home)/stickers
+        - /part/[id]
+      actions:
+        - Request sticker data for up to 200 parts
+        - Generate a quantity-aware PDF
+        - Print or share the PDF
+        - Confirm printed items
+    web:
+      outcome: Generate authenticated sticker data and provide downloadable PDF plus browser print
+      route: /cabinet/stickers
+      disposition: browser-native
+      browserEquivalent: Generate or download a PDF, open browser print, and use Web Share only when supported
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/parts/batch-sticker
+      notes: Stickers.Manage protects runtime generation, but immutable batch limits, PDF data, and print confirmation contracts are pending under ROZ-121
+    access:
+      permissions:
+        - stickers.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-111
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/stickers.tsx
+      - rozbirka.mobile:app/part/[id]/index.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+
 systemCapabilities:
   - id: auth.session.refresh
     domain: auth
@@ -934,3 +1301,28 @@ excludedRoutes:
     evidence:
       - rozbirka.mobile:app/(auth)/_layout.tsx
     webReplacement: null
+  - route: /(tabs)/(parts)/_layout
+    classification: unreachable
+    reason: Expo Router layout groups parts screens but is not a user-addressable capability
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(parts)/_layout.tsx
+    webReplacement: null
+  - route: /part/[id]/sell
+    classification: obsolete
+    reason: Legacy direct-sale is replaced by the canonical Orders flow for reserve, payment, cancel, refund, and audit consistency
+    evidence:
+      - rozbirka.mobile:app/part/[id]/sell.tsx
+      - rozbirka.mobile:src/api/sales.ts
+    webReplacement: /cabinet/orders/new?partId=:id
+    tracking:
+      status: existing
+      issue: ROZ-112
+  - route: /part/[id]/success
+    classification: obsolete
+    reason: The legacy direct-sale success screen is replaced by the canonical order detail and payment outcome
+    evidence:
+      - rozbirka.mobile:app/part/[id]/success.tsx
+    webReplacement: /cabinet/orders/:id
+    tracking:
+      status: existing
+      issue: ROZ-112

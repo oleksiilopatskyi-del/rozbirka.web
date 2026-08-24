@@ -13,11 +13,12 @@
 
 | Dimension | Value | Count |
 | --- | --- | --- |
-| Contract | not-applicable | 2 |
-| Contract | partial | 25 |
-| Disposition | browser-native | 9 |
-| Disposition | parity | 15 |
-| Excluded routes | total | 1 |
+| Contract | not-applicable | 4 |
+| Contract | partial | 27 |
+| Contract | unsafe | 6 |
+| Disposition | browser-native | 17 |
+| Disposition | parity | 17 |
+| Excluded routes | total | 4 |
 
 ## User capabilities
 
@@ -65,6 +66,26 @@
 | intake.list.view | Browse and find vehicle intake batches | /(tabs)/(home)/intake | Search, filter by status, paginate, and open tenant intake batches through a stable URL | partial | core | ROZ-60 |
 | intake.parts.create | Create and browse parts within an intake | /intake/[id] | Create a part with an immutable intake relationship and browse intake-scoped inventory | partial | web | ROZ-108 |
 
+### parts
+
+| ID | Capability | Mobile routes | Web outcome | Contract | Owner | Tracking |
+| --- | --- | --- | --- | --- | --- | --- |
+| parts.create | Create a part from a vehicle, intake, VIN, or manual source | /part/add | Create a tenant part with explicit source, browser-safe media input, VIN fallback, compatibility, and validated inventory fields | unsafe | core | ROZ-122 |
+| parts.delete | Delete a part | /part/[id]<br>/part/[id]/edit | Delete a tenant part only when server-enforced reservation, order, media, and audit rules allow it | partial | web | ROZ-110 |
+| parts.detail.view | View part details, compatibility, media, and source vehicle | /part/[id] | Open a tenant-safe part detail URL with authoritative availability, compatibility, history links, and media | unsafe | core | ROZ-122 |
+| parts.edit | Edit part inventory, commercial, compatibility, and media fields | /part/[id]/edit | Edit a tenant part with server validation and a safe media lifecycle | unsafe | core | ROZ-122 |
+| parts.history.view | View part inventory and order history | /part/[id] | View an auditable chronological part history and navigate to related orders | unsafe | core | ROZ-122 |
+| parts.list.view | Search and filter tenant inventory | /(tabs)/(parts) | Search, filter, paginate, and open tenant inventory through stable URLs | unsafe | core | ROZ-122 |
+
+### scanning
+
+| ID | Capability | Mobile routes | Web outcome | Contract | Owner | Tracking |
+| --- | --- | --- | --- | --- | --- | --- |
+| scanning.qr.lookup | Resolve a part from a QR code | /(tabs)/scan-tab<br>/scan | Resolve a tenant-safe QR through camera, manual input, uploaded image, or stable scan URL | unsafe | core | ROZ-122 |
+| scanning.vin.decode | Extract and decode a VIN for vehicle and part workflows | /car/add<br>/part/add<br>/part/[id]/edit | Capture or enter a VIN and decode it with explicit partial-result and failure states | not-applicable | web | ROZ-111 |
+| stickers.generate-print-share | Generate, print, download, or share part stickers | /(tabs)/(home)/stickers<br>/part/[id] | Generate authenticated sticker data and provide downloadable PDF plus browser print | partial | web | ROZ-111 |
+| stickers.queue.manage | Build and persist a tenant-scoped sticker queue | /(tabs)/(home)/stickers<br>/part/[id] | Maintain a tenant-scoped sticker selection with explicit resume, discard, and print-confirmation behavior | not-applicable | web | ROZ-111 |
+
 ## System capabilities
 
 | ID | Capability | Trigger | Web outcome | Contract | Owner | Tracking |
@@ -78,11 +99,16 @@
 | Route | Classification | Reason | Web replacement | Tracking |
 | --- | --- | --- | --- | --- |
 | /(auth)/_layout | unreachable | Expo Router layout groups authentication screens but is not a user-addressable capability | — | — |
+| /(tabs)/(parts)/_layout | unreachable | Expo Router layout groups parts screens but is not a user-addressable capability | — | — |
+| /part/[id]/sell | obsolete | Legacy direct-sale is replaced by the canonical Orders flow for reserve, payment, cancel, refund, and audit consistency | /cabinet/orders/new?partId=:id | ROZ-112 |
+| /part/[id]/success | obsolete | The legacy direct-sale success screen is replaced by the canonical order detail and payment outcome | /cabinet/orders/:id | ROZ-112 |
 
 ## Existing Linear tracking
 
 | Item | Owner | Tracking |
 | --- | --- | --- |
+| /part/[id]/sell | decision | ROZ-112 |
+| /part/[id]/success | decision | ROZ-112 |
 | auth.invitation.accept | core | ROZ-122 |
 | auth.invitation.preview | web | ROZ-104 |
 | auth.otp.request | identity | ROZ-125 |
@@ -110,6 +136,16 @@
 | intake.edit | web | ROZ-108 |
 | intake.list.view | core | ROZ-60 |
 | intake.parts.create | web | ROZ-108 |
+| parts.create | core | ROZ-122 |
+| parts.delete | web | ROZ-110 |
+| parts.detail.view | core | ROZ-122 |
+| parts.edit | core | ROZ-122 |
+| parts.history.view | core | ROZ-122 |
+| parts.list.view | core | ROZ-122 |
+| scanning.qr.lookup | core | ROZ-122 |
+| scanning.vin.decode | web | ROZ-111 |
+| stickers.generate-print-share | web | ROZ-111 |
+| stickers.queue.manage | web | ROZ-111 |
 
 ## Proposed gaps
 
