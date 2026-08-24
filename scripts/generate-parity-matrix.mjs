@@ -1,7 +1,21 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { parseDocument } from 'yaml'
+
+const scriptDirectory = dirname(fileURLToPath(import.meta.url))
+const repositoryRoot = resolve(scriptDirectory, '..')
+export const defaultSourcePath = join(
+  repositoryRoot,
+  'docs/parity/mobile-web-parity.yaml',
+)
+export const defaultOutputPath = join(
+  repositoryRoot,
+  'docs/parity/mobile-web-parity.md',
+)
+const generateUsage =
+  'Usage: npm run parity:generate -- [--source <yaml>] [--out <markdown>]'
 
 const domains = new Set([
   'auth',
@@ -622,4 +636,44 @@ export async function generateParityReport({ sourcePath, outputPath }) {
   } finally {
     await rm(temporaryPath, { force: true })
   }
+}
+
+export function parseArguments(argumentsToParse, commandUsage = generateUsage) {
+  const values = {}
+  const supported = new Set(['--out', '--source'])
+  for (let index = 0; index < argumentsToParse.length; index += 2) {
+    const flag = argumentsToParse[index]
+    const value = argumentsToParse[index + 1]
+    if (!supported.has(flag) || !value || value.startsWith('--')) {
+      throw new Error(commandUsage)
+    }
+    if (values[flag]) {
+      throw new Error(
+        `Argument ${flag} may be provided only once. ${commandUsage}`,
+      )
+    }
+    values[flag] = value
+  }
+  return {
+    sourcePath: values['--source']
+      ? resolve(values['--source'])
+      : defaultSourcePath,
+    outputPath: values['--out'] ? resolve(values['--out']) : defaultOutputPath,
+  }
+}
+
+async function main() {
+  const options = parseArguments(process.argv.slice(2))
+  await generateParityReport(options)
+  console.log(`Generated parity matrix at ${options.outputPath}`)
+}
+
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error)
+    process.exitCode = 1
+  })
 }

@@ -1,7 +1,9 @@
 // @vitest-environment node
+import { execFile } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   generateParityReport,
@@ -11,6 +13,36 @@ import {
 } from './generate-parity-matrix.mjs'
 
 const temporaryDirectories: string[] = []
+const execFileAsync = promisify(execFile)
+const repositoryRoot = resolve(import.meta.dirname, '..')
+const generateScript = join(
+  repositoryRoot,
+  'scripts/generate-parity-matrix.mjs',
+)
+const checkScript = join(repositoryRoot, 'scripts/check-parity-matrix.mjs')
+
+async function runScript(script: string, args: string[]) {
+  return execFileAsync(process.execPath, [script, ...args], {
+    cwd: repositoryRoot,
+  })
+}
+
+async function runScriptFailure(script: string, args: string[]) {
+  try {
+    await runScript(script, args)
+  } catch (error: unknown) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'stderr' in error &&
+      typeof error.stderr === 'string'
+    ) {
+      return error.stderr
+    }
+    throw error
+  }
+  throw new Error('Expected the script to fail')
+}
 
 const validYaml = `
 schemaVersion: 1
@@ -276,5 +308,91 @@ describe('parity matrix generator', () => {
     expect(() => validateParityDocument(document)).toThrow(
       'capabilities[0].evidnce: unknown field',
     )
+  })
+
+  it('generates a report through the CLI with explicit paths', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'rozbirka-parity-cli-'))
+    temporaryDirectories.push(directory)
+    const source = join(directory, 'source.yaml')
+    const output = join(directory, 'output.md')
+    await writeFile(source, validYaml)
+
+    const { stdout } = await runScript(generateScript, [
+      '--source',
+      source,
+      '--out',
+      output,
+    ])
+
+    expect(stdout).toContain(`Generated parity matrix at ${output}`)
+    expect(await readFile(output, 'utf8')).toBe(
+      renderParityMarkdown(validateParityDocument(parseParityYaml(validYaml))),
+    )
+  })
+
+  it('rejects unsupported CLI arguments with usage guidance', async () => {
+    expect(
+      await runScriptFailure(generateScript, ['--matrix', 'source.yaml']),
+    ).toContain(
+      'Usage: npm run parity:generate -- [--source <yaml>] [--out <markdown>]',
+    )
+  })
+
+  it('passes the read-only checker for byte-identical output', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'rozbirka-parity-check-'))
+    temporaryDirectories.push(directory)
+    const source = join(directory, 'source.yaml')
+    const output = join(directory, 'output.md')
+    await writeFile(source, validYaml)
+    await generateParityReport({ sourcePath: source, outputPath: output })
+
+    const { stdout } = await runScript(checkScript, [
+      '--source',
+      source,
+      '--out',
+      output,
+    ])
+
+    expect(stdout).toContain('Parity matrix is up to date')
+  })
+
+  it('reports drift without modifying stale output', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'rozbirka-parity-drift-'))
+    temporaryDirectories.push(directory)
+    const source = join(directory, 'source.yaml')
+    const output = join(directory, 'output.md')
+    await writeFile(source, validYaml)
+    await writeFile(output, '# stale report\n')
+
+    expect(
+      await runScriptFailure(checkScript, [
+        '--source',
+        source,
+        '--out',
+        output,
+      ]),
+    ).toContain(`Generated parity matrix drift: ${output}`)
+    expect(await readFile(output, 'utf8')).toBe('# stale report\n')
+  })
+
+  it('leaves existing output untouched when YAML is invalid', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'rozbirka-parity-invalid-'))
+    temporaryDirectories.push(directory)
+    const source = join(directory, 'source.yaml')
+    const output = join(directory, 'output.md')
+    await writeFile(source, 'schemaVersion: [invalid')
+    await writeFile(output, '# preserved report\n')
+
+    expect(
+      await runScriptFailure(generateScript, [
+        '--source',
+        source,
+        '--out',
+        output,
+      ]),
+    ).toContain(
+      'Flow sequence in block collection must be sufficiently indented',
+    )
+    expect(await readFile(output, 'utf8')).toBe('# preserved report\n')
   })
 })

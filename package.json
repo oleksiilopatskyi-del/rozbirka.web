@@ -30,6 +30,8 @@
     "check:prerender": "node scripts/check-prerender-output.mjs",
     "contracts:generate": "node scripts/generate-api-contracts.mjs",
     "contracts:check": "node scripts/check-api-contracts.mjs",
+    "parity:generate": "node scripts/generate-parity-matrix.mjs",
+    "parity:check": "node scripts/check-parity-matrix.mjs",
     "deps:check": "node scripts/check-dependency-health.mjs",
     "verify:quality": "npm run check && npm run test:e2e",
     "verify:release:prod": "npm run build:prod && npm run check:artifact:prod && npm run budget:assets && npm run audit:lhci && wrangler deploy --dry-run --env production",
