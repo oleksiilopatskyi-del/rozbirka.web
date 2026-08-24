@@ -1,0 +1,478 @@
+schemaVersion: 1
+
+audit:
+  mobileCommit: 2f0930509b2dbf7293da529ce2e1f225a852dba0
+  webCommit: 6aa6d92f443db451aace4875d0afd7dd358e975c
+  coreCommit: 46e2d91b371fac24043a5eebaef7a8f75fb3ff08
+  identityCommit: b7497a46204cbae0e964bb2cf4d00f91f9d382d0
+
+capabilities:
+  - id: auth.welcome.view
+    domain: auth
+    name: View the authentication entry screen and legal links
+    mobile:
+      routes:
+        - /(auth)/welcome
+      actions:
+        - Open phone authentication
+        - Open terms of use
+        - Open privacy policy
+    web:
+      outcome: Start authentication and open the applicable legal documents
+      route: /login
+      disposition: browser-native
+      browserEquivalent: Use standard Web links for legal documents and a stable login URL
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - anonymous
+      tenant: not-applicable
+      billing: not-applicable
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/(auth)/welcome.tsx
+      - rozbirka.web:src/routes/routes.tsx
+
+  - id: auth.otp.request
+    domain: auth
+    name: Request a phone OTP
+    mobile:
+      routes:
+        - /(auth)/login
+      actions:
+        - Enter a Ukrainian phone number
+        - Request an OTP
+        - Resend an OTP after cooldown
+    web:
+      outcome: Request and safely resend a phone OTP with clear rate-limit errors
+      route: /login
+      disposition: parity
+    contract:
+      service: identity
+      status: partial
+      operations:
+        - POST /auth/phone
+      notes: Runtime endpoint exists, but immutable Identity OpenAPI and OTP hardening are pending under ROZ-124 and ROZ-125
+    access:
+      permissions:
+        - anonymous
+      tenant: not-applicable
+      billing: not-applicable
+    owner: identity
+    tracking:
+      status: existing
+      issue: ROZ-125
+    evidence:
+      - rozbirka.mobile:app/(auth)/login.tsx
+      - rozbirka.mobile:src/api/auth.ts
+      - rozbirka.identity:src/Rozbirka.Identity.API/Controllers/AuthController.cs
+
+  - id: auth.otp.verify
+    domain: auth
+    name: Verify a phone OTP and establish a session
+    mobile:
+      routes:
+        - /(auth)/login
+      actions:
+        - Enter a six-digit OTP
+        - Verify the OTP
+        - Continue to name, tenant onboarding, or the dashboard
+    web:
+      outcome: Verify the OTP, establish the authenticated session, and resume the correct onboarding destination
+      route: /login
+      disposition: parity
+    contract:
+      service: identity
+      status: partial
+      operations:
+        - POST /auth/verify
+      notes: Runtime endpoint exists, but immutable Identity OpenAPI, production OTP guarantees, and negative-path coverage are pending under ROZ-124 and ROZ-125
+    access:
+      permissions:
+        - anonymous
+      tenant: not-applicable
+      billing: not-applicable
+    owner: identity
+    tracking:
+      status: existing
+      issue: ROZ-125
+    evidence:
+      - rozbirka.mobile:app/(auth)/login.tsx
+      - rozbirka.mobile:src/api/auth.ts
+      - rozbirka.identity:src/Rozbirka.Identity.API/Controllers/AuthController.cs
+
+  - id: auth.profile-name.set
+    domain: auth
+    name: Set the authenticated user display name
+    mobile:
+      routes:
+        - /(auth)/name
+      actions:
+        - Validate a display name
+        - Save the display name
+        - Resume a pending invitation
+    web:
+      outcome: Save the authenticated profile name before tenant or invitation onboarding continues
+      route: /account
+      disposition: parity
+    contract:
+      service: identity
+      status: partial
+      operations:
+        - PATCH /auth/me/name
+      notes: Runtime endpoint exists, but the immutable Identity profile contract is pending under ROZ-124
+    access:
+      permissions:
+        - authenticated
+      tenant: not-applicable
+      billing: not-applicable
+    owner: identity
+    tracking:
+      status: existing
+      issue: ROZ-124
+    evidence:
+      - rozbirka.mobile:app/(auth)/name.tsx
+      - rozbirka.mobile:src/api/auth.ts
+      - rozbirka.identity:src/Rozbirka.Identity.API/Controllers/AuthController.cs
+
+  - id: auth.invitation.preview
+    domain: auth
+    name: Preview an invitation before accepting it
+    mobile:
+      routes:
+        - /(auth)/invite/[code]
+      actions:
+        - Load invitation tenant, role, inviter, expiry, and validity
+        - Continue to login when anonymous
+    web:
+      outcome: Open a stable invitation URL and preview safe invitation information before authentication or acceptance
+      route: /invite/:code
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/invitations/{code}/info
+      notes: Anonymous runtime endpoint exists, but the immutable Core contract is pending under ROZ-121
+    access:
+      permissions:
+        - anonymous
+      tenant: not-applicable
+      billing: not-applicable
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/(auth)/invite/[code].tsx
+      - rozbirka.mobile:src/api/invites.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/InvitationsController.cs
+      - rozbirka.web:src/routes/routes.tsx
+
+  - id: auth.invitation.accept
+    domain: auth
+    name: Join a tenant through an invitation
+    mobile:
+      routes:
+        - /(auth)/invite/[code]
+        - /(auth)/onboarding
+      actions:
+        - Enter or resume an invitation code
+        - Accept the invitation
+        - Transition into the accepted tenant
+    web:
+      outcome: Accept an invitation only after authentication and transition into the new tenant without stale tenant data
+      route: /invite/:code
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/invitations/accept
+      notes: User-scoped acceptance exists, but the immutable Core contract and tenant-transition integration evidence are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - authenticated
+      tenant: invitation-target
+      billing: not-applicable
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/(auth)/invite/[code].tsx
+      - rozbirka.mobile:app/(auth)/onboarding.tsx
+      - rozbirka.mobile:src/api/invites.ts
+      - rozbirka.mobile:src/session/tenantTransition.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/InvitationsController.cs
+
+  - id: auth.tenant.list
+    domain: auth
+    name: List tenants available to the authenticated user
+    mobile:
+      routes:
+        - /(auth)/login
+        - /(auth)/name
+        - /(auth)/register
+      actions:
+        - Resolve whether the user can enter an existing tenant
+        - Detect whether the user already owns an active tenant
+    web:
+      outcome: Resolve available tenant memberships before entering the authenticated cabinet
+      route: /account
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/tenants
+      notes: Runtime endpoint exists, but immutable list and tenant-membership contracts are pending under ROZ-121 and tenant safety remains part of ROZ-122
+    access:
+      permissions:
+        - authenticated
+      tenant: user-memberships
+      billing: not-applicable
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-121
+    evidence:
+      - rozbirka.mobile:app/(auth)/login.tsx
+      - rozbirka.mobile:app/(auth)/name.tsx
+      - rozbirka.mobile:src/api/tenants.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/TenantsController.cs
+
+  - id: auth.tenant.create
+    domain: auth
+    name: Create the first business tenant
+    mobile:
+      routes:
+        - /(auth)/onboarding
+        - /(auth)/register
+      actions:
+        - Enter a business name
+        - Enforce the owner-tenant limit
+        - Create and enter the tenant
+    web:
+      outcome: Create an eligible business tenant and enter its cabinet with server-derived ownership
+      route: /onboarding/create-business
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/tenants
+        - POST /api/v1/tenants
+      notes: Runtime endpoints exist, but immutable ownership, owner-limit, and tenant creation contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - authenticated
+      tenant: absent-before-create
+      billing: initial-entitlement
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/(auth)/onboarding.tsx
+      - rozbirka.mobile:app/(auth)/register.tsx
+      - rozbirka.mobile:src/api/tenants.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/TenantsController.cs
+
+  - id: dashboard.summary.view
+    domain: dashboard
+    name: View the operational dashboard summary
+    mobile:
+      routes:
+        - /(tabs)/(home)
+      actions:
+        - View revenue and operational totals
+        - View the latest permitted activity
+        - Refresh the dashboard
+    web:
+      outcome: View permission-aware server totals and recent activity for the active tenant
+      route: /cabinet
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/dashboard
+      notes: Runtime endpoint exists, but immutable aggregates, permissions, and response contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - authenticated
+        - dashboard.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-106
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/index.tsx
+      - rozbirka.mobile:src/api/dashboard.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/DashboardController.cs
+
+  - id: dashboard.analytics.view
+    domain: dashboard
+    name: View dashboard analytics by period
+    mobile:
+      routes:
+        - /(tabs)/(home)
+      actions:
+        - Switch between day, week, and month
+        - Swipe through analytics periods
+        - Refresh analytics
+    web:
+      outcome: View URL-stable day, week, and month analytics from authoritative server data
+      route: /cabinet?period=week
+      disposition: browser-native
+      browserEquivalent: Use URL-backed period controls rather than a native horizontal pager gesture
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/dashboard/analytics?period={period}
+      notes: Runtime period endpoint exists, but immutable period, aggregate, and response contracts are pending under ROZ-121
+    access:
+      permissions:
+        - authenticated
+        - dashboard.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-106
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/index.tsx
+      - rozbirka.mobile:src/api/dashboard.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/DashboardController.cs
+
+  - id: dashboard.navigation.use
+    domain: dashboard
+    name: Navigate to permitted cabinet modules and quick actions
+    mobile:
+      routes:
+        - /(tabs)/(home)
+      actions:
+        - Open cars, intake, parts, orders, customers, cash, team, stickers, and reports
+        - Start permitted create actions
+    web:
+      outcome: Navigate to permission-aware cabinet modules through stable links and guarded create actions
+      route: /cabinet
+      disposition: browser-native
+      browserEquivalent: Use responsive navigation links and buttons while preserving server-derived permission and usage gates
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - module-specific
+      tenant: required
+      billing: usage-gated
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-106
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/index.tsx
+      - rozbirka.web:src/routes/routes.tsx
+
+systemCapabilities:
+  - id: auth.session.refresh
+    domain: auth
+    name: Refresh an authenticated session
+    trigger: An API request encounters an expired access token
+    mobileBehavior: Coordinate refresh so concurrent failures do not rotate the refresh token more than once
+    webOutcome: Preserve one safe session refresh operation and retry eligible requests without exposing tokens
+    contract:
+      service: identity
+      status: partial
+      operations:
+        - POST /auth/refresh
+      notes: Runtime refresh exists, but immutable session lifecycle and concurrent refresh guarantees are pending under ROZ-124 and ROZ-125
+    access:
+      permissions:
+        - authenticated-session
+      tenant: preserved-across-refresh
+      billing: not-applicable
+    owner: identity
+    tracking:
+      status: existing
+      issue: ROZ-125
+    evidence:
+      - rozbirka.mobile:src/api/auth.ts
+      - rozbirka.mobile:src/session/authRefreshCoordinator.ts
+      - rozbirka.identity:src/Rozbirka.Identity.API/Controllers/AuthController.cs
+      - rozbirka.web:src/api/refresh-coordinator.ts
+
+  - id: auth.session.logout
+    domain: auth
+    name: Revoke and clean up an authenticated session
+    trigger: The user signs out or session recovery cannot continue
+    mobileBehavior: Revoke the refresh token and clear tenant-scoped private state
+    webOutcome: Revoke the refresh token, remove credentials, and clear private tenant data before returning to login
+    contract:
+      service: identity
+      status: partial
+      operations:
+        - POST /auth/logout
+      notes: Runtime logout exists, but immutable revocation and cleanup guarantees are pending under ROZ-124 and ROZ-125
+    access:
+      permissions:
+        - authenticated-session
+      tenant: clear-on-logout
+      billing: not-applicable
+    owner: identity
+    tracking:
+      status: existing
+      issue: ROZ-125
+    evidence:
+      - rozbirka.mobile:src/api/auth.ts
+      - rozbirka.mobile:src/session/sessionCleanup.ts
+      - rozbirka.identity:src/Rozbirka.Identity.API/Controllers/AuthController.cs
+      - rozbirka.web:src/api/session.ts
+
+  - id: auth.tenant.transition
+    domain: auth
+    name: Transition safely into a selected or accepted tenant
+    trigger: Login, tenant creation, or invitation acceptance selects a tenant
+    mobileBehavior: Update tenant identity and invalidate private tenant-scoped state before navigation
+    webOutcome: Switch the active tenant without leaking cached data, permissions, or billing state from the previous tenant
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/tenants
+        - GET /api/v1/me/permissions
+      notes: Membership and permission endpoints exist, but immutable contracts and cache-security guarantees are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - authenticated
+      tenant: transition-target
+      billing: reload-entitlements
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:src/session/tenantTransition.ts
+      - rozbirka.mobile:src/query/tenantMutationBoundary.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/TenantsController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/MeController.cs
+      - rozbirka.web:src/api/tenant-preference.ts
+
+excludedRoutes:
+  - route: /(auth)/_layout
+    classification: unreachable
+    reason: Expo Router layout groups authentication screens but is not a user-addressable capability
+    evidence:
+      - rozbirka.mobile:app/(auth)/_layout.tsx
+    webReplacement: null

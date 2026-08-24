@@ -6,6 +6,8 @@ import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  defaultOutputPath,
+  defaultSourcePath,
   generateParityReport,
   parseParityYaml,
   renderParityMarkdown,
@@ -394,5 +396,22 @@ describe('parity matrix generator', () => {
       'Flow sequence in block collection must be sufficiently indented',
     )
     expect(await readFile(output, 'utf8')).toBe('# preserved report\n')
+  })
+
+  it('keeps the committed report byte-identical to its pinned audit source', async () => {
+    const source = await readFile(defaultSourcePath, 'utf8')
+    const document = validateParityDocument(parseParityYaml(source))
+    const output = await readFile(defaultOutputPath, 'utf8')
+
+    expect(document.audit).toEqual({
+      mobileCommit: '2f0930509b2dbf7293da529ce2e1f225a852dba0',
+      webCommit: '6aa6d92f443db451aace4875d0afd7dd358e975c',
+      coreCommit: '46e2d91b371fac24043a5eebaef7a8f75fb3ff08',
+      identityCommit: 'b7497a46204cbae0e964bb2cf4d00f91f9d382d0',
+    })
+    expect(document.capabilities.length).toBeGreaterThan(0)
+    expect(document.systemCapabilities.length).toBeGreaterThan(0)
+    expect(document.excludedRoutes.length).toBeGreaterThan(0)
+    expect(output).toBe(renderParityMarkdown(document))
   })
 })
