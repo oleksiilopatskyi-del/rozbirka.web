@@ -86,7 +86,7 @@ export class DashboardContractError extends Error {
 type UnknownRecord = Record<string, unknown>
 
 const DATE_TIME_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/
 
 const reject = (): never => {
   throw new DashboardContractError()
@@ -116,6 +116,41 @@ const asNullable = <T>(
   parseValue: (item: unknown) => T,
 ): T | null => (value == null ? null : parseValue(value))
 
+const isValidDateTime = (timestamp: string): boolean => {
+  const parts = DATE_TIME_PATTERN.exec(timestamp)
+  if (!parts) return false
+
+  const year = Number(parts[1])
+  const month = Number(parts[2])
+  const day = Number(parts[3])
+  const hour = Number(parts[4])
+  const minute = Number(parts[5])
+  const second = Number(parts[6])
+  const offsetHour = Number(parts[7])
+  const offsetMinute = Number(parts[8])
+
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59 ||
+    (parts[7] !== undefined && (offsetHour > 23 || offsetMinute > 59))
+  ) {
+    return false
+  }
+
+  const date = new Date(0)
+  date.setUTCFullYear(year, month - 1, day)
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    Number.isFinite(Date.parse(timestamp))
+  )
+}
+
 const parseRevenueByCurrency = (value: unknown): RevenueByCurrency => {
   const record = asRecord(value)
   return {
@@ -136,12 +171,7 @@ const parseDashboardRevenue = (value: unknown): DashboardRevenue => {
 const parseLastActivity = (value: unknown): LastActivity => {
   const record = asRecord(value)
   const timestamp = asString(record['timestamp'])
-  if (
-    !DATE_TIME_PATTERN.test(timestamp) ||
-    !Number.isFinite(Date.parse(timestamp))
-  ) {
-    reject()
-  }
+  if (!isValidDateTime(timestamp)) reject()
 
   return {
     type: asString(record['type']),

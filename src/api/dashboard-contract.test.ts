@@ -184,6 +184,18 @@ describe('parseDashboardData', () => {
       }),
     ).toThrow(DashboardContractError)
   })
+
+  it('rejects an activity timestamp with an impossible calendar date', () => {
+    expect(() =>
+      parseDashboardData({
+        ...ownerDashboard,
+        lastActivity: {
+          ...ownerDashboard.lastActivity,
+          timestamp: '2026-02-30T09:30:00.000Z',
+        },
+      }),
+    ).toThrow(DashboardContractError)
+  })
 })
 
 describe('parseDashboardAnalytics', () => {
