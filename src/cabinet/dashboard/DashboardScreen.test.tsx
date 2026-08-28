@@ -80,7 +80,9 @@ beforeEach(() => {
   } satisfies DashboardDataState)
 })
 
-it('renders independent dashboard request status landmarks', () => {
+it('keeps the ready summary mounted when analytics fails and retries analytics only', async () => {
+  const user = userEvent.setup()
+  const retryAnalytics = vi.fn().mockResolvedValue(undefined)
   vi.mocked(useDashboardData).mockReturnValue({
     summary: {
       status: 'ready',
@@ -118,7 +120,7 @@ it('renders independent dashboard request status landmarks', () => {
     refreshing: false,
     refresh: vi.fn(),
     retrySummary: vi.fn(),
-    retryAnalytics: vi.fn(),
+    retryAnalytics,
   })
 
   renderDashboard(['/app/koval/dashboard?period=month'])
@@ -126,9 +128,11 @@ it('renders independent dashboard request status landmarks', () => {
   expect(screen.getByRole('region', { name: 'Зведення' })).toHaveTextContent(
     'Продажів сьогодні',
   )
-  expect(
-    screen.getByRole('alert', { name: 'Стан аналітики' }),
-  ).toHaveTextContent('Не вдалося завантажити аналітику')
+  expect(screen.getByRole('alert', { name: 'Аналітика' })).toHaveTextContent(
+    'Не вдалося завантажити аналітику',
+  )
+  await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
+  expect(retryAnalytics).toHaveBeenCalledOnce()
   expect(useDashboardData).toHaveBeenCalledWith('month')
 })
 

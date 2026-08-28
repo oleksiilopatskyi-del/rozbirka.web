@@ -4,14 +4,9 @@ import { useCabinet } from '../CabinetContext'
 import { readDashboardPeriod, writeDashboardPeriod } from './dashboard-period'
 import { useDashboardData, type DashboardLoadable } from './use-dashboard-data'
 import type { DashboardData, DashboardPeriod } from '@/api/dashboard-contract'
+import { DashboardAnalytics } from './DashboardAnalytics'
 import { DashboardBillingBanner } from './DashboardBillingBanner'
 import { DashboardSummary } from './DashboardSummary'
-
-const periodLabels: Readonly<Record<DashboardPeriod, string>> = {
-  day: 'День',
-  week: 'Тиждень',
-  month: 'Місяць',
-}
 
 export function DashboardScreen() {
   const { targetTenant, snapshot } = useCabinet()
@@ -50,19 +45,6 @@ export function DashboardScreen() {
         className="bg-surface-1 min-w-0 rounded-3xl border border-white/[0.06] p-5 sm:p-6"
         role="region"
       >
-        <div className="flex flex-wrap gap-2" aria-label="Період аналітики">
-          {(Object.keys(periodLabels) as DashboardPeriod[]).map((period) => (
-            <button
-              aria-pressed={selection.period === period}
-              className="rounded-full border border-white/[0.12] px-3 py-1.5 text-sm text-white"
-              key={period}
-              onClick={() => selectPeriod(period)}
-              type="button"
-            >
-              {periodLabels[period]}
-            </button>
-          ))}
-        </div>
         <div className="mt-5 grid gap-5">
           {snapshot !== null && targetTenant !== null ? (
             <DashboardBillingBanner snapshot={snapshot} tenant={targetTenant} />
@@ -71,14 +53,10 @@ export function DashboardScreen() {
             loadable={dashboard.summary}
             retry={() => dashboard.retrySummary()}
           />
-          <DashboardStatus
-            label="Стан аналітики"
+          <DashboardAnalytics
             loadable={dashboard.analytics}
-            messages={{
-              loading: 'Завантажуємо аналітику…',
-              ready: 'Аналітика готова.',
-              error: 'Не вдалося завантажити аналітику.',
-            }}
+            onPeriodChange={selectPeriod}
+            period={selection.period}
             retry={() => dashboard.retryAnalytics()}
           />
         </div>
@@ -143,38 +121,5 @@ function DashboardSummaryState({
         />
       </div>
     </section>
-  )
-}
-
-interface DashboardStatusProps {
-  label: string
-  loadable: DashboardLoadable<unknown>
-  messages: { loading: string; ready: string; error: string }
-  retry: () => Promise<void>
-}
-
-function DashboardStatus({
-  label,
-  loadable,
-  messages,
-  retry,
-}: DashboardStatusProps) {
-  return (
-    <div
-      aria-label={label}
-      className="rounded-2xl border border-white/[0.06] p-4 text-sm text-neutral-400"
-      role={loadable.status === 'error' ? 'alert' : 'status'}
-    >
-      <p>{messages[loadable.status]}</p>
-      {loadable.status === 'error' ? (
-        <button
-          className="mt-3 min-h-11 rounded-full border border-white/[0.12] px-4 text-white"
-          onClick={() => void retry()}
-          type="button"
-        >
-          Спробувати ще раз
-        </button>
-      ) : null}
-    </div>
   )
 }
