@@ -62,11 +62,13 @@ describe('invitationsApi', () => {
   it('accepts through the authenticated client and forwards cancellation', async () => {
     const controller = new AbortController()
     let authenticatedRequest: InternalAxiosRequestConfig | undefined
+    let authenticatedSignal: AbortSignal | undefined
     publicApiClient.defaults.adapter = () => {
       throw new Error('public client must not accept invitations')
     }
     apiClient.defaults.adapter = (config) => {
       authenticatedRequest = config
+      authenticatedSignal = config.signal as AbortSignal | undefined
       return Promise.resolve(
         response(config, {
           tenantId: 'tenant-2',
@@ -84,7 +86,11 @@ describe('invitationsApi', () => {
     expect(authenticatedRequest?.url).toBe('/invitations/accept')
     expect(authenticatedRequest?.method).toBe('post')
     expect(authenticatedRequest?.data).toBe('{"code":"ABCD1234"}')
-    expect(authenticatedRequest?.signal).toBe(controller.signal)
+    expect(authenticatedSignal?.aborted).toBe(false)
+
+    controller.abort()
+
+    expect(authenticatedSignal?.aborted).toBe(true)
   })
 
   it('rejects with a normalized API problem', async () => {

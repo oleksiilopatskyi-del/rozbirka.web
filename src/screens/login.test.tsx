@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { authApi } from '@/api/auth'
@@ -41,6 +42,19 @@ function LocationProbe() {
   const location = useLocation()
   return (
     <span data-testid="location">{location.pathname + location.search}</span>
+  )
+}
+
+function LoginUnmountHarness() {
+  const [mounted, setMounted] = useState(true)
+  return (
+    <>
+      {mounted && <LoginScreen />}
+      <button type="button" onClick={() => setMounted(false)}>
+        Unmount login
+      </button>
+      <LocationProbe />
+    </>
   )
 }
 
@@ -86,7 +100,8 @@ beforeEach(() => {
     tenant: null,
     tenants: [],
     hydrate: vi.fn().mockResolvedValue(undefined),
-    switchTenant: vi.fn(),
+    commitTenant: vi.fn(),
+    updateName: vi.fn(),
     signOut: vi.fn(),
   }
   vi.mocked(useAuth).mockReturnValue(auth)
@@ -239,6 +254,40 @@ it('hydrates before navigating after verify', async () => {
   )
 })
 
+it('uses the hydrated selected tenant for a cabinet plan destination', async () => {
+  otpSend.mockResolvedValueOnce({ cooldownSeconds: 0, retryAfterSeconds: 0 })
+  vi.mocked(auth.hydrate).mockImplementation(() => {
+    const tenant = {
+      id: 'tenant-1',
+      name: 'Koval Auto',
+      slug: 'koval',
+      plan: 'active' as const,
+      planTier: 'pro',
+      city: null,
+      logoUrl: null,
+      isActive: true,
+      createdAt: '2026-08-01T00:00:00Z',
+      roleName: 'owner',
+    }
+    auth.tenant = tenant
+    auth.tenants = [tenant]
+    return Promise.resolve()
+  })
+  const user = userEvent.setup()
+  renderLogin('/login?plan=pro_monthly')
+  await reachOtpStep(user)
+  await enterOtp(user)
+
+  await user.click(screen.getByRole('button', { name: 'Підтвердити' }))
+
+  expect(
+    await screen.findByRole('link', { name: 'Продовжити' }),
+  ).toHaveAttribute(
+    'href',
+    '/app/koval/settings/billing/plans?plan=pro_monthly',
+  )
+})
+
 it('asks a new user for a name and stores the rotated access response', async () => {
   otpSend.mockResolvedValueOnce({ cooldownSeconds: 0, retryAfterSeconds: 0 })
   otpVerify.mockResolvedValue({
@@ -316,4 +365,43 @@ it('starts an authenticated unnamed user at the name step and resumes the invite
   expect(
     await screen.findByRole('link', { name: 'Продовжити' }),
   ).toHaveAttribute('href', '/invite/ABCD1234')
+})
+
+it('does not navigate after an unmounted name flow finishes hydrating', async () => {
+  auth.status = 'authenticated'
+  auth.user = {
+    id: 'user-1',
+    phone: '+380501112233',
+    displayName: ' ',
+    role: 'owner',
+    isActive: true,
+    lastLoginAt: null,
+  }
+  const hydration = deferred<void>()
+  vi.mocked(auth.hydrate).mockReturnValue(hydration.promise)
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/login?invite=ABCD1234']}>
+      <LoginUnmountHarness />
+    </MemoryRouter>,
+  )
+
+  await user.type(screen.getByLabelText('Ім’я'), 'Олена')
+  await user.click(screen.getByRole('button', { name: 'Продовжити' }))
+  expect(auth.hydrate).toHaveBeenCalledOnce()
+  await user.click(screen.getByRole('button', { name: 'Unmount login' }))
+
+  vi.useFakeTimers()
+  await act(async () => {
+    hydration.resolve()
+    await hydration.promise
+    await Promise.resolve()
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(800)
+  })
+
+  expect(screen.getByTestId('location')).toHaveTextContent(
+    '/login?invite=ABCD1234',
+  )
 })

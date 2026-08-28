@@ -11,9 +11,11 @@ let sendRequests = 0
 let verifyRequests = 0
 let refreshRequests = 0
 let logoutRequests = 0
+let delayedLogout = null
 const refreshTokens = new Set()
 
 function reset(options = {}) {
+  releaseLogoutDelay()
   newUser = options.newUser === true
   tokenSequence = 0
   sendRequests = 0
@@ -21,6 +23,21 @@ function reset(options = {}) {
   refreshRequests = 0
   logoutRequests = 0
   refreshTokens.clear()
+}
+
+function releaseLogoutDelay() {
+  const pendingLogout = delayedLogout
+  delayedLogout = null
+  pendingLogout?.resolve()
+  return pendingLogout !== null
+}
+
+function armLogoutDelay() {
+  let resolve = () => undefined
+  const promise = new Promise((release) => {
+    resolve = release
+  })
+  delayedLogout = { promise, resolve }
 }
 
 function issueSession() {
@@ -87,6 +104,35 @@ const server = createServer(async (request, response) => {
         refreshRequests,
         logoutRequests,
       })
+      return
+    }
+
+    if (request.method === 'POST' && url.pathname === '/_test/logout/delay') {
+      if (delayedLogout) {
+        sendProblem(
+          response,
+          409,
+          'LOGOUT_DELAY_ALREADY_ARMED',
+          'Logout delay already armed',
+        )
+        return
+      }
+      armLogoutDelay()
+      sendJson(response, 200, { delayed: true })
+      return
+    }
+
+    if (request.method === 'POST' && url.pathname === '/_test/logout/release') {
+      if (!releaseLogoutDelay()) {
+        sendProblem(
+          response,
+          409,
+          'LOGOUT_DELAY_NOT_ARMED',
+          'Logout delay is not armed',
+        )
+        return
+      }
+      sendJson(response, 200, { released: true })
       return
     }
 
@@ -171,6 +217,11 @@ const server = createServer(async (request, response) => {
     if (request.method === 'POST' && url.pathname === '/auth/logout') {
       const body = await readJson(request)
       logoutRequests += 1
+      const pendingLogout = delayedLogout
+      if (pendingLogout) {
+        await pendingLogout.promise
+        if (delayedLogout === pendingLogout) delayedLogout = null
+      }
       if (isObject(body) && typeof body.refreshToken === 'string') {
         refreshTokens.delete(body.refreshToken)
       }
@@ -209,6 +260,7 @@ let closing = false
 function shutdown(signal) {
   if (closing) return
   closing = true
+  releaseLogoutDelay()
   server.close((error) => {
     if (error) {
       process.stderr.write(
@@ -217,6 +269,8 @@ function shutdown(signal) {
       process.exitCode = 1
     }
   })
+  server.closeIdleConnections()
+  setImmediate(() => server.closeAllConnections())
 }
 
 process.once('SIGINT', () => shutdown('SIGINT'))

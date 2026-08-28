@@ -15,7 +15,8 @@ describe('SiteHeader mobile menu', () => {
       tenant: null,
       tenants: [],
       hydrate: vi.fn(),
-      switchTenant: vi.fn(),
+      commitTenant: vi.fn(),
+      updateName: vi.fn(),
       signOut: vi.fn(),
     })
   })

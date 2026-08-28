@@ -33,10 +33,15 @@ export const authApi = {
     return resp.data
   },
 
-  async updateName(name: string): Promise<VerifyUser> {
+  async updateName(
+    name: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<VerifyUser> {
+    const config = options.signal ? { signal: options.signal } : undefined
     const response = await identityClient.patch<UpdateNameResponse>(
       '/auth/me/name',
       { name },
+      config,
     )
     credentials.setAccess(response.data.accessToken)
     return response.data.user

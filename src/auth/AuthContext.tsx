@@ -25,8 +25,10 @@ export interface AuthContextValue {
   tenants: Tenant[]
   /** Called after a successful OTP verify; bootstraps user + tenants from the server. */
   hydrate: (accessToken?: string) => Promise<void>
-  /** Switch the active розбірка. Updates X-Tenant-Id used by the core API client. */
-  switchTenant: (tenantId: string) => void
+  /** Commit a tenant whose cabinet access snapshot is ready. */
+  commitTenant: (tenantId: string) => void
+  /** Update the authenticated user's display name without reloading tenant state. */
+  updateName: (name: string) => Promise<void>
   /** POST /session/logout and reset state. Pass `silent` to skip the network call. */
   signOut: (opts?: { silent?: boolean }) => Promise<void>
 }
@@ -48,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const bootstrappedRef = useRef(false)
   const authGenerationRef = useRef(0)
   const activeOperationRef = useRef<AuthOperation | null>(null)
+  const profileUpdateRef = useRef<AbortController | null>(null)
 
   const reset = useCallback(() => {
     setUser((current) => (current === null ? current : null))
@@ -67,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const invalidateAuth = useCallback(() => {
     authGenerationRef.current += 1
+    profileUpdateRef.current?.abort('auth-invalidated')
+    profileUpdateRef.current = null
     restorePendingTenantPreference(activeOperationRef.current)
     activeOperationRef.current?.settleCompletion()
     activeOperationRef.current = null
@@ -172,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [bootstrap],
   )
 
-  const switchTenant = useCallback((tenantId: string) => {
+  const commitTenant = useCallback((tenantId: string) => {
     setTenants((list) => {
       const next = list.find((t) => t.id === tenantId)
       if (next) {
@@ -182,6 +187,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return list
     })
   }, [])
+
+  const updateName = useCallback<AuthContextValue['updateName']>(
+    async (name) => {
+      const generation = authGenerationRef.current
+      const currentUserId = user?.id
+      if (status !== 'authenticated' || !currentUserId) {
+        throw new Error('Cannot update a guest profile')
+      }
+
+      profileUpdateRef.current?.abort('profile-update-superseded')
+      const controller = new AbortController()
+      profileUpdateRef.current = controller
+      try {
+        const updated = await authApi.updateName(name, {
+          signal: controller.signal,
+        })
+        setUser((current) => {
+          if (
+            controller.signal.aborted ||
+            authGenerationRef.current !== generation ||
+            current?.id !== currentUserId ||
+            updated.id !== currentUserId
+          ) {
+            return current
+          }
+          return { ...current, ...updated }
+        })
+      } finally {
+        if (profileUpdateRef.current === controller) {
+          profileUpdateRef.current = null
+        }
+      }
+    },
+    [status, user?.id],
+  )
 
   const signOut = useCallback<AuthContextValue['signOut']>(
     async ({ silent } = {}) => {
@@ -207,7 +247,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tenant,
     tenants,
     hydrate,
-    switchTenant,
+    commitTenant,
+    updateName,
     signOut,
   }
 

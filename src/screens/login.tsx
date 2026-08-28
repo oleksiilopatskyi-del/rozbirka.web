@@ -66,6 +66,7 @@ export function LoginScreen() {
   const returnTo = resolvePostLoginDestination(
     location.search,
     fallbackReturnTo ?? '/account',
+    auth.tenant,
   )
   const [step, setStep] = useState<Step>(() =>
     auth.status === 'authenticated' &&
@@ -82,6 +83,45 @@ export function LoginScreen() {
   const [resendingOtp, setResendingOtp] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [resendIn, setResendIn] = useState(0)
+  const mountedRef = useRef(false)
+  const navigationGenerationRef = useRef(0)
+  const navigationTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      navigationGenerationRef.current += 1
+      if (navigationTimerRef.current !== null) {
+        window.clearTimeout(navigationTimerRef.current)
+        navigationTimerRef.current = null
+      }
+    }
+  }, [])
+
+  const beginNavigationOperation = () => {
+    navigationGenerationRef.current += 1
+    if (navigationTimerRef.current !== null) {
+      window.clearTimeout(navigationTimerRef.current)
+      navigationTimerRef.current = null
+    }
+    return navigationGenerationRef.current
+  }
+
+  const isCurrentNavigationOperation = (generation: number) =>
+    mountedRef.current && navigationGenerationRef.current === generation
+
+  const scheduleNavigation = (generation: number) => {
+    if (!isCurrentNavigationOperation(generation)) return
+    navigationTimerRef.current = window.setTimeout(() => {
+      if (isCurrentNavigationOperation(generation)) {
+        void navigate(returnTo, { replace: true })
+      }
+      if (navigationGenerationRef.current === generation) {
+        navigationTimerRef.current = null
+      }
+    }, 800)
+  }
 
   useEffect(() => {
     if (resendIn <= 0) return
@@ -123,22 +163,24 @@ export function LoginScreen() {
       return
     }
     setVerifyingOtp(true)
+    const generation = beginNavigationOperation()
     try {
       const resp = await authApi.otpVerify({ phone: toE164(phone), code: otp })
+      if (!isCurrentNavigationOperation(generation)) return
       // Existing user — straight to success. Brand-new user — ask their name first.
       if (resp.isNewUser) {
         setStep('name')
       } else {
         await auth.hydrate(resp.accessToken)
+        if (!isCurrentNavigationOperation(generation)) return
         setStep('success')
-        window.setTimeout(() => {
-          void navigate(returnTo, { replace: true })
-        }, 800)
+        scheduleNavigation(generation)
       }
     } catch (err) {
+      if (!isCurrentNavigationOperation(generation)) return
       setError(extractError(err, 'Невірний код'))
     } finally {
-      setVerifyingOtp(false)
+      if (isCurrentNavigationOperation(generation)) setVerifyingOtp(false)
     }
   }
 
@@ -152,17 +194,19 @@ export function LoginScreen() {
       return
     }
     setSavingName(true)
+    const generation = beginNavigationOperation()
     try {
       await authApi.updateName(trimmed)
+      if (!isCurrentNavigationOperation(generation)) return
       await auth.hydrate()
+      if (!isCurrentNavigationOperation(generation)) return
       setStep('success')
-      window.setTimeout(() => {
-        void navigate(returnTo, { replace: true })
-      }, 800)
+      scheduleNavigation(generation)
     } catch (err) {
+      if (!isCurrentNavigationOperation(generation)) return
       setError(extractError(err, 'Не вдалося зберегти ім’я'))
     } finally {
-      setSavingName(false)
+      if (isCurrentNavigationOperation(generation)) setSavingName(false)
     }
   }
 

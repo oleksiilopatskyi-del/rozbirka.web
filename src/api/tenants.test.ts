@@ -16,22 +16,24 @@ afterEach(() => {
 
 it('rethrows cancellation from automatic tenant selection', async () => {
   const controller = new AbortController()
-  let adapterSignal: unknown
+  let adapterSignal: AbortSignal | undefined
   apiClient.defaults.adapter = (config) =>
     new Promise((_resolve, reject) => {
-      adapterSignal = config.signal
+      adapterSignal = config.signal as AbortSignal | undefined
       config.signal?.addEventListener?.('abort', () => {
         reject(new CanceledError(undefined, config))
       })
     })
 
   const pending = tenantsApi.ensureSelected({ signal: controller.signal })
-  await vi.waitFor(() => expect(adapterSignal).toBe(controller.signal))
+  await vi.waitFor(() => expect(adapterSignal).toBeDefined())
+  expect(adapterSignal?.aborted).toBe(false)
   controller.abort()
 
   await expect(pending).rejects.toMatchObject({
     problem: { kind: 'cancelled' },
   })
+  expect(adapterSignal?.aborted).toBe(true)
   expect(tenantPreference.get()).toBeNull()
 })
 

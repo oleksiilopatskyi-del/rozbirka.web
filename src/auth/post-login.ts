@@ -31,6 +31,7 @@ export function isSafeCabinetPath(value: string): boolean {
 export function resolvePostLoginDestination(
   search: string,
   fallback: string,
+  tenant?: { slug: string } | null,
 ): string {
   const params = new URLSearchParams(search)
   const invite = params.get('invite')
@@ -46,7 +47,50 @@ export function resolvePostLoginDestination(
   }
 
   const planCode = readPlanCode(search)
-  if (planCode) return accountPathForPlan(planCode)
+  if (planCode) {
+    return tenant && isSafeTenantSlug(tenant.slug)
+      ? `/app/${tenant.slug}/settings/billing/plans?plan=${planCode}`
+      : accountPathForPlan(planCode)
+  }
 
-  return isSafeCabinetPath(fallback) ? fallback : '/account'
+  const safeFallback = isSafeCabinetPath(fallback) ? fallback : '/account'
+  return tenant && isSafeTenantSlug(tenant.slug)
+    ? resolveTenantFallback(tenant.slug, safeFallback)
+    : safeFallback
+}
+
+const isSafeTenantSlug = (slug: string) =>
+  /^[a-z0-9](?:[a-z0-9-]{0,62})$/.test(slug)
+
+function resolveTenantFallback(slug: string, fallback: string): string {
+  if (!/^\/account(?:[/?#]|$)/.test(fallback)) return fallback
+  const queryStart = fallback.indexOf('?')
+  const hashStart = fallback.indexOf('#')
+  const query =
+    queryStart < 0
+      ? ''
+      : fallback.slice(
+          queryStart,
+          hashStart >= 0 && hashStart > queryStart ? hashStart : undefined,
+        )
+  const params = new URLSearchParams(query)
+  switch (params.get('section')) {
+    case 'subscription':
+      return `/app/${slug}/settings/billing/overview`
+    case 'plans': {
+      const plan = readPlanCode(query)
+      return `/app/${slug}/settings/billing/plans${plan ? `?plan=${plan}` : ''}`
+    }
+    case 'payment':
+    case 'billing':
+      return `/app/${slug}/settings/billing/payments`
+    default: {
+      const scan = params.get('scan')
+      return `/app/${slug}/dashboard${
+        scan && /^[A-Za-z0-9._~-]{1,256}$/.test(scan)
+          ? `?scan=${encodeURIComponent(scan)}`
+          : ''
+      }`
+    }
+  }
 }

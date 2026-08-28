@@ -112,7 +112,8 @@ const authValue = (
   tenant: null,
   tenants: [],
   hydrate: vi.fn().mockResolvedValue(undefined),
-  switchTenant: vi.fn(),
+  commitTenant: vi.fn(),
+  updateName: vi.fn(),
   signOut: vi.fn(),
 })
 
@@ -152,10 +153,26 @@ it('links a guest to the encoded invitation login intent', async () => {
   ).toHaveAttribute('href', '/login?invite=AB%2FCD')
 })
 
-it('accepts for a named user, selects the tenant, hydrates, then replaces navigation', async () => {
+it('accepts for a named user, hydrates, then enters the accepted tenant slug', async () => {
   auth = authValue('authenticated')
   const hydration = deferred<void>()
-  vi.mocked(auth.hydrate).mockReturnValue(hydration.promise)
+  vi.mocked(auth.hydrate).mockImplementation(async () => {
+    await hydration.promise
+    auth.tenants = [
+      {
+        id: 'tenant-2',
+        name: 'Розбірка Соболя',
+        slug: 'sobol-yard',
+        plan: 'active',
+        planTier: 'pro',
+        city: null,
+        logoUrl: null,
+        isActive: true,
+        createdAt: '2026-08-15T00:00:00Z',
+        roleName: 'manager',
+      },
+    ]
+  })
   vi.mocked(useAuth).mockReturnValue(auth)
   const user = userEvent.setup()
   renderInvite()
@@ -172,7 +189,9 @@ it('accepts for a named user, selects the tenant, hydrates, then replaces naviga
     await hydration.promise
   })
 
-  expect(await screen.findByTestId('location')).toHaveTextContent('/account')
+  expect(await screen.findByTestId('location')).toHaveTextContent(
+    '/app/sobol-yard/dashboard',
+  )
 })
 
 it('routes an authenticated unnamed user through the invitation login name step', async () => {

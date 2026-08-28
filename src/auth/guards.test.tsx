@@ -22,12 +22,27 @@ const authValue = (status: 'loading' | 'authenticated' | 'guest') => ({
   tenant: null,
   tenants: [],
   hydrate: vi.fn(),
-  switchTenant: vi.fn(),
+  commitTenant: vi.fn(),
+  updateName: vi.fn(),
   signOut: vi.fn(),
 })
 
 it('preserves a valid plan when redirecting an authenticated user', () => {
-  vi.mocked(useAuth).mockReturnValue(authValue('authenticated'))
+  vi.mocked(useAuth).mockReturnValue({
+    ...authValue('authenticated'),
+    tenant: {
+      id: 'tenant-1',
+      name: 'Koval Auto',
+      slug: 'koval',
+      plan: 'active',
+      planTier: 'pro',
+      city: null,
+      logoUrl: null,
+      isActive: true,
+      createdAt: '2026-08-01T00:00:00Z',
+      roleName: 'owner',
+    },
+  })
 
   render(
     <MemoryRouter initialEntries={['/login?plan=pro_monthly']}>
@@ -40,13 +55,13 @@ it('preserves a valid plan when redirecting an authenticated user', () => {
             </RedirectIfAuth>
           }
         />
-        <Route path="/account" element={<LocationProbe />} />
+        <Route path="*" element={<LocationProbe />} />
       </Routes>
     </MemoryRouter>,
   )
 
   expect(
-    screen.getByText('/account?section=plans&plan=pro_monthly|null'),
+    screen.getByText('/app/koval/settings/billing/plans?plan=pro_monthly|null'),
   ).toBeInTheDocument()
 })
 
