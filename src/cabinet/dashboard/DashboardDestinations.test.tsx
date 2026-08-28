@@ -35,6 +35,8 @@ const snapshot = ({
     'intakes.manage',
     'reports.view',
     'reports.manage',
+    'billing.view',
+    'billing.manage',
   ],
   features = [FEATURES.AdvancedReports, FEATURES.IntakeManagement],
   state = 'active',
@@ -80,6 +82,18 @@ it('derives unique in-tenant links and quick actions without dashboard.view', ()
   expect(
     within(destinations).getByRole('link', { name: 'Звіти' }),
   ).toHaveAttribute('href', '/app/koval/reports')
+  expect(
+    within(destinations).getByRole('link', { name: 'Підписка' }),
+  ).toHaveAttribute('href', '/app/koval/settings/billing/overview')
+  expect(
+    within(destinations).getByRole('link', { name: 'Тарифи' }),
+  ).toHaveAttribute('href', '/app/koval/settings/billing/plans')
+  expect(
+    within(destinations).getByRole('link', { name: 'Платежі' }),
+  ).toHaveAttribute('href', '/app/koval/settings/billing/payments')
+  expect(
+    within(destinations).getByRole('link', { name: 'Профіль' }),
+  ).toHaveAttribute('href', '/app/koval/settings/profile')
 
   const actions = screen.getByRole('region', { name: 'Швидкі дії' })
   expect(
@@ -91,6 +105,15 @@ it('derives unique in-tenant links and quick actions without dashboard.view', ()
   expect(
     within(actions).getByRole('link', { name: 'Відкрити: Звіти' }),
   ).toHaveAttribute('href', '/app/koval/reports')
+  expect(
+    within(actions).getByRole('link', { name: 'Відкрити: Підписка' }),
+  ).toHaveAttribute('href', '/app/koval/settings/billing/overview')
+  expect(
+    within(actions).getByRole('link', { name: 'Відкрити: Тарифи' }),
+  ).toHaveAttribute('href', '/app/koval/settings/billing/plans')
+  expect(
+    within(actions).getByRole('link', { name: 'Відкрити: Платежі' }),
+  ).toHaveAttribute('href', '/app/koval/settings/billing/payments')
 
   const labels = screen.getAllByRole('link').map((link) => link.textContent)
   expect(new Set(labels).size).toBe(labels.length)
@@ -107,7 +130,7 @@ it.each([
       permissions: ['cars.view', 'cars.manage', 'intakes.view'],
       features: [FEATURES.IntakeManagement],
     }),
-    ['Автомобілі', 'Приймання'],
+    ['Автомобілі', 'Приймання', 'Профіль'],
     ['Відкрити: Автомобілі'],
   ],
   [
@@ -117,23 +140,48 @@ it.each([
       permissions: ['intakes.view', 'intakes.manage'],
       features: [FEATURES.IntakeManagement],
     }),
-    ['Приймання'],
+    ['Приймання', 'Профіль'],
     ['Відкрити: Приймання'],
   ],
   [
     'missing feature',
     snapshot({ features: [FEATURES.IntakeManagement] }),
-    ['Автомобілі', 'Приймання'],
-    ['Відкрити: Автомобілі', 'Відкрити: Приймання'],
+    ['Автомобілі', 'Приймання', 'Підписка', 'Тарифи', 'Платежі', 'Профіль'],
+    [
+      'Відкрити: Автомобілі',
+      'Відкрити: Приймання',
+      'Відкрити: Підписка',
+      'Відкрити: Тарифи',
+      'Відкрити: Платежі',
+    ],
   ],
-  ['blocked subscription', snapshot({ state: 'blocked' }), [], []],
+  [
+    'blocked subscription',
+    snapshot({ state: 'blocked' }),
+    ['Підписка', 'Тарифи', 'Платежі', 'Профіль'],
+    ['Відкрити: Підписка', 'Відкрити: Тарифи', 'Відкрити: Платежі'],
+  ],
   [
     'exhausted intake quota',
     snapshot({
       quotaUsage: { ...usage, intakes: { used: 10, max: 10 } },
     }),
-    ['Автомобілі', 'Приймання', 'Звіти'],
-    ['Відкрити: Автомобілі', 'Відкрити: Звіти'],
+    [
+      'Автомобілі',
+      'Приймання',
+      'Звіти',
+      'Підписка',
+      'Тарифи',
+      'Платежі',
+      'Профіль',
+    ],
+    [
+      'Відкрити: Автомобілі',
+      'Відкрити: Звіти',
+      'Відкрити: Підписка',
+      'Відкрити: Тарифи',
+      'Відкрити: Платежі',
+    ],
   ],
 ] as const)('%s respects policy outcomes', (_name, access, links, actions) => {
   renderDestinations(access)

@@ -20,10 +20,9 @@ export function DashboardDestinations({
   snapshot: TenantAccessSnapshot
   tenant: Pick<Tenant, 'slug'>
 }) {
-  const { links, quickActions, hasReleasedOperationalModule } =
-    deriveDestinations(snapshot, tenant.slug)
+  const { links, quickActions } = deriveDestinations(snapshot, tenant.slug)
 
-  if (!hasReleasedOperationalModule) {
+  if (links.length === 0 && quickActions.length === 0) {
     return (
       <section
         aria-label="Підготовка робочих модулів"
@@ -78,20 +77,17 @@ export function DashboardDestinations({
 }
 
 function deriveDestinations(snapshot: TenantAccessSnapshot, slug: string) {
-  const operationalModules =
-    Object.values(cabinetModules).filter(isOperationalModule)
+  const destinationModules =
+    Object.values(cabinetModules).filter(isDestinationModule)
   const access = { status: 'ready' as const, snapshot, error: null }
 
   return {
-    hasReleasedOperationalModule: operationalModules.some(
-      (definition) => definition.released,
-    ),
-    links: operationalModules.flatMap((definition): DashboardDestination[] =>
+    links: destinationModules.flatMap((definition): DashboardDestination[] =>
       evaluateModuleAccess(definition, access, 'view').kind === 'allowed'
         ? [toDestination(definition, slug)]
         : [],
     ),
-    quickActions: operationalModules.flatMap(
+    quickActions: destinationModules.flatMap(
       (definition): DashboardDestination[] =>
         evaluateModuleAccess(definition, access, 'mutation').kind === 'allowed'
           ? [toDestination(definition, slug)]
@@ -100,11 +96,8 @@ function deriveDestinations(snapshot: TenantAccessSnapshot, slug: string) {
   }
 }
 
-function isOperationalModule(definition: CabinetModuleDefinition) {
-  return (
-    definition.key !== 'dashboard' &&
-    definition.navigation?.placement === 'primary'
-  )
+function isDestinationModule(definition: CabinetModuleDefinition) {
+  return definition.key !== 'dashboard'
 }
 
 function toDestination(

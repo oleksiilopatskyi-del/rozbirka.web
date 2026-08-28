@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -186,18 +186,18 @@ it('uses week for a missing period without changing the URL', () => {
   )
 })
 
-it('shows non-interactive preparation guidance after analytics when no operational module is released', () => {
+it('shows released account destinations after analytics from the full module registry', () => {
   renderDashboard(['/app/koval/dashboard'])
 
-  const guidance = screen.getByRole('region', {
-    name: 'Підготовка робочих модулів',
-  })
-  expect(guidance).toHaveTextContent('Готуємо робочі модулі')
-  expect(within(guidance).queryByRole('link')).not.toBeInTheDocument()
+  const profile = screen.getByRole('link', { name: 'Профіль' })
+  expect(profile).toHaveAttribute('href', '/app/koval/settings/profile')
+  expect(
+    screen.queryByRole('region', { name: 'Підготовка робочих модулів' }),
+  ).not.toBeInTheDocument()
 
   const analytics = screen.getByRole('region', { name: 'Аналітика' })
   expect(
-    analytics.compareDocumentPosition(guidance) &
+    analytics.compareDocumentPosition(profile) &
       Node.DOCUMENT_POSITION_FOLLOWING,
   ).not.toBe(0)
 })
