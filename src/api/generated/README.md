@@ -33,10 +33,11 @@ Check committed output for byte-for-byte drift with the same inputs:
 npm run contracts:check -- --core <versioned-file-or-url> --identity <versioned-file-or-url>
 ```
 
-The normal `npm run check` intentionally does not run `contracts:check` yet.
-ROZ-59 must first provide committed, immutable Core and Identity OpenAPI input
-locations. Once those artifacts exist, wire their exact locations into CI and
-make the drift gate mandatory before marking ROZ-39 complete.
+CI requires `CORE_OPENAPI_IMMUTABLE_URL` and `IDENTITY_OPENAPI_IMMUTABLE_URL`
+repository variables. The reusable quality workflow passes those explicit inputs
+to `contracts:check`; missing values, mutable URLs, missing committed outputs, or
+byte drift fail the gate. The variables must identify the exact Core and Identity
+inputs used to generate the committed files, never a runtime or `latest` alias.
 
 The pinned generator currently declares a TypeScript 5 peer range, while this
 project uses TypeScript 6. The repository-local `force=true` npm setting applies
