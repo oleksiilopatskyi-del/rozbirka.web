@@ -1,9 +1,7 @@
 import { Link } from 'react-router'
 import type { Tenant } from '@/api/types'
 import type { TenantAccessSnapshot } from '../access-types'
-import { cabinetPath } from '../cabinet-paths'
-import { cabinetModules } from '../module-registry'
-import { evaluateModuleAccess } from '../policy'
+import { getDashboardBillingPath } from './dashboard-billing-access'
 
 interface BillingGuidance {
   title: string
@@ -21,12 +19,7 @@ export function DashboardBillingBanner({
   const guidance = getBillingGuidance(snapshot)
   if (guidance === null) return null
 
-  const billingAllowed =
-    evaluateModuleAccess(
-      cabinetModules.billing,
-      { status: 'ready', snapshot, error: null },
-      'view',
-    ).kind === 'allowed'
+  const billingPath = getDashboardBillingPath(snapshot, tenant)
 
   return (
     <section
@@ -35,14 +28,14 @@ export function DashboardBillingBanner({
     >
       <h2 className="font-medium text-white">{guidance.title}</h2>
       <p className="mt-1 text-sm text-neutral-400">{guidance.message}</p>
-      {billingAllowed ? (
+      {billingPath === null ? null : (
         <Link
           className="mt-3 inline-flex min-h-11 items-center rounded-full border border-white/[0.12] px-4 text-sm text-white"
-          to={cabinetPath(tenant.slug, 'billing')}
+          to={billingPath}
         >
           Перейти до підписки
         </Link>
-      ) : null}
+      )}
     </section>
   )
 }

@@ -54,9 +54,9 @@ it('renders common and owner totals in Ukrainian formats', () => {
   expect(getByExactText('5\u00a0678')).toBeInTheDocument()
   expect(getByExactText('45\u00a0600\u00a0₴')).toBeInTheDocument()
   expect(getByExactText('123\u00a0456\u00a0₴')).toBeInTheDocument()
-  expect(screen.getByText(/28\.08\.2026/)).toBeInTheDocument()
-  expect(screen.getByText(/28\.08\.2026, 16:45/)).toBeInTheDocument()
-  expect(screen.getByText(/Додано запчастину/)).toBeInTheDocument()
+  const activity = screen.getByRole('region', { name: 'Остання активність' })
+  expect(activity).toHaveTextContent(/28\.08\.2026, 16:45/)
+  expect(activity).toHaveTextContent(/Додано запчастину/)
 })
 
 it('does not invent absent owner values', () => {
@@ -77,6 +77,48 @@ it('does not invent absent owner values', () => {
   expect(screen.queryByText('Активних авто')).not.toBeInTheDocument()
   expect(screen.queryByText('Баланс')).not.toBeInTheDocument()
   expect(screen.queryByText('Інвестовано')).not.toBeInTheDocument()
+})
+
+it('renders Core-provided work totals for an owner, including a real zero', () => {
+  render(
+    <DashboardSummary
+      data={summary({
+        role: 'owner',
+        carsInWork: 3,
+        totalPartsSold: 0,
+        myPartsToday: null,
+        lastMyActivity: null,
+      })}
+    />,
+  )
+
+  expect(screen.getByText('Авто в роботі')).toBeInTheDocument()
+  expect(screen.getByText('Продано запчастин').parentElement).toHaveTextContent(
+    '0',
+  )
+})
+
+it('renders Core-provided personal totals and activity for a manager', () => {
+  render(
+    <DashboardSummary
+      data={summary({
+        role: 'manager',
+        carsInWork: null,
+        totalPartsSold: null,
+        myPartsToday: 2,
+        lastMyActivity: {
+          type: 'Продано запчастину',
+          userName: 'Олена',
+          timestamp: '2026-08-28T14:00:00Z',
+        },
+      })}
+    />,
+  )
+
+  expect(screen.getByText('Продано мною сьогодні')).toBeInTheDocument()
+  expect(
+    screen.getByRole('region', { name: 'Моя остання активність' }),
+  ).toHaveTextContent('Продано запчастину · Олена')
 })
 
 it('renders master-only totals and activity without owner values', () => {

@@ -7,7 +7,9 @@ import type { DashboardData, DashboardPeriod } from '@/api/dashboard-contract'
 import { DashboardAnalytics } from './DashboardAnalytics'
 import { DashboardBillingBanner } from './DashboardBillingBanner'
 import { DashboardDestinations } from './DashboardDestinations'
+import { DashboardErrorState } from './DashboardErrorState'
 import { DashboardSummary } from './DashboardSummary'
+import { getDashboardBillingPath } from './dashboard-billing-access'
 
 export function DashboardScreen() {
   const { targetTenant, snapshot } = useCabinet()
@@ -15,6 +17,10 @@ export function DashboardScreen() {
   const selection = readDashboardPeriod(searchParams)
   const dashboard = useDashboardData(selection.period)
   const tenantName = targetTenant?.name ?? 'вашій розбірці'
+  const billingPath =
+    snapshot !== null && targetTenant !== null
+      ? getDashboardBillingPath(snapshot, targetTenant)
+      : null
 
   useEffect(() => {
     if (!selection.normalize) return
@@ -51,10 +57,12 @@ export function DashboardScreen() {
             <DashboardBillingBanner snapshot={snapshot} tenant={targetTenant} />
           ) : null}
           <DashboardSummaryState
+            billingPath={billingPath}
             loadable={dashboard.summary}
             retry={() => dashboard.retrySummary()}
           />
           <DashboardAnalytics
+            billingPath={billingPath}
             loadable={dashboard.analytics}
             onPeriodChange={selectPeriod}
             period={selection.period}
@@ -78,9 +86,11 @@ export function DashboardScreen() {
 }
 
 function DashboardSummaryState({
+  billingPath,
   loadable,
   retry,
 }: {
+  billingPath: string | null
   loadable: DashboardLoadable<DashboardData>
   retry: () => Promise<void>
 }) {
@@ -90,22 +100,13 @@ function DashboardSummaryState({
 
   if (loadable.status === 'error') {
     return (
-      <section
-        aria-label="Зведення"
-        className="rounded-2xl border border-white/[0.06] p-4"
-        role="alert"
-      >
-        <p className="text-sm text-neutral-400">
-          Не вдалося завантажити зведення.
-        </p>
-        <button
-          className="mt-3 min-h-11 rounded-full border border-white/[0.12] px-4 text-white"
-          onClick={() => void retry()}
-          type="button"
-        >
-          Спробувати ще раз
-        </button>
-      </section>
+      <DashboardErrorState
+        ariaLabel="Зведення"
+        billingPath={billingPath}
+        genericMessage="Не вдалося завантажити зведення."
+        problem={loadable.error}
+        retry={retry}
+      />
     )
   }
 

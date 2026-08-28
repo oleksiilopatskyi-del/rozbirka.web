@@ -144,7 +144,11 @@ it('retries only failed summary data and marks refresh as busy', async () => {
     summary: {
       status: 'error',
       data: null,
-      error: { kind: 'network', message: 'Немає з’єднання з мережею.' },
+      error: {
+        kind: 'network',
+        code: 'UNRECOGNIZED_UPSTREAM_CODE',
+        message: 'Raw upstream network detail',
+      },
     },
     analytics: {
       status: 'ready',
@@ -168,11 +172,109 @@ it('retries only failed summary data and marks refresh as busy', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
   expect(retrySummary).toHaveBeenCalledOnce()
+  expect(screen.getByRole('alert', { name: 'Зведення' })).toHaveTextContent(
+    'Не вдалося завантажити зведення',
+  )
+  expect(
+    screen.queryByText('Raw upstream network detail'),
+  ).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Оновлюємо…' })).toBeDisabled()
   expect(
     screen.getByRole('region', { name: 'Панель зведення' }),
   ).toHaveAttribute('aria-busy', 'true')
 })
+
+it('guides a 402 summary failure through tenant billing policy without leaking raw data', async () => {
+  const user = userEvent.setup()
+  const retrySummary = vi.fn().mockResolvedValue(undefined)
+  const retryAnalytics = vi.fn()
+  vi.mocked(useCabinet).mockReturnValue({
+    status: 'ready',
+    targetTenant: tenant,
+    snapshot: {
+      ...snapshot,
+      permissions: new Set(['billing.view']),
+    },
+    error: null,
+    retry: vi.fn(),
+    switchTenant: vi.fn(),
+  } satisfies CabinetContextValue)
+  vi.mocked(useDashboardData).mockReturnValue({
+    summary: {
+      status: 'error',
+      data: null,
+      error: {
+        kind: 'unknown',
+        status: 402,
+        code: 'SUBSCRIPTION_REQUIRED',
+        message: 'Raw upstream billing detail',
+        cause: { payload: 'private upstream payload' },
+      },
+    },
+    analytics: { status: 'loading', data: null, error: null },
+    refreshing: false,
+    refresh: vi.fn(),
+    retrySummary,
+    retryAnalytics,
+  })
+
+  renderDashboard(['/app/koval/dashboard'])
+
+  const error = screen.getByRole('alert', { name: 'Зведення' })
+  expect(error).toHaveTextContent('Підписка потребує уваги')
+  expect(error).not.toHaveTextContent('Raw upstream billing detail')
+  expect(error).not.toHaveTextContent('private upstream payload')
+  expect(
+    screen.getByRole('link', { name: 'Перейти до підписки' }),
+  ).toHaveAttribute('href', '/app/koval/settings/billing/overview')
+
+  await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
+  expect(retrySummary).toHaveBeenCalledOnce()
+  expect(retryAnalytics).not.toHaveBeenCalled()
+})
+
+it.each([
+  ['QUOTA_EXCEEDED', 'Ліміт вичерпано'],
+  ['FEATURE_NOT_AVAILABLE', 'Функція недоступна на вашому тарифі'],
+] as const)(
+  'guides an analytics %s failure without exposing error data or a denied billing CTA',
+  async (code, guidance) => {
+    const user = userEvent.setup()
+    const retrySummary = vi.fn()
+    const retryAnalytics = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(useDashboardData).mockReturnValue({
+      summary: { status: 'loading', data: null, error: null },
+      analytics: {
+        status: 'error',
+        data: null,
+        error: {
+          kind: 'unknown',
+          code,
+          message: 'Raw upstream analytics detail',
+          cause: { payload: 'private upstream payload' },
+        },
+      },
+      refreshing: false,
+      refresh: vi.fn(),
+      retrySummary,
+      retryAnalytics,
+    })
+
+    renderDashboard(['/app/koval/dashboard'])
+
+    const error = screen.getByRole('alert', { name: 'Аналітика' })
+    expect(error).toHaveTextContent(guidance)
+    expect(error).not.toHaveTextContent('Raw upstream analytics detail')
+    expect(error).not.toHaveTextContent('private upstream payload')
+    expect(
+      screen.queryByRole('link', { name: 'Перейти до підписки' }),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
+    expect(retryAnalytics).toHaveBeenCalledOnce()
+    expect(retrySummary).not.toHaveBeenCalled()
+  },
+)
 
 it('uses week for a missing period without changing the URL', () => {
   renderDashboard(['/app/koval/dashboard?scan=QR-123~part'])

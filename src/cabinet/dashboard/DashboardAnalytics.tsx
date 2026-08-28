@@ -3,6 +3,7 @@ import type {
   DashboardPeriod,
 } from '@/api/dashboard-contract'
 import type { DashboardLoadable } from './use-dashboard-data'
+import { DashboardErrorState } from './DashboardErrorState'
 
 const periodLabels: Readonly<Record<DashboardPeriod, string>> = {
   day: 'День',
@@ -19,6 +20,7 @@ interface DashboardAnalyticsProps {
   period: DashboardPeriod
   onPeriodChange: (period: DashboardPeriod) => void
   retry: () => Promise<void>
+  billingPath?: string | null
 }
 
 export function DashboardAnalytics({
@@ -26,6 +28,7 @@ export function DashboardAnalytics({
   period,
   onPeriodChange,
   retry,
+  billingPath = null,
 }: DashboardAnalyticsProps) {
   return (
     <section aria-label="Аналітика" className="grid gap-5">
@@ -50,7 +53,15 @@ export function DashboardAnalytics({
         <AnalyticsContent data={loadable.data} />
       ) : null}
       {loadable.status === 'loading' ? <AnalyticsLoading /> : null}
-      {loadable.status === 'error' ? <AnalyticsError retry={retry} /> : null}
+      {loadable.status === 'error' ? (
+        <DashboardErrorState
+          ariaLabel="Аналітика"
+          billingPath={billingPath}
+          genericMessage="Не вдалося завантажити аналітику."
+          problem={loadable.error}
+          retry={retry}
+        />
+      ) : null}
     </section>
   )
 }
@@ -199,27 +210,6 @@ function AnalyticsLoading() {
         aria-hidden="true"
         className="mt-3 block h-20 animate-pulse rounded bg-white/[0.08]"
       />
-    </section>
-  )
-}
-
-function AnalyticsError({ retry }: { retry: () => Promise<void> }) {
-  return (
-    <section
-      aria-label="Аналітика"
-      className="rounded-2xl border border-white/[0.06] p-4"
-      role="alert"
-    >
-      <p className="text-sm text-neutral-400">
-        Не вдалося завантажити аналітику.
-      </p>
-      <button
-        className="mt-3 min-h-11 rounded-full border border-white/[0.12] px-4 text-white"
-        onClick={() => void retry()}
-        type="button"
-      >
-        Спробувати ще раз
-      </button>
     </section>
   )
 }

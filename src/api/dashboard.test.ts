@@ -83,4 +83,28 @@ describe('dashboardApi', () => {
       DashboardContractError,
     )
   })
+
+  it('rejects malformed successful analytics data', async () => {
+    vi.spyOn(apiClient, 'get').mockResolvedValue({
+      data: {
+        ...analytics,
+        revenue: { ...analytics.revenue, series: [] },
+      },
+    })
+
+    await expect(dashboardApi.getAnalytics('month')).rejects.toBeInstanceOf(
+      DashboardContractError,
+    )
+  })
+
+  it('rejects valid analytics for a period other than the requested period', async () => {
+    vi.spyOn(apiClient, 'get').mockResolvedValue({
+      data: { ...analytics, period: 'day' },
+    })
+
+    await expect(dashboardApi.getAnalytics('month')).rejects.toMatchObject({
+      name: 'DashboardContractError',
+      message: 'Invalid dashboard response',
+    })
+  })
 })

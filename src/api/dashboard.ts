@@ -1,6 +1,7 @@
 import { apiClient } from './client'
 import type { RequestOptions } from './contracts'
 import {
+  DashboardContractError,
   parseDashboardAnalytics,
   parseDashboardData,
   type DashboardAnalytics,
@@ -28,6 +29,8 @@ export const dashboardApi = {
       params: { period },
       ...requestConfig(options),
     })
-    return parseDashboardAnalytics(response.data)
+    const parsed = parseDashboardAnalytics(response.data)
+    if (parsed.period !== period) throw new DashboardContractError()
+    return parsed
   },
 }

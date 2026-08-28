@@ -29,38 +29,31 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
     item('Нових запчастин сьогодні', data.todayNewPartsCount),
     revenueItem(data),
   ])
-  const ownerItems = isOwnerOrManager(data.role)
-    ? compact([
-        item('Активних авто', data.activeCarsCount),
-        item('Немає в наявності', data.outOfStockPartsCount),
-        item('Клієнтів', data.customersCount),
-        hryvniaItem('Баланс', data.totalBalanceUah),
-        item('Учасників команди', data.teamMembersCount),
-        hryvniaItem('Інвестовано', data.totalInvested),
-        hryvniaItem('Повернуто', data.totalRecouped),
-      ])
-    : []
-  const masterItems = isMaster(data.role)
-    ? compact([
-        item('Авто в роботі', data.carsInWork),
-        item('Продано запчастин', data.totalPartsSold),
-        item('Продано мною сьогодні', data.myPartsToday),
-      ])
-    : []
+  const managementItems = compact([
+    item('Активних авто', data.activeCarsCount),
+    item('Немає в наявності', data.outOfStockPartsCount),
+    item('Клієнтів', data.customersCount),
+    hryvniaItem('Баланс', data.totalBalanceUah),
+    item('Учасників команди', data.teamMembersCount),
+    hryvniaItem('Інвестовано', data.totalInvested),
+    hryvniaItem('Повернуто', data.totalRecouped),
+  ])
+  const workItems = compact([
+    item('Авто в роботі', data.carsInWork),
+    item('Продано запчастин', data.totalPartsSold),
+    item('Продано мною сьогодні', data.myPartsToday),
+  ])
 
   return (
     <section aria-label="Зведення" className="grid gap-5">
       {data.isYardEmpty ? <DashboardEmptyState /> : null}
       <SummaryList items={commonItems} />
-      {ownerItems.length > 0 ? <SummaryList items={ownerItems} /> : null}
-      {masterItems.length > 0 ? <SummaryList items={masterItems} /> : null}
-      <Activity activity={data.lastActivity} title="Остання активність" />
-      {isMaster(data.role) ? (
-        <Activity
-          activity={data.lastMyActivity}
-          title="Моя остання активність"
-        />
+      {managementItems.length > 0 ? (
+        <SummaryList items={managementItems} />
       ) : null}
+      {workItems.length > 0 ? <SummaryList items={workItems} /> : null}
+      <Activity activity={data.lastActivity} title="Остання активність" />
+      <Activity activity={data.lastMyActivity} title="Моя остання активність" />
     </section>
   )
 }
@@ -132,14 +125,6 @@ function revenueItem(data: DashboardData): SummaryItem | null {
 
 function compact(items: readonly (SummaryItem | null)[]): SummaryItem[] {
   return items.filter((item): item is SummaryItem => item !== null)
-}
-
-function isOwnerOrManager(role: string): boolean {
-  return role === 'owner' || role === 'manager'
-}
-
-function isMaster(role: string): boolean {
-  return role === 'master'
 }
 
 function formatDate(timestamp: string): string {
