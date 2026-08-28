@@ -123,13 +123,51 @@ it('renders independent dashboard request status landmarks', () => {
 
   renderDashboard(['/app/koval/dashboard?period=month'])
 
-  expect(
-    screen.getByRole('status', { name: 'Стан зведення' }),
-  ).toHaveTextContent('Зведення готове')
+  expect(screen.getByRole('region', { name: 'Зведення' })).toHaveTextContent(
+    'Продажів сьогодні',
+  )
   expect(
     screen.getByRole('alert', { name: 'Стан аналітики' }),
   ).toHaveTextContent('Не вдалося завантажити аналітику')
   expect(useDashboardData).toHaveBeenCalledWith('month')
+})
+
+it('retries only failed summary data and marks refresh as busy', async () => {
+  const user = userEvent.setup()
+  const retrySummary = vi.fn()
+  const refresh = vi.fn()
+  vi.mocked(useDashboardData).mockReturnValue({
+    summary: {
+      status: 'error',
+      data: null,
+      error: { kind: 'network', message: 'Немає з’єднання з мережею.' },
+    },
+    analytics: {
+      status: 'ready',
+      data: {
+        period: 'week',
+        labels: [],
+        revenue: { totals: {}, trendPercent: 0, series: [] },
+        partsSold: { total: 0, delta: 0, series: [] },
+        activeOrders: { total: 0, delta: 0, series: [] },
+        topPart: null,
+      },
+      error: null,
+    },
+    refreshing: true,
+    refresh,
+    retrySummary,
+    retryAnalytics: vi.fn(),
+  })
+
+  renderDashboard(['/app/koval/dashboard'])
+
+  await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
+  expect(retrySummary).toHaveBeenCalledOnce()
+  expect(screen.getByRole('button', { name: 'Оновлюємо…' })).toBeDisabled()
+  expect(
+    screen.getByRole('region', { name: 'Панель зведення' }),
+  ).toHaveAttribute('aria-busy', 'true')
 })
 
 it('uses week for a missing period without changing the URL', () => {

@@ -3,7 +3,9 @@ import { useSearchParams } from 'react-router'
 import { useCabinet } from '../CabinetContext'
 import { readDashboardPeriod, writeDashboardPeriod } from './dashboard-period'
 import { useDashboardData, type DashboardLoadable } from './use-dashboard-data'
-import type { DashboardPeriod } from '@/api/dashboard-contract'
+import type { DashboardData, DashboardPeriod } from '@/api/dashboard-contract'
+import { DashboardBillingBanner } from './DashboardBillingBanner'
+import { DashboardSummary } from './DashboardSummary'
 
 const periodLabels: Readonly<Record<DashboardPeriod, string>> = {
   day: 'День',
@@ -12,7 +14,7 @@ const periodLabels: Readonly<Record<DashboardPeriod, string>> = {
 }
 
 export function DashboardScreen() {
-  const { targetTenant } = useCabinet()
+  const { targetTenant, snapshot } = useCabinet()
   const [searchParams, setSearchParams] = useSearchParams()
   const selection = readDashboardPeriod(searchParams)
   const dashboard = useDashboardData(selection.period)
@@ -42,7 +44,12 @@ export function DashboardScreen() {
         </h1>
         <p className="text-sm text-neutral-400">Ваш робочий простір готовий.</p>
       </header>
-      <div className="bg-surface-1 min-w-0 rounded-3xl border border-white/[0.06] p-5 sm:p-6">
+      <div
+        aria-busy={dashboard.refreshing}
+        aria-label="Панель зведення"
+        className="bg-surface-1 min-w-0 rounded-3xl border border-white/[0.06] p-5 sm:p-6"
+        role="region"
+      >
         <div className="flex flex-wrap gap-2" aria-label="Період аналітики">
           {(Object.keys(periodLabels) as DashboardPeriod[]).map((period) => (
             <button
@@ -56,21 +63,12 @@ export function DashboardScreen() {
             </button>
           ))}
         </div>
-        <h2 className="mt-5 text-base font-medium text-white">
-          Почніть роботу
-        </h2>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-neutral-400">
-          Доступні для вашої ролі розділи зібрані в навігації кабінету.
-        </p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <DashboardStatus
-            label="Стан зведення"
+        <div className="mt-5 grid gap-5">
+          {snapshot !== null && targetTenant !== null ? (
+            <DashboardBillingBanner snapshot={snapshot} tenant={targetTenant} />
+          ) : null}
+          <DashboardSummaryState
             loadable={dashboard.summary}
-            messages={{
-              loading: 'Завантажуємо зведення…',
-              ready: 'Зведення готове.',
-              error: 'Не вдалося завантажити зведення.',
-            }}
             retry={() => dashboard.retrySummary()}
           />
           <DashboardStatus
@@ -92,6 +90,57 @@ export function DashboardScreen() {
         >
           {dashboard.refreshing ? 'Оновлюємо…' : 'Оновити дані'}
         </button>
+      </div>
+    </section>
+  )
+}
+
+function DashboardSummaryState({
+  loadable,
+  retry,
+}: {
+  loadable: DashboardLoadable<DashboardData>
+  retry: () => Promise<void>
+}) {
+  if (loadable.status === 'ready') {
+    return <DashboardSummary data={loadable.data} />
+  }
+
+  if (loadable.status === 'error') {
+    return (
+      <section
+        aria-label="Зведення"
+        className="rounded-2xl border border-white/[0.06] p-4"
+        role="alert"
+      >
+        <p className="text-sm text-neutral-400">
+          Не вдалося завантажити зведення.
+        </p>
+        <button
+          className="mt-3 min-h-11 rounded-full border border-white/[0.12] px-4 text-white"
+          onClick={() => void retry()}
+          type="button"
+        >
+          Спробувати ще раз
+        </button>
+      </section>
+    )
+  }
+
+  return (
+    <section
+      aria-label="Зведення"
+      className="rounded-2xl border border-white/[0.06] p-4"
+    >
+      <div aria-label="Завантаження зведення" role="status">
+        <span
+          aria-hidden
+          className="block h-5 w-32 animate-pulse rounded bg-white/[0.08]"
+        />
+        <span
+          aria-hidden
+          className="mt-3 block h-16 animate-pulse rounded bg-white/[0.08]"
+        />
       </div>
     </section>
   )
