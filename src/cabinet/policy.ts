@@ -1,6 +1,15 @@
 import type { BillingState } from '../api/types'
+import {
+  isCabinetParityRuntimeRolledOut,
+  parseCabinetParityCompatibility,
+  type CabinetParityCompatibilityV1,
+} from '../config/cabinet-feature-flags'
 import type { TenantAccessState } from './access-types'
 import type { CabinetModuleDefinition, QuotaResource } from './module-registry'
+
+const cabinetParityCompatibility = parseCabinetParityCompatibility(
+  import.meta.env['VITE_CABINET_PARITY_COMPATIBILITY'] as string | undefined,
+)
 
 export type ModuleAccessOperation = 'view' | 'control' | 'mutation'
 
@@ -33,6 +42,7 @@ export const evaluateModuleAccess = (
   definition: CabinetModuleDefinition,
   access: TenantAccessState,
   operation: ModuleAccessOperation,
+  rolloutCompatibility: CabinetParityCompatibilityV1 = cabinetParityCompatibility,
 ): ModuleAccessDecision => {
   if (access.status === 'loading') {
     return { kind: 'access-loading' }
@@ -43,6 +53,16 @@ export const evaluateModuleAccess = (
   }
 
   if (!definition.released) {
+    return { kind: 'unreleased' }
+  }
+
+  if (
+    definition.rollout === 'cabinet-parity-v1' &&
+    !isCabinetParityRuntimeRolledOut(
+      access.snapshot.cabinetParityRollout,
+      rolloutCompatibility,
+    )
+  ) {
     return { kind: 'unreleased' }
   }
 

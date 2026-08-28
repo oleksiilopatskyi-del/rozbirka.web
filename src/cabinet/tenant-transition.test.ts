@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { SubscriptionDto, Tenant } from '../api/types'
-import type { MePermissionsDto } from './access-types'
+import type { MePermissionsDto, TenantAccessSnapshot } from './access-types'
 import {
   createTenantTransition,
   type TenantTransitionDependencies,
@@ -156,6 +156,49 @@ it('clears A before persisting or loading B', async () => {
       'billing.view',
     ])
     expect([...result.snapshot.features]).toEqual(['inventory'])
+  }
+})
+
+it('commits the tenant-scoped server rollout envelope into the immutable access snapshot', async () => {
+  const cabinetParityRollout = {
+    configuration:
+      '{"version":1,"mode":"internal","canaryPercent":0,"emergencyOff":false}',
+    claim: {
+      version: 1 as const,
+      subjectId: 'tenant-42',
+      grants: ['cabinet-parity'],
+      audiences: ['internal'],
+    },
+  }
+  const transition = createTenantTransition({
+    currentScope: () => ({ userId: 'u1', tenantId: tenantA.id }),
+    begin: vi.fn(),
+    rotateRequests: vi.fn(),
+    clear: vi.fn().mockResolvedValue(undefined),
+    persistTenant: vi.fn(),
+    loadAccess: vi
+      .fn()
+      .mockResolvedValue({ ...access(['cars.view']), cabinetParityRollout }),
+    loadSubscription: vi.fn(),
+    commit: vi.fn(),
+    fail: vi.fn(),
+  })
+
+  const result = await transition.transition(tenantB)
+
+  expect(result).toMatchObject({
+    kind: 'committed',
+    snapshot: { cabinetParityRollout },
+  })
+  if (result.kind === 'committed') {
+    const envelope = (
+      result.snapshot as TenantAccessSnapshot & {
+        cabinetParityRollout: typeof cabinetParityRollout
+      }
+    ).cabinetParityRollout
+    expect(Object.isFrozen(envelope)).toBe(true)
+    expect(Object.isFrozen(envelope.claim)).toBe(true)
+    expect(Object.isFrozen(envelope.claim.grants)).toBe(true)
   }
 })
 

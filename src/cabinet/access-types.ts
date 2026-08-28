@@ -1,4 +1,5 @@
 import type { BillingState, PlanUsageDto, SubscriptionDto } from '../api/types'
+import type { CabinetParityRolloutEnvelopeV1 } from '../config/cabinet-feature-flags'
 
 export const ALL_PERMISSIONS = [
   'cars.view',
@@ -31,6 +32,11 @@ export interface MePermissionsDto {
   features: string[]
   /** Additive backend contract; optional only while older deployments roll out. */
   entitlement?: TenantEntitlementDto | null
+  /**
+   * Optional during the backwards-compatible rollout of the server contract.
+   * When present, the client validates it and fails parity modules closed.
+   */
+  cabinetParityRollout?: CabinetParityRolloutEnvelopeV1 | null
 }
 
 export interface TenantEntitlementDto {
@@ -57,6 +63,7 @@ export interface TenantAccessSnapshot {
   readonly features: ReadonlySet<string>
   readonly entitlement: TenantEntitlementSnapshot | null
   readonly subscription: TenantSubscriptionSnapshot | null
+  readonly cabinetParityRollout?: DeepReadonly<CabinetParityRolloutEnvelopeV1> | null
 }
 
 export type TenantAccessState =

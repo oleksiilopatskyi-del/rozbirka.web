@@ -59,6 +59,7 @@ export interface CabinetModuleDefinition {
   allowedSubscriptionStates?: readonly BillingState[]
   quotaResource?: QuotaResource
   navigation?: CabinetNavigationItem
+  rollout?: 'cabinet-parity-v1'
 }
 
 const BUSINESS_SUBSCRIPTION_STATES = [
@@ -137,6 +138,7 @@ export const cabinetModules: Readonly<
     key: 'team',
     routeSegment: '/team',
     released: true,
+    rollout: 'cabinet-parity-v1',
     viewPermission: 'team.view',
     mutationPermission: 'team.manage',
     requiredFeature: FEATURES.TeamCollaboration,
@@ -168,6 +170,7 @@ export const cabinetModules: Readonly<
     key: 'reports',
     routeSegment: '/reports',
     released: true,
+    rollout: 'cabinet-parity-v1',
     viewPermission: 'reports.view',
     mutationPermission: 'reports.manage',
     requiredFeature: FEATURES.AdvancedReports,
@@ -178,6 +181,7 @@ export const cabinetModules: Readonly<
     key: 'billing',
     routeSegment: '/settings/billing/overview',
     released: true,
+    rollout: 'cabinet-parity-v1',
     viewPermission: 'billing.view',
     mutationPermission: 'billing.manage',
     navigation: {
@@ -190,6 +194,7 @@ export const cabinetModules: Readonly<
     key: 'plans',
     routeSegment: '/settings/billing/plans',
     released: true,
+    rollout: 'cabinet-parity-v1',
     viewPermission: 'billing.view',
     mutationPermission: 'billing.manage',
     navigation: {
@@ -202,6 +207,7 @@ export const cabinetModules: Readonly<
     key: 'payments',
     routeSegment: '/settings/billing/payments',
     released: true,
+    rollout: 'cabinet-parity-v1',
     viewPermission: 'billing.view',
     mutationPermission: 'billing.manage',
     navigation: {
@@ -214,6 +220,7 @@ export const cabinetModules: Readonly<
     key: 'profile',
     routeSegment: '/settings/profile',
     released: true,
+    rollout: 'cabinet-parity-v1',
     navigation: {
       label: 'Профіль',
       icon: UserRound,
@@ -224,6 +231,7 @@ export const cabinetModules: Readonly<
     key: 'business',
     routeSegment: '/settings/business',
     released: true,
+    rollout: 'cabinet-parity-v1',
     viewPermission: 'team.view',
     mutationPermission: 'team.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
