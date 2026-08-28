@@ -493,7 +493,7 @@ describe('cabinetModules', () => {
       orders: false,
       customers: false,
       cash: false,
-      reports: false,
+      reports: true,
       team: false,
       business: true,
     })

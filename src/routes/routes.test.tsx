@@ -94,6 +94,7 @@ describe('production route boundary', () => {
     ['settings/billing/payments', 'PaymentsScreen'],
     ['settings/profile', 'ProfileScreen'],
     ['settings/business', 'BusinessSettingsScreen'],
+    ['reports', 'ReportsScreen'],
   ])(
     'loads %s through its distinct released screen',
     async (path, screenName) => {

@@ -167,7 +167,7 @@ export const cabinetModules: Readonly<
   reports: {
     key: 'reports',
     routeSegment: '/reports',
-    released: false,
+    released: true,
     viewPermission: 'reports.view',
     mutationPermission: 'reports.manage',
     requiredFeature: FEATURES.AdvancedReports,
