@@ -19,6 +19,7 @@ type DisplayStatus =
   | 'completed'
   | 'failed'
   | 'expired'
+  | 'unknown'
 
 interface DateRange {
   from: string
@@ -90,7 +91,8 @@ const statusOf = (report: ReportJob): DisplayStatus => {
     return 'processing'
   }
   if (report.status === 'completed') return 'completed'
-  return 'failed'
+  if (report.status === 'failed') return 'failed'
+  return 'unknown'
 }
 
 const statusLabel: Record<DisplayStatus, string> = {
@@ -99,6 +101,7 @@ const statusLabel: Record<DisplayStatus, string> = {
   completed: 'Звіт готовий',
   failed: 'Не вдалося сформувати звіт',
   expired: 'Строк дії звіту завершився',
+  unknown: 'Невідомий стан звіту',
 }
 
 const isPollingStatus = (status: DisplayStatus) =>

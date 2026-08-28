@@ -129,6 +129,23 @@ it.each([
   expect(await screen.findByText(label)).toBeVisible()
 })
 
+it('shows an unknown backend status without offering a replacement job', async () => {
+  vi.mocked(reportsApi.list).mockResolvedValue({
+    items: [report('awaiting_manual_review')],
+    page: 1,
+    pageSize: 20,
+    total: 1,
+    totalPages: 1,
+  })
+
+  render(<ReportsScreen {...screenProps} />)
+
+  expect(await screen.findByText('Невідомий стан звіту')).toBeVisible()
+  expect(screen.queryByText('Не вдалося сформувати звіт')).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Створити заміну' })).toBeNull()
+  expect(reportsApi.create).not.toHaveBeenCalled()
+})
+
 it('keeps edited range controls stable while unrelated polling updates arrive', async () => {
   const update = deferred<ReportJob>()
   vi.mocked(reportsApi.list).mockResolvedValue({
