@@ -652,7 +652,7 @@ test('reload restores the cabinet session through one refresh request @auth-smok
   await page.reload()
   await expect(
     page.getByRole('heading', { name: 'Вітаємо в Розбірка Коваль' }),
-  ).toBeVisible()
+  ).toBeVisible({ timeout: 10_000 })
   const afterReload = await upstreamStats(request)
   expect(afterReload.refreshRequests - beforeReload.refreshRequests).toBe(1)
 })

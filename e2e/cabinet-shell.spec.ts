@@ -957,7 +957,7 @@ test('boots an active Manager entitlement without requesting detailed billing @c
 test('loads a direct week dashboard once, navigates month and Back, and traverses periods by keyboard @cabinet-smoke', async ({
   page,
   request,
-}) => {
+}, testInfo) => {
   const fixture = await installCabinetApiBoundary(page)
   await loginFrom(page)
   await expect(dashboardSummaryValue(page, 'Продажів сьогодні')).toHaveText('7')
@@ -1003,11 +1003,21 @@ test('loads a direct week dashboard once, navigates month and Back, and traverse
   const week = page.getByRole('button', { name: 'Тиждень', exact: true })
   const month = page.getByRole('button', { name: 'Місяць', exact: true })
   await day.focus()
-  await page.keyboard.press('Tab')
-  await expect(week).toBeFocused()
-  await page.keyboard.press('Tab')
-  await expect(month).toBeFocused()
-  await page.keyboard.press('Enter')
+  if (testInfo.project.name === 'webkit' || testInfo.project.name === 'ios') {
+    // Playwright WebKit follows the host's full-keyboard-access setting, so
+    // Tab cannot traverse native buttons reliably in this engine. Keep the
+    // engine's native button eligibility and keyboard activation covered.
+    await expect(day).toBeFocused()
+    await expect(week).toHaveJSProperty('tabIndex', 0)
+    await expect(month).toHaveJSProperty('tabIndex', 0)
+    await month.focus()
+  } else {
+    await page.keyboard.press('Tab')
+    await expect(week).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(month).toBeFocused()
+  }
+  await month.press('Enter')
   await expect(page).toHaveURL('/app/koval/dashboard?period=month')
   expect(
     fixture.requests.filter(
