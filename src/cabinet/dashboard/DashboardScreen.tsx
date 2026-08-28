@@ -6,6 +6,7 @@ import { useDashboardData, type DashboardLoadable } from './use-dashboard-data'
 import type { DashboardData, DashboardPeriod } from '@/api/dashboard-contract'
 import { DashboardAnalytics } from './DashboardAnalytics'
 import { DashboardBillingBanner } from './DashboardBillingBanner'
+import { DashboardDestinations } from './DashboardDestinations'
 import { DashboardSummary } from './DashboardSummary'
 
 export function DashboardScreen() {
@@ -59,6 +60,9 @@ export function DashboardScreen() {
             period={selection.period}
             retry={() => dashboard.retryAnalytics()}
           />
+          {snapshot !== null && targetTenant !== null ? (
+            <DashboardDestinations snapshot={snapshot} tenant={targetTenant} />
+          ) : null}
         </div>
         <button
           className="mt-4 min-h-11 rounded-full border border-white/[0.12] px-4 text-sm text-white disabled:opacity-60"

@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -184,6 +184,22 @@ it('uses week for a missing period without changing the URL', () => {
   expect(screen.getByLabelText('Поточний маршрут')).toHaveTextContent(
     '/app/koval/dashboard?scan=QR-123~part',
   )
+})
+
+it('shows non-interactive preparation guidance after analytics when no operational module is released', () => {
+  renderDashboard(['/app/koval/dashboard'])
+
+  const guidance = screen.getByRole('region', {
+    name: 'Підготовка робочих модулів',
+  })
+  expect(guidance).toHaveTextContent('Готуємо робочі модулі')
+  expect(within(guidance).queryByRole('link')).not.toBeInTheDocument()
+
+  const analytics = screen.getByRole('region', { name: 'Аналітика' })
+  expect(
+    analytics.compareDocumentPosition(guidance) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).not.toBe(0)
 })
 
 it.each(['period=year', 'period=day&period=month'])(
