@@ -162,6 +162,12 @@ interface CabinetFixtureState {
   releaseDelayedPermissions(): Promise<DelayedDeliveryOutcome>
 }
 
+interface DashboardUpstreamStats {
+  logoutRequests: number
+  dashboardRequests: number
+  dashboardAnalyticsRequests: Record<'day' | 'week' | 'month', number>
+}
+
 async function fulfillData(route: Route, data: unknown, status = 200) {
   await route.fulfill({ status, json: status < 400 ? { data } : data })
 }
@@ -177,6 +183,9 @@ const isRecognizedBillingPath = (path: string) =>
     '/api/v1/billing/subscribe',
     '/api/v1/billing/cancel',
   ].includes(path) || isPaymentCancellationPath(path)
+
+const isRecognizedDashboardPath = (path: string) =>
+  path === '/api/v1/dashboard' || path === '/api/v1/dashboard/analytics'
 
 async function installCabinetApiBoundary(
   page: Page,
@@ -200,7 +209,8 @@ async function installCabinetApiBoundary(
 
   await page.route('**/*', async (route) => {
     const request = route.request()
-    const path = new URL(request.url()).pathname
+    const requestUrl = new URL(request.url())
+    const path = requestUrl.pathname
     const tenantId = request.headers()['x-tenant-id'] ?? null
 
     if (path === '/auth/me' && request.method() === 'GET') {
@@ -221,6 +231,7 @@ async function installCabinetApiBoundary(
       path === '/api/v1/billing/payments' ||
       path === '/api/v1/billing/subscribe' ||
       path === '/api/v1/billing/cancel' ||
+      isRecognizedDashboardPath(path) ||
       isPaymentCancellationPath(path)
     if (isTenantScoped) {
       if (tenantId === null) {
@@ -349,6 +360,31 @@ async function installCabinetApiBoundary(
             : { kind: 'fulfilled' },
         )
       }
+      return
+    }
+    if (isRecognizedDashboardPath(path)) {
+      const authorization = request.headers().authorization
+      const upstreamResponse = await fetch(
+        `${upstreamOrigin}${path}${requestUrl.search}`,
+        {
+          method: request.method(),
+          headers: {
+            ...(authorization ? { Authorization: authorization } : {}),
+            ...(tenantId ? { 'X-Tenant-Id': tenantId } : {}),
+          },
+        },
+      )
+      const body = await upstreamResponse.text()
+      await route.fulfill({
+        status: upstreamResponse.status,
+        body,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Content-Type':
+            upstreamResponse.headers.get('Content-Type') ??
+            'application/json; charset=utf-8',
+        },
+      })
       return
     }
     if (path === '/api/v1/billing/subscription' && request.method() === 'GET') {
@@ -485,10 +521,28 @@ async function resetUpstream(request: APIRequestContext) {
   expect(response.ok()).toBeTruthy()
 }
 
-async function upstreamStats(request: APIRequestContext) {
+async function upstreamStats(
+  request: APIRequestContext,
+): Promise<DashboardUpstreamStats> {
   const response = await request.get(`${upstreamOrigin}/_test/stats`)
   expect(response.ok()).toBeTruthy()
-  return (await response.json()) as { logoutRequests: number }
+  return (await response.json()) as DashboardUpstreamStats
+}
+
+async function resetDashboardUpstream(
+  request: APIRequestContext,
+  options: {
+    dashboardSummaryFailures?: number
+    dashboardAnalyticsFailures?: Partial<
+      Record<'day' | 'week' | 'month', number>
+    >
+  } = {},
+) {
+  const response = await request.post(
+    `${upstreamOrigin}/_test/dashboard/reset`,
+    { data: options },
+  )
+  expect(response.ok()).toBeTruthy()
 }
 
 async function armDelayedLogout(request: APIRequestContext) {
@@ -583,15 +637,25 @@ async function selectVisibleTenant(page: Page, tenantId: string) {
 }
 
 async function clickVisibleCabinetLink(page: Page, name: string) {
-  let link = page.getByRole('link', { name }).filter({ visible: true })
+  let link = page
+    .locator('nav')
+    .filter({ visible: true })
+    .getByRole('link', { name, exact: true })
   if ((await link.count()) === 0) {
     await page.getByRole('button', { name: 'Ще' }).click()
     link = page
       .getByRole('dialog', { name: 'Меню кабінету' })
-      .getByRole('link', { name })
+      .getByRole('link', { name, exact: true })
   }
   await link.click()
 }
+
+const dashboardSummaryValue = (page: Page, label: string) =>
+  page
+    .getByRole('region', { name: 'Панель зведення' })
+    .getByText(label, { exact: true })
+    .locator('..')
+    .locator('dd')
 
 test.beforeEach(async ({ request }) => {
   await resetUpstream(request)
@@ -606,6 +670,8 @@ test('tenant fixture rejects missing tenant headers for every scoped endpoint', 
   for (const path of [
     '/api/v1/me/permissions',
     '/api/v1/billing/subscription',
+    '/api/v1/dashboard',
+    '/api/v1/dashboard/analytics?period=week',
   ]) {
     expect(await fixtureGet(page, path), path).toEqual({
       status: 400,
@@ -625,6 +691,8 @@ test('tenant fixture rejects unknown and inactive tenant headers', async ({
   for (const path of [
     '/api/v1/me/permissions',
     '/api/v1/billing/subscription',
+    '/api/v1/dashboard',
+    '/api/v1/dashboard/analytics?period=week',
   ]) {
     expect(await fixtureGet(page, path, 'tenant-unknown'), path).toEqual({
       status: 404,
@@ -855,6 +923,149 @@ test('boots an active Manager entitlement without requesting detailed billing @c
         path === '/api/v1/billing/subscription' && tenantId === 'tenant-2',
     ),
   ).toHaveLength(0)
+})
+
+test('loads a direct week dashboard once, navigates month and Back, and traverses periods by keyboard @cabinet-smoke', async ({
+  page,
+  request,
+}) => {
+  const fixture = await installCabinetApiBoundary(page)
+  await loginFrom(page)
+  await expect(dashboardSummaryValue(page, 'Продажів сьогодні')).toHaveText('7')
+  await resetDashboardUpstream(request)
+
+  await page.goto('/app/koval/dashboard?period=week')
+  await expect(page).toHaveURL('/app/koval/dashboard?period=week')
+  await expect(dashboardSummaryValue(page, 'Продажів сьогодні')).toHaveText('7')
+  const analytics = page.getByRole('region', { name: 'Панель зведення' })
+  await expect(analytics.getByText('21', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Тиждень' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect
+    .poll(async () => {
+      const stats = await upstreamStats(request)
+      return {
+        summary: stats.dashboardRequests,
+        analytics: stats.dashboardAnalyticsRequests,
+      }
+    })
+    .toEqual({
+      summary: 1,
+      analytics: { day: 0, week: 1, month: 0 },
+    })
+
+  await page.getByRole('button', { name: 'Місяць' }).click()
+  await expect(page).toHaveURL('/app/koval/dashboard?period=month')
+  await expect(analytics.getByText('84', { exact: true })).toBeVisible()
+  await expect
+    .poll(async () => (await upstreamStats(request)).dashboardAnalyticsRequests)
+    .toEqual({ day: 0, week: 1, month: 1 })
+
+  await page.goBack()
+  await expect(page).toHaveURL('/app/koval/dashboard?period=week')
+  await expect(analytics.getByText('21', { exact: true })).toBeVisible()
+  await expect
+    .poll(async () => (await upstreamStats(request)).dashboardAnalyticsRequests)
+    .toEqual({ day: 0, week: 2, month: 1 })
+
+  const day = page.getByRole('button', { name: 'День', exact: true })
+  const week = page.getByRole('button', { name: 'Тиждень', exact: true })
+  const month = page.getByRole('button', { name: 'Місяць', exact: true })
+  await day.focus()
+  await page.keyboard.press('Tab')
+  await expect(week).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(month).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL('/app/koval/dashboard?period=month')
+  expect(
+    fixture.requests.filter(
+      ({ path, tenantId }) =>
+        path === '/api/v1/dashboard' && tenantId === 'tenant-1',
+    ).length,
+  ).toBeGreaterThan(0)
+})
+
+test('retries failed dashboard summary and analytics independently', async ({
+  page,
+  request,
+}) => {
+  await installCabinetApiBoundary(page)
+  await loginFrom(page)
+  await expect(dashboardSummaryValue(page, 'Продажів сьогодні')).toHaveText('7')
+  await resetDashboardUpstream(request, {
+    dashboardSummaryFailures: 1,
+    dashboardAnalyticsFailures: { week: 1 },
+  })
+
+  await page.goto('/app/koval/dashboard?period=week')
+  const summaryError = page
+    .getByRole('alert')
+    .filter({ hasText: 'Не вдалося завантажити зведення.' })
+  const analyticsError = page
+    .getByRole('alert')
+    .filter({ hasText: 'Не вдалося завантажити аналітику.' })
+  await expect(summaryError).toBeVisible()
+  await expect(analyticsError).toBeVisible()
+  await expect
+    .poll(async () => {
+      const stats = await upstreamStats(request)
+      return {
+        summary: stats.dashboardRequests,
+        week: stats.dashboardAnalyticsRequests.week,
+      }
+    })
+    .toEqual({ summary: 1, week: 1 })
+
+  await summaryError.getByRole('button', { name: 'Спробувати ще раз' }).click()
+  await expect(dashboardSummaryValue(page, 'Продажів сьогодні')).toHaveText('7')
+  await analyticsError
+    .getByRole('button', { name: 'Спробувати ще раз' })
+    .click()
+  await expect(
+    page
+      .getByRole('region', { name: 'Панель зведення' })
+      .getByText('21', { exact: true }),
+  ).toBeVisible()
+  await expect
+    .poll(async () => {
+      const stats = await upstreamStats(request)
+      return {
+        summary: stats.dashboardRequests,
+        week: stats.dashboardAnalyticsRequests.week,
+      }
+    })
+    .toEqual({ summary: 2, week: 2 })
+})
+
+test('switches dashboard tenants without rendering stale totals', async ({
+  page,
+}) => {
+  const fixture = await installCabinetApiBoundary(page)
+  await loginFrom(page)
+  await expect(dashboardSummaryValue(page, 'Продажів сьогодні')).toHaveText('7')
+
+  await selectVisibleTenant(page, 'tenant-2')
+
+  await expect(page).toHaveURL('/app/sobol/dashboard')
+  await expect(dashboardSummaryValue(page, 'Продажів сьогодні')).toHaveText(
+    '17',
+  )
+  await expect(
+    page
+      .getByRole('region', { name: 'Панель зведення' })
+      .getByText('7', { exact: true }),
+  ).toHaveCount(0)
+  expect(
+    fixture.requests.filter(({ path }) => path === '/api/v1/dashboard'),
+  ).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ tenantId: 'tenant-1' }),
+      expect.objectContaining({ tenantId: 'tenant-2' }),
+    ]),
+  )
 })
 
 for (const width of [320, 768, 1024, 1440]) {

@@ -296,7 +296,7 @@ capabilities:
         - Refresh the dashboard
     web:
       outcome: View permission-aware server totals and recent activity for the active tenant
-      route: /cabinet
+      route: /app/:tenant/dashboard
       disposition: parity
     contract:
       service: core
@@ -331,7 +331,7 @@ capabilities:
         - Refresh analytics
     web:
       outcome: View URL-stable day, week, and month analytics from authoritative server data
-      route: /cabinet?period=week
+      route: /app/:tenant/dashboard?period=week
       disposition: browser-native
       browserEquivalent: Use URL-backed period controls rather than a native horizontal pager gesture
     contract:
@@ -366,7 +366,7 @@ capabilities:
         - Start permitted create actions
     web:
       outcome: Navigate to permission-aware cabinet modules through stable links and guarded create actions
-      route: /cabinet
+      route: /app/:tenant/dashboard
       disposition: browser-native
       browserEquivalent: Use responsive navigation links and buttons while preserving server-derived permission and usage gates
     contract:

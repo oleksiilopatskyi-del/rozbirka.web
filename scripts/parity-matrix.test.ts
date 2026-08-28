@@ -418,6 +418,35 @@ describe('parity matrix generator', () => {
     expect(document.capabilities.length).toBeGreaterThan(0)
     expect(document.systemCapabilities.length).toBeGreaterThan(0)
     expect(document.excludedRoutes.length).toBeGreaterThan(0)
+    type DashboardCapability = {
+      id: string
+      domain: string
+      web: { route: string }
+      tracking: { status: string; issue?: string }
+    }
+    expect(
+      (document.capabilities as DashboardCapability[])
+        .filter(
+          ({ domain, tracking }) =>
+            domain === 'dashboard' &&
+            tracking.status === 'existing' &&
+            tracking.issue === 'ROZ-106',
+        )
+        .map(({ id, web }) => ({ id, route: web.route })),
+    ).toEqual([
+      {
+        id: 'dashboard.summary.view',
+        route: '/app/:tenant/dashboard',
+      },
+      {
+        id: 'dashboard.analytics.view',
+        route: '/app/:tenant/dashboard?period=week',
+      },
+      {
+        id: 'dashboard.navigation.use',
+        route: '/app/:tenant/dashboard',
+      },
+    ])
     expect(
       new Set(
         [...document.capabilities, ...document.systemCapabilities].map(
