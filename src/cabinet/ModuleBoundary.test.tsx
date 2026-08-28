@@ -25,7 +25,7 @@ vi.mock('./module-registry', async (importOriginal) => {
     ...actual,
     cabinetModules: {
       ...actual.cabinetModules,
-      reports: { ...actual.cabinetModules.reports, released: true },
+      cars: { ...actual.cabinetModules.cars, released: false },
     },
   }
 })

@@ -627,7 +627,7 @@ describe('cabinetModules', () => {
     ).toBe(true)
   })
 
-  it('publishes only the implemented business modules', () => {
+  it('publishes every implemented parity module', () => {
     expect(
       Object.fromEntries(
         Object.entries(cabinetModules).map(([key, definition]) => [
@@ -636,13 +636,13 @@ describe('cabinetModules', () => {
         ]),
       ),
     ).toMatchObject({
-      cars: false,
-      intakes: false,
-      parts: false,
-      stickers: false,
-      orders: false,
-      customers: false,
-      cash: false,
+      cars: true,
+      intakes: true,
+      parts: true,
+      stickers: true,
+      orders: true,
+      customers: true,
+      cash: true,
       reports: true,
       team: true,
       business: true,
