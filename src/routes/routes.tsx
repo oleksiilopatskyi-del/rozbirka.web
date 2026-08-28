@@ -40,8 +40,9 @@ const cabinetScreenRoute = (
 
 const releasedCabinetRoutes: Partial<Record<CabinetModuleKey, RouteObject>> = {
   dashboard: cabinetScreenRoute('dashboard', async () => {
-    const { CabinetHomeScreen } = await import('@/cabinet/screens/cabinet-home')
-    return CabinetHomeScreen
+    const { DashboardScreen } =
+      await import('@/cabinet/dashboard/DashboardScreen')
+    return DashboardScreen
   }),
   billing: cabinetScreenRoute('billing', async () => {
     const { SubscriptionScreen } =

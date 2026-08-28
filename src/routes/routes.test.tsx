@@ -88,7 +88,7 @@ describe('production route boundary', () => {
   })
 
   it.each([
-    ['dashboard', 'CabinetHomeScreen'],
+    ['dashboard', 'DashboardScreen'],
     ['settings/billing/overview', 'SubscriptionScreen'],
     ['settings/billing/plans', 'PlansScreen'],
     ['settings/billing/payments', 'PaymentsScreen'],

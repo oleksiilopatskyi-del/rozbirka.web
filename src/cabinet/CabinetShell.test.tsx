@@ -137,7 +137,11 @@ it('renders nested cabinet content in a responsive overflow-safe shell', () => {
 })
 
 it('renders the minimal tenant dashboard home', () => {
-  render(<CabinetHomeScreen />)
+  render(
+    <MemoryRouter initialEntries={['/app/koval/dashboard']}>
+      <CabinetHomeScreen />
+    </MemoryRouter>,
+  )
 
   expect(
     screen.getByRole('heading', { name: 'Вітаємо в Koval Auto' }),
