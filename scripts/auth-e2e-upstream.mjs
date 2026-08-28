@@ -17,6 +17,7 @@ let dashboardAnalyticsRequests = { day: 0, week: 0, month: 0 }
 let dashboardSummaryFailures = 0
 let dashboardAnalyticsFailures = { day: 0, week: 0, month: 0 }
 let delayedLogout = null
+let delayedDashboard = null
 const refreshTokens = new Set()
 const accessTokens = new Set()
 
@@ -125,6 +126,7 @@ function resetDashboard(options = {}) {
 
 function reset(options = {}) {
   releaseLogoutDelay()
+  releaseDashboardDelay()
   newUser = options.newUser === true
   tokenSequence = 0
   sendRequests = 0
@@ -149,6 +151,21 @@ function armLogoutDelay() {
     resolve = release
   })
   delayedLogout = { promise, resolve }
+}
+
+function releaseDashboardDelay() {
+  const pendingDashboard = delayedDashboard
+  delayedDashboard = null
+  pendingDashboard?.resolve()
+  return pendingDashboard !== null
+}
+
+function armDashboardDelay(tenantId) {
+  let resolve = () => undefined
+  const promise = new Promise((release) => {
+    resolve = release
+  })
+  delayedDashboard = { tenantId, promise, resolve, pending: false }
 }
 
 function issueSession() {
@@ -277,6 +294,7 @@ const server = createServer(async (request, response) => {
         logoutRequests,
         dashboardRequests,
         dashboardAnalyticsRequests,
+        dashboardDelayPending: delayedDashboard?.pending === true,
       })
       return
     }
@@ -297,6 +315,55 @@ const server = createServer(async (request, response) => {
       }
       resetDashboard(options)
       sendJson(response, 200, { reset: true })
+      return
+    }
+
+    if (
+      request.method === 'POST' &&
+      url.pathname === '/_test/dashboard/delay'
+    ) {
+      const options = await readJson(request)
+      if (
+        !isObject(options) ||
+        typeof options.tenantId !== 'string' ||
+        !(options.tenantId in dashboardSummaries)
+      ) {
+        sendProblem(
+          response,
+          400,
+          'INVALID_DASHBOARD_DELAY',
+          'Invalid dashboard delay payload',
+        )
+        return
+      }
+      if (delayedDashboard) {
+        sendProblem(
+          response,
+          409,
+          'DASHBOARD_DELAY_ALREADY_ARMED',
+          'Dashboard delay already armed',
+        )
+        return
+      }
+      armDashboardDelay(options.tenantId)
+      sendJson(response, 200, { delayed: true })
+      return
+    }
+
+    if (
+      request.method === 'POST' &&
+      url.pathname === '/_test/dashboard/release'
+    ) {
+      if (!releaseDashboardDelay()) {
+        sendProblem(
+          response,
+          409,
+          'DASHBOARD_DELAY_NOT_ARMED',
+          'Dashboard delay is not armed',
+        )
+        return
+      }
+      sendJson(response, 200, { released: true })
       return
     }
 
@@ -437,6 +504,12 @@ const server = createServer(async (request, response) => {
         )
         return
       }
+      const pendingDashboard = delayedDashboard
+      if (pendingDashboard?.tenantId === tenantId) {
+        pendingDashboard.pending = true
+        await pendingDashboard.promise
+        if (delayedDashboard === pendingDashboard) delayedDashboard = null
+      }
       sendJson(response, 200, { data: dashboardSummaries[tenantId] })
       return
     }
@@ -447,8 +520,9 @@ const server = createServer(async (request, response) => {
     ) {
       const tenantId = authorizeDashboard(request, response)
       if (tenantId === null) return
-      const period = url.searchParams.get('period')
-      if (!dashboardPeriods.includes(period)) {
+      const periods = url.searchParams.getAll('period')
+      const period = periods[0]
+      if (periods.length !== 1 || !dashboardPeriods.includes(period)) {
         sendProblem(
           response,
           400,
@@ -518,6 +592,7 @@ function shutdown(signal) {
   if (closing) return
   closing = true
   releaseLogoutDelay()
+  releaseDashboardDelay()
   server.close((error) => {
     if (error) {
       process.stderr.write(

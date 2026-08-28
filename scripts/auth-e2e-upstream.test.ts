@@ -191,6 +191,32 @@ describe('dashboard fixture', () => {
     })
   })
 
+  it.each([
+    ['missing', '/api/v1/dashboard/analytics'],
+    ['invalid', '/api/v1/dashboard/analytics?period=year'],
+    ['duplicate', '/api/v1/dashboard/analytics?period=week&period=invalid'],
+  ])(
+    'rejects %s analytics period values without counting them',
+    async (_case, path) => {
+      await startFixture()
+      const accessToken = await issueAccessToken()
+
+      const response = await dashboardGet(path, accessToken)
+
+      expect(response.status).toBe(400)
+      const error = requireRecord((await readRecord(response)).error)
+      expect(error.code).toBe('INVALID_DASHBOARD_PERIOD')
+      const stats = await readRecord(
+        await fetch(`${fixtureOrigin}/_test/stats`),
+      )
+      expect(stats.dashboardAnalyticsRequests).toEqual({
+        day: 0,
+        week: 0,
+        month: 0,
+      })
+    },
+  )
+
   it('fails configured dashboard attempts once and counts retry requests', async () => {
     await startFixture()
     const reset = await fetch(`${fixtureOrigin}/_test/reset`, {
@@ -258,5 +284,52 @@ describe('dashboard fixture', () => {
 
     const stats = await readRecord(await fetch(`${fixtureOrigin}/_test/stats`))
     expect(stats.dashboardRequests).toBe(2)
+  })
+
+  it('delays one tenant dashboard response until explicit release', async () => {
+    await startFixture()
+    const accessToken = await issueAccessToken()
+    let released = false
+
+    try {
+      const armed = await fetch(`${fixtureOrigin}/_test/dashboard/delay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: 'tenant-2' }),
+      })
+      expect(armed.status).toBe(200)
+
+      let settled = false
+      const summary = dashboardGet(
+        '/api/v1/dashboard',
+        accessToken,
+        'tenant-2',
+      ).then((response) => {
+        settled = true
+        return response
+      })
+      await expect
+        .poll(async () => {
+          const stats = await readRecord(
+            await fetch(`${fixtureOrigin}/_test/stats`),
+          )
+          return stats.dashboardDelayPending
+        })
+        .toBe(true)
+      expect(settled).toBe(false)
+
+      const release = await fetch(`${fixtureOrigin}/_test/dashboard/release`, {
+        method: 'POST',
+      })
+      expect(release.status).toBe(200)
+      released = true
+      expect((await summary).status).toBe(200)
+    } finally {
+      if (!released) {
+        await fetch(`${fixtureOrigin}/_test/dashboard/release`, {
+          method: 'POST',
+        })
+      }
+    }
   })
 })

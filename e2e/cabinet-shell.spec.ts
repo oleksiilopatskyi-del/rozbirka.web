@@ -166,6 +166,7 @@ interface DashboardUpstreamStats {
   logoutRequests: number
   dashboardRequests: number
   dashboardAnalyticsRequests: Record<'day' | 'week' | 'month', number>
+  dashboardDelayPending: boolean
 }
 
 async function fulfillData(route: Route, data: unknown, status = 200) {
@@ -545,6 +546,24 @@ async function resetDashboardUpstream(
   expect(response.ok()).toBeTruthy()
 }
 
+async function armDelayedDashboard(
+  request: APIRequestContext,
+  tenantId: string,
+) {
+  const response = await request.post(
+    `${upstreamOrigin}/_test/dashboard/delay`,
+    { data: { tenantId } },
+  )
+  expect(response.ok()).toBeTruthy()
+}
+
+async function releaseDelayedDashboard(request: APIRequestContext) {
+  const response = await request.post(
+    `${upstreamOrigin}/_test/dashboard/release`,
+  )
+  expect(response.ok()).toBeTruthy()
+}
+
 async function armDelayedLogout(request: APIRequestContext) {
   const response = await request.post(`${upstreamOrigin}/_test/logout/delay`)
   expect(response.ok()).toBeTruthy()
@@ -656,6 +675,16 @@ const dashboardSummaryValue = (page: Page, label: string) =>
     .getByText(label, { exact: true })
     .locator('..')
     .locator('dd')
+
+async function expectPopulatedDashboard(page: Page) {
+  await expect(dashboardSummaryValue(page, 'Продажів сьогодні')).toHaveText('7')
+  await expect(
+    page
+      .getByRole('heading', { name: 'Продано запчастин', exact: true })
+      .locator('..')
+      .getByText('21', { exact: true }),
+  ).toBeVisible()
+}
 
 test.beforeEach(async ({ request }) => {
   await resetUpstream(request)
@@ -1040,24 +1069,38 @@ test('retries failed dashboard summary and analytics independently', async ({
     .toEqual({ summary: 2, week: 2 })
 })
 
-test('switches dashboard tenants without rendering stale totals', async ({
+test('clears stale dashboard totals while the next tenant summary is pending', async ({
   page,
+  request,
 }) => {
   const fixture = await installCabinetApiBoundary(page)
   await loginFrom(page)
   await expect(dashboardSummaryValue(page, 'Продажів сьогодні')).toHaveText('7')
+  await armDelayedDashboard(request, 'tenant-2')
+  let delayReleased = false
 
-  await selectVisibleTenant(page, 'tenant-2')
+  try {
+    await selectVisibleTenant(page, 'tenant-2')
+    await expect
+      .poll(async () => (await upstreamStats(request)).dashboardDelayPending)
+      .toBe(true)
 
-  await expect(page).toHaveURL('/app/sobol/dashboard')
-  await expect(dashboardSummaryValue(page, 'Продажів сьогодні')).toHaveText(
-    '17',
-  )
-  await expect(
-    page
-      .getByRole('region', { name: 'Панель зведення' })
-      .getByText('7', { exact: true }),
-  ).toHaveCount(0)
+    await expect(page).toHaveURL('/app/sobol/dashboard')
+    await expect(page.getByLabel('Завантаження зведення')).toBeVisible()
+    await expect(
+      page
+        .getByRole('region', { name: 'Панель зведення' })
+        .getByText('7', { exact: true }),
+    ).toHaveCount(0)
+
+    await releaseDelayedDashboard(request)
+    delayReleased = true
+    await expect(dashboardSummaryValue(page, 'Продажів сьогодні')).toHaveText(
+      '17',
+    )
+  } finally {
+    if (!delayReleased) await releaseDelayedDashboard(request)
+  }
   expect(
     fixture.requests.filter(({ path }) => path === '/api/v1/dashboard'),
   ).toEqual(
@@ -1073,6 +1116,7 @@ for (const width of [320, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 })
     await installCabinetApiBoundary(page)
     await loginFrom(page)
+    await expectPopulatedDashboard(page)
 
     expect(
       await page.evaluate(
@@ -1263,6 +1307,7 @@ test('cabinet has no serious accessibility violations', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installCabinetApiBoundary(page)
   await loginFrom(page)
+  await expectPopulatedDashboard(page)
   const results = await new AxeBuilder({ page }).analyze()
   expect(
     results.violations.filter((violation) =>
