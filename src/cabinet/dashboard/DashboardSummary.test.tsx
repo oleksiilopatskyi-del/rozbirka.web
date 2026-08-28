@@ -55,6 +55,7 @@ it('renders common and owner totals in Ukrainian formats', () => {
   expect(getByExactText('45\u00a0600\u00a0₴')).toBeInTheDocument()
   expect(getByExactText('123\u00a0456\u00a0₴')).toBeInTheDocument()
   expect(screen.getByText(/28\.08\.2026/)).toBeInTheDocument()
+  expect(screen.getByText(/28\.08\.2026, 16:45/)).toBeInTheDocument()
   expect(screen.getByText(/Додано запчастину/)).toBeInTheDocument()
 })
 
