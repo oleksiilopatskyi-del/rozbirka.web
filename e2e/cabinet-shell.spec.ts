@@ -842,6 +842,16 @@ async function expectPopulatedDashboard(page: Page) {
   ).toBeVisible()
 }
 
+const releasedAccessPaths = [
+  '/app/koval/team',
+  '/app/koval/reports',
+  '/app/koval/settings/profile',
+  '/app/koval/settings/business',
+  '/app/koval/settings/billing/overview',
+  '/app/koval/settings/billing/plans',
+  '/app/koval/settings/billing/payments',
+] as const
+
 async function expectReleasedScreenSettled(page: Page, path: string) {
   await page.goto(path)
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
@@ -861,7 +871,38 @@ async function expectReleasedScreenSettled(page: Page, path: string) {
     ).toBeVisible()
     return
   }
-  await expect(page.getByLabel('Назва розбірки')).toHaveValue('Розбірка Коваль')
+  if (path === '/app/koval/settings/profile') {
+    await expect(page.getByLabel('Ім’я')).toHaveValue('Олена Коваль')
+    return
+  }
+  if (path === '/app/koval/settings/business') {
+    await expect(page.getByLabel('Назва розбірки')).toHaveValue(
+      'Розбірка Коваль',
+    )
+    return
+  }
+  if (path === '/app/koval/settings/billing/overview') {
+    await expect(
+      page.getByRole('heading', { name: 'Підписка', level: 1 }),
+    ).toBeVisible()
+    await expect(page.getByText('Koval Pro', { exact: true })).toBeVisible()
+    return
+  }
+  if (path === '/app/koval/settings/billing/plans') {
+    await expect(
+      page.getByRole('heading', { name: 'Тарифи', level: 1 }),
+    ).toBeVisible()
+    await expect(page.getByText('Lite', { exact: true })).toBeVisible()
+    return
+  }
+  if (path === '/app/koval/settings/billing/payments') {
+    await expect(
+      page.getByRole('heading', { name: 'Білінг', level: 1 }),
+    ).toBeVisible()
+    await expect(page.getByText('Платежів ще не було.')).toBeVisible()
+    return
+  }
+  throw new Error(`Missing settled-screen assertion for ${path}`)
 }
 
 test.beforeEach(async ({ request }) => {
@@ -1513,11 +1554,7 @@ test('cabinet meets automated WCAG 2.2 AA checks', async ({ page }) => {
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
     .analyze()
-  expect(
-    results.violations.filter((violation) =>
-      ['critical', 'serious'].includes(violation.impact ?? ''),
-    ),
-  ).toEqual([])
+  expect(results.violations).toEqual([])
 })
 
 for (const width of [320, 768, 1024, 1440]) {
@@ -1528,11 +1565,7 @@ for (const width of [320, 768, 1024, 1440]) {
     await installCabinetApiBoundary(page)
     await loginFrom(page)
 
-    for (const path of [
-      '/app/koval/team',
-      '/app/koval/reports',
-      '/app/koval/settings/business',
-    ]) {
+    for (const path of releasedAccessPaths) {
       await expectReleasedScreenSettled(page, path)
       expect(
         await page.evaluate(
@@ -1550,20 +1583,12 @@ test('released access screens meet automated WCAG 2.2 AA checks', async ({
   await installCabinetApiBoundary(page)
   await loginFrom(page)
 
-  for (const path of [
-    '/app/koval/team',
-    '/app/koval/reports',
-    '/app/koval/settings/business',
-  ]) {
+  for (const path of releasedAccessPaths) {
     await expectReleasedScreenSettled(page, path)
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
       .analyze()
-    expect(
-      results.violations.filter((violation) =>
-        ['critical', 'serious'].includes(violation.impact ?? ''),
-      ),
-    ).toEqual([])
+    expect(results.violations).toEqual([])
   }
 })
 
