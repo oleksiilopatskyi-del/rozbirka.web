@@ -188,6 +188,19 @@ const isRecognizedBillingPath = (path: string) =>
 const isRecognizedDashboardPath = (path: string) =>
   path === '/api/v1/dashboard' || path === '/api/v1/dashboard/analytics'
 
+const isRecognizedTeamPath = (path: string) =>
+  path === '/api/v1/team/members' ||
+  path === '/api/v1/team/roles' ||
+  path === '/api/v1/team/invitations' ||
+  /^\/api\/v1\/team\/(?:members|roles|invitations)\/[^/]+(?:\/(?:role|activate|deactivate))?$/.test(
+    path,
+  ) ||
+  /^\/api\/v1\/team\/users\/[^/]+\/permissions$/.test(path)
+
+const isRecognizedReportsPath = (path: string) =>
+  path === '/api/v1/reports' ||
+  /^\/api\/v1\/reports\/[^/]+(?:\/download)?$/.test(path)
+
 async function installCabinetApiBoundary(
   page: Page,
   options: CabinetFixtureOptions = {},
@@ -222,7 +235,7 @@ async function installCabinetApiBoundary(
       await fulfillData(route, tenants)
       return
     }
-    if (path.startsWith('/api/v1/')) {
+    if (path === '/api/v1' || path.startsWith('/api/v1/')) {
       requests.push({ method: request.method(), path, tenantId })
     }
 
@@ -233,6 +246,8 @@ async function installCabinetApiBoundary(
       path === '/api/v1/billing/subscribe' ||
       path === '/api/v1/billing/cancel' ||
       isRecognizedDashboardPath(path) ||
+      isRecognizedTeamPath(path) ||
+      isRecognizedReportsPath(path) ||
       isPaymentCancellationPath(path)
     if (isTenantScoped) {
       if (tenantId === null) {
@@ -293,6 +308,10 @@ async function installCabinetApiBoundary(
             'cars.manage',
             'billing.view',
             'billing.manage',
+            'team.view',
+            'team.manage',
+            'reports.view',
+            'reports.manage',
           ],
           features: ['reports.advanced', 'team_collaboration'],
           entitlement: {
@@ -386,6 +405,129 @@ async function installCabinetApiBoundary(
             'application/json; charset=utf-8',
         },
       })
+      return
+    }
+    if (path === '/api/v1/team/members' && request.method() === 'GET') {
+      await fulfillData(route, [
+        {
+          id: 'member-1',
+          userId: 'user-2',
+          name: 'Іван Менеджер',
+          phone: '+380671112233',
+          role: {
+            id: 'role-manager',
+            name: 'Менеджер',
+            isSystem: false,
+            permissions: ['team.view', 'reports.view'],
+            membersCount: 1,
+          },
+          isActive: true,
+          joinedAt: '2026-08-10T09:00:00.000Z',
+        },
+      ])
+      return
+    }
+    if (path === '/api/v1/team/roles' && request.method() === 'GET') {
+      await fulfillData(route, [
+        {
+          id: 'role-owner',
+          name: 'Власник',
+          isSystem: true,
+          permissions: ['team.view', 'team.manage'],
+          membersCount: 1,
+        },
+        {
+          id: 'role-manager',
+          name: 'Менеджер',
+          isSystem: false,
+          permissions: ['team.view', 'reports.view'],
+          membersCount: 1,
+        },
+      ])
+      return
+    }
+    if (path === '/api/v1/team/invitations' && request.method() === 'GET') {
+      await fulfillData(route, [
+        {
+          id: 'invitation-1',
+          code: 'TEAM-2026',
+          role: {
+            id: 'role-manager',
+            name: 'Менеджер',
+            isSystem: false,
+            permissions: ['team.view', 'reports.view'],
+            membersCount: 1,
+          },
+          expiresAt: '2026-09-30T00:00:00.000Z',
+          createdAt: '2026-08-20T00:00:00.000Z',
+          isUsed: false,
+          isRevoked: false,
+          isExpired: false,
+        },
+      ])
+      return
+    }
+    if (
+      path === '/api/v1/team/users/user-2/permissions' &&
+      request.method() === 'GET'
+    ) {
+      await fulfillData(route, {
+        userId: 'user-2',
+        roleName: 'Менеджер',
+        permissions: ['team.view', 'reports.view'],
+      })
+      return
+    }
+    if (isRecognizedTeamPath(path)) {
+      await fulfillData(
+        route,
+        {
+          error: {
+            code: 'FIXTURE_METHOD_NOT_ALLOWED',
+            message: 'Team fixture method not allowed',
+          },
+        },
+        405,
+      )
+      return
+    }
+    if (path === '/api/v1/reports' && request.method() === 'GET') {
+      await fulfillData(route, {
+        items: [
+          {
+            id: 'report-1',
+            type: 'carSales',
+            status: 'completed',
+            stage: 'completed',
+            progress: 100,
+            itemsTotal: 12,
+            itemsProcessed: 12,
+            requestedAt: '2026-08-20T10:00:00.000Z',
+            startedAt: '2026-08-20T10:00:01.000Z',
+            completedAt: '2026-08-20T10:00:03.000Z',
+            expiresAt: '2026-09-20T10:00:03.000Z',
+            errorMessage: null,
+            fileSizeBytes: 2048,
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+        totalPages: 1,
+      })
+      return
+    }
+    if (isRecognizedReportsPath(path)) {
+      await fulfillData(
+        route,
+        {
+          error: {
+            code: 'FIXTURE_METHOD_NOT_ALLOWED',
+            message: 'Reports fixture method not allowed',
+          },
+        },
+        405,
+      )
       return
     }
     if (path === '/api/v1/billing/subscription' && request.method() === 'GET') {
@@ -486,6 +628,20 @@ async function installCabinetApiBoundary(
           },
         },
         405,
+      )
+      return
+    }
+
+    if (path === '/api/v1' || path.startsWith('/api/v1/')) {
+      await fulfillData(
+        route,
+        {
+          error: {
+            code: 'FIXTURE_ROUTE_NOT_IMPLEMENTED',
+            message: 'API fixture route not implemented',
+          },
+        },
+        501,
       )
       return
     }
@@ -686,6 +842,69 @@ async function expectPopulatedDashboard(page: Page) {
   ).toBeVisible()
 }
 
+const releasedAccessPaths = [
+  '/app/koval/team',
+  '/app/koval/reports',
+  '/app/koval/settings/profile',
+  '/app/koval/settings/business',
+  '/app/koval/settings/billing/overview',
+  '/app/koval/settings/billing/plans',
+  '/app/koval/settings/billing/payments',
+] as const
+
+async function expectReleasedScreenSettled(page: Page, path: string) {
+  await page.goto(path)
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  if (path.endsWith('/team')) {
+    await expect(
+      page.getByRole('rowheader', { name: /Іван Менеджер/ }),
+    ).toBeVisible()
+    await expect(page.getByText('TEAM-2026', { exact: true })).toBeVisible()
+    return
+  }
+  if (path.endsWith('/reports')) {
+    await expect(
+      page.getByRole('heading', { name: 'Звіт готовий' }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Завантажити PDF' }),
+    ).toBeVisible()
+    return
+  }
+  if (path === '/app/koval/settings/profile') {
+    await expect(page.getByLabel('Ім’я')).toHaveValue('Олена Коваль')
+    return
+  }
+  if (path === '/app/koval/settings/business') {
+    await expect(page.getByLabel('Назва розбірки')).toHaveValue(
+      'Розбірка Коваль',
+    )
+    return
+  }
+  if (path === '/app/koval/settings/billing/overview') {
+    await expect(
+      page.getByRole('heading', { name: 'Підписка', level: 1 }),
+    ).toBeVisible()
+    await expect(page.getByText('Koval Pro', { exact: true })).toBeVisible()
+    return
+  }
+  if (path === '/app/koval/settings/billing/plans') {
+    await expect(
+      page.getByRole('heading', { name: 'Тарифи', level: 1 }),
+    ).toBeVisible()
+    await expect(page.getByText('Lite', { exact: true })).toBeVisible()
+    return
+  }
+  if (path === '/app/koval/settings/billing/payments') {
+    await expect(
+      page.getByRole('heading', { name: 'Білінг', level: 1 }),
+    ).toBeVisible()
+    await expect(page.getByText('Платежів ще не було.')).toBeVisible()
+    return
+  }
+  throw new Error(`Missing settled-screen assertion for ${path}`)
+}
+
 test.beforeEach(async ({ request }) => {
   await resetUpstream(request)
 })
@@ -810,6 +1029,30 @@ test('billing fixture handles subscription cancellation without route escape', a
       },
     },
   })
+})
+
+test('cabinet fixture fails closed for every unexpected API route', async ({
+  page,
+}) => {
+  await installCabinetApiBoundary(page)
+  await page.goto('/login')
+
+  for (const path of [
+    '/api/v1',
+    '/api/v1/unexpected',
+    '/api/v1/team/members/member-1/unexpected',
+    '/api/v1/reports/report-1/download/unexpected',
+  ]) {
+    expect(await fixtureGet(page, path, 'tenant-1'), path).toEqual({
+      status: 501,
+      body: {
+        error: {
+          code: 'FIXTURE_ROUTE_NOT_IMPLEMENTED',
+          message: 'API fixture route not implemented',
+        },
+      },
+    })
+  }
 })
 
 test('same-slug Back aborts a pending tenant selection before it can commit @cabinet-smoke', async ({
@@ -1313,17 +1556,104 @@ test('renders an unknown cabinet route inside the branded shell', async ({
   )
 })
 
-test('cabinet has no serious accessibility violations', async ({ page }) => {
+test('cabinet meets automated WCAG 2.2 AA checks', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await installCabinetApiBoundary(page)
   await loginFrom(page)
   await expectPopulatedDashboard(page)
-  const results = await new AxeBuilder({ page }).analyze()
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+    .analyze()
+  expect(results.violations).toEqual([])
+})
+
+for (const width of [320, 768, 1024, 1440]) {
+  test(`released access screens avoid horizontal overflow at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await installCabinetApiBoundary(page)
+    await loginFrom(page)
+
+    for (const path of releasedAccessPaths) {
+      await expectReleasedScreenSettled(page, path)
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true)
+    }
+  })
+}
+
+test('released access screens meet automated WCAG 2.2 AA checks', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installCabinetApiBoundary(page)
+  await loginFrom(page)
+
+  for (const path of releasedAccessPaths) {
+    await expectReleasedScreenSettled(page, path)
+    const results = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+    expect(results.violations).toEqual([])
+  }
+})
+
+test('released Team dialogs and Reports actions keep 44px targets', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 900 })
+  await installCabinetApiBoundary(page)
+  await loginFrom(page)
+
+  await expectReleasedScreenSettled(page, '/app/koval/team')
+  await page.getByRole('button', { name: 'Права Іван Менеджер' }).click()
+  const permissions = page.getByRole('dialog', {
+    name: 'Права: Іван Менеджер',
+  })
+  await expect(permissions).toBeVisible()
+  const permissionLabels = permissions.locator('label', {
+    has: permissions.getByRole('checkbox'),
+  })
+  const permissionBoxes = await permissionLabels.evaluateAll((labels) =>
+    labels.map((label) => {
+      const rect = label.getBoundingClientRect()
+      return { width: rect.width, height: rect.height }
+    }),
+  )
+  expect(permissionBoxes.length).toBeGreaterThan(0)
   expect(
-    results.violations.filter((violation) =>
-      ['critical', 'serious'].includes(violation.impact ?? ''),
-    ),
-  ).toEqual([])
+    permissionBoxes.every(({ width, height }) => width >= 44 && height >= 44),
+  ).toBe(true)
+  await permissions.getByRole('button', { name: 'Скасувати' }).click()
+
+  await page.getByRole('button', { name: 'Редагувати Менеджер' }).click()
+  const roleDialog = page.getByRole('dialog', { name: 'Роль: Менеджер' })
+  await expect(roleDialog).toBeVisible()
+  const roleActions = roleDialog.getByRole('button')
+  for (let index = 0; index < (await roleActions.count()); index += 1) {
+    const action = roleActions.nth(index)
+    const box = await action.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.width).toBeGreaterThanOrEqual(44)
+    expect(box!.height).toBeGreaterThanOrEqual(44)
+  }
+  await roleDialog.getByRole('button', { name: 'Скасувати' }).click()
+
+  await expectReleasedScreenSettled(page, '/app/koval/reports')
+  const reportActions = page
+    .getByRole('button', { name: 'Завантажити PDF' })
+    .or(page.getByRole('button', { name: 'Друкувати' }))
+  for (let index = 0; index < (await reportActions.count()); index += 1) {
+    const action = reportActions.nth(index)
+    const box = await action.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.width).toBeGreaterThanOrEqual(44)
+    expect(box!.height).toBeGreaterThanOrEqual(44)
+  }
 })
 
 test('visible mobile cabinet controls meet the 44px target minimum', async ({

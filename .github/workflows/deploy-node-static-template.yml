@@ -27,6 +27,14 @@ on:
         description: Run npm build before deployment
         required: true
         type: boolean
+      core_contract:
+        description: Immutable Core OpenAPI file or versioned URL
+        required: true
+        type: string
+      identity_contract:
+        description: Immutable Identity OpenAPI file or versioned URL
+        required: true
+        type: string
     secrets:
       CLOUDFLARE_TOKEN:
         description: Cloudflare API token with Workers deploy permissions
@@ -66,7 +74,38 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
 
       - if: inputs.run_build
-        run: npm run verify:quality
+        name: Lint, typecheck, parity, and dependency gates
+        run: npm run check:static
+
+      - if: inputs.run_build
+        name: Unit test gate
+        run: npm run test:unit
+
+      - if: inputs.run_build
+        name: Contract tooling and API adapter gate
+        run: npm run test:contracts
+
+      - if: inputs.run_build
+        name: Immutable Core and Identity contract drift gate
+        run: >-
+          npm run contracts:check --
+          --core "$CORE_OPENAPI_INPUT"
+          --identity "$IDENTITY_OPENAPI_INPUT"
+        env:
+          CORE_OPENAPI_INPUT: ${{ inputs.core_contract }}
+          IDENTITY_OPENAPI_INPUT: ${{ inputs.identity_contract }}
+
+      - if: inputs.run_build
+        name: Auth and tenant integration gate
+        run: npm run test:integration
+
+      - if: inputs.run_build
+        name: Browser E2E gate
+        run: npm run test:e2e
+
+      - if: inputs.run_build
+        name: Authenticated Chromium smoke gate
+        run: npm run test:smoke
 
       - if: failure() && inputs.run_build
         uses: actions/upload-artifact@v4

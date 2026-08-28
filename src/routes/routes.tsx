@@ -45,6 +45,14 @@ const releasedCabinetRoutes: Partial<Record<CabinetModuleKey, RouteObject>> = {
       await import('@/cabinet/dashboard/DashboardScreen')
     return DashboardScreen
   }),
+  reports: cabinetScreenRoute('reports', async () => {
+    const { ReportsScreen } = await import('@/cabinet/reports/ReportsScreen')
+    return ReportsScreen
+  }),
+  team: cabinetScreenRoute('team', async () => {
+    const { TeamScreen } = await import('@/cabinet/team/TeamScreen')
+    return TeamScreen
+  }),
   billing: cabinetScreenRoute('billing', async () => {
     const { SubscriptionScreen } =
       await import('@/cabinet/billing/subscription-screen')
@@ -90,6 +98,11 @@ const releasedCabinetRoutes: Partial<Record<CabinetModuleKey, RouteObject>> = {
   cash: cabinetScreenRoute('cash', async () => {
     const { CashScreen } = await import('@/cabinet/cash/CashScreen')
     return CashScreen
+  }),
+  business: cabinetScreenRoute('business', async () => {
+    const { BusinessSettingsScreen } =
+      await import('@/cabinet/business/business-settings-screen')
+    return BusinessSettingsScreen
   }),
 }
 

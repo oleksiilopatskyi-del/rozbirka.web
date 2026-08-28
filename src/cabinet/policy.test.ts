@@ -166,7 +166,157 @@ const failedAccess: TenantAccessState = {
   error: new Error('offline'),
 }
 
+const rolloutAccess = (
+  configuration: string | undefined,
+  {
+    grants = ['cabinet-parity'],
+    audiences = [],
+    subjectId = 'tenant-42',
+  }: {
+    grants?: string[]
+    audiences?: string[]
+    subjectId?: string
+  } = {},
+): TenantAccessState => {
+  const access = ready({
+    permissions: ['team.view', 'billing.view', 'reports.view'],
+    features: [FEATURES.TeamCollaboration, FEATURES.AdvancedReports],
+  })
+  if (configuration === undefined) return access
+  if (access.status !== 'ready') throw new Error('expected ready access')
+
+  return {
+    status: 'ready',
+    snapshot: {
+      ...access.snapshot,
+      cabinetParityRollout: {
+        configuration,
+        claim: { version: 1, subjectId, grants, audiences },
+      },
+    },
+    error: null,
+  }
+}
+
+const rolloutConfiguration = (
+  mode: 'off' | 'internal' | 'canary' | 'on',
+  canaryPercent = 0,
+  emergencyOff = false,
+) => JSON.stringify({ version: 1, mode, canaryPercent, emergencyOff })
+
 describe('evaluateModuleAccess', () => {
+  it('allows a missing envelope only when explicit v1 compatibility is enabled', () => {
+    expect(
+      evaluateModuleAccess(
+        cabinetModules.team,
+        rolloutAccess(undefined),
+        'view',
+        { version: 1, allowMissingEnvelope: true },
+      ),
+    ).toEqual({ kind: 'allowed' })
+
+    expect(
+      evaluateModuleAccess(
+        cabinetModules.team,
+        rolloutAccess(undefined),
+        'view',
+        { version: 1, allowMissingEnvelope: false },
+      ),
+    ).toEqual({ kind: 'unreleased' })
+  })
+
+  it.each([
+    ['off', rolloutConfiguration('off'), [], { kind: 'unreleased' }],
+    [
+      'internal without server audience',
+      rolloutConfiguration('internal'),
+      [],
+      { kind: 'unreleased' },
+    ],
+    [
+      'internal with server audience',
+      rolloutConfiguration('internal'),
+      ['internal'],
+      { kind: 'allowed' },
+    ],
+    [
+      'canary outside fixed cohort',
+      rolloutConfiguration('canary', 82),
+      [],
+      { kind: 'unreleased' },
+    ],
+    [
+      'canary inside fixed cohort',
+      rolloutConfiguration('canary', 83),
+      [],
+      { kind: 'allowed' },
+    ],
+    ['on', rolloutConfiguration('on'), [], { kind: 'allowed' }],
+    [
+      'emergency off',
+      rolloutConfiguration('on', 100, true),
+      [],
+      { kind: 'unreleased' },
+    ],
+  ] as const)(
+    '%s gates a parity route at shared policy boundary',
+    (_name, configuration, audiences, expected) => {
+      expect(
+        evaluateModuleAccess(
+          cabinetModules.team,
+          rolloutAccess(configuration, { audiences: [...audiences] }),
+          'view',
+        ),
+      ).toEqual(expected)
+    },
+  )
+
+  it('fails closed when the configured server envelope omits its grant', () => {
+    expect(
+      evaluateModuleAccess(
+        cabinetModules.team,
+        rolloutAccess(rolloutConfiguration('on'), { grants: [] }),
+        'view',
+      ),
+    ).toEqual({ kind: 'unreleased' })
+  })
+
+  it.each([
+    ['off', rolloutConfiguration('off')],
+    ['emergency off', rolloutConfiguration('on', 100, true)],
+  ] as const)(
+    '%s preserves pre-initiative account routes while gating new parity routes',
+    (_name, configuration) => {
+      const access = rolloutAccess(configuration)
+
+      for (const key of ['billing', 'plans', 'payments', 'profile'] as const) {
+        expect(
+          evaluateModuleAccess(cabinetModules[key], access, 'view'),
+        ).toEqual({ kind: 'allowed' })
+      }
+
+      for (const key of ['team', 'reports', 'business'] as const) {
+        expect(
+          evaluateModuleAccess(cabinetModules[key], access, 'view'),
+        ).toEqual({ kind: 'unreleased' })
+      }
+    },
+  )
+
+  it('gates every newly released parity surface with the same configured policy', () => {
+    const disabled = rolloutAccess(rolloutConfiguration('off'))
+    const enabled = rolloutAccess(rolloutConfiguration('on'))
+
+    for (const key of ['team', 'reports', 'business'] as const) {
+      expect(
+        evaluateModuleAccess(cabinetModules[key], disabled, 'view'),
+      ).toEqual({ kind: 'unreleased' })
+      expect(
+        evaluateModuleAccess(cabinetModules[key], enabled, 'view'),
+      ).toEqual({ kind: 'allowed' })
+    }
+  })
+
   it('allows an active built-in Manager to view cars without billing.view', () => {
     expect(MANAGER_PERMISSIONS).not.toContain('billing.view')
 
@@ -477,7 +627,7 @@ describe('cabinetModules', () => {
     ).toBe(true)
   })
 
-  it('keeps business modules unavailable until they are released', () => {
+  it('publishes only the implemented business modules', () => {
     expect(
       Object.fromEntries(
         Object.entries(cabinetModules).map(([key, definition]) => [
@@ -493,9 +643,9 @@ describe('cabinetModules', () => {
       orders: false,
       customers: false,
       cash: false,
-      reports: false,
-      team: false,
-      business: false,
+      reports: true,
+      team: true,
+      business: true,
     })
   })
 

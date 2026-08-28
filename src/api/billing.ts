@@ -10,6 +10,47 @@ import type {
   SubscriptionDto,
 } from './types'
 
+export type BillingSource = 'mono' | 'apple_iap' | 'google_play' | null
+export type BillingManageVia = 'web' | 'apple' | 'google' | null
+export type ProviderAwareSubscriptionDto = SubscriptionDto & {
+  source: BillingSource
+  manageVia: BillingManageVia
+}
+
+export type ProviderManagement =
+  | { kind: 'mono' }
+  | { kind: 'provider'; label: string; url: string }
+  | { kind: 'unavailable' }
+
+export function resolveProviderManagement(
+  subscription: Pick<ProviderAwareSubscriptionDto, 'source' | 'manageVia'>,
+): ProviderManagement {
+  if (subscription.source === 'mono' && subscription.manageVia === 'web') {
+    return { kind: 'mono' }
+  }
+  if (
+    subscription.source === 'apple_iap' &&
+    subscription.manageVia === 'apple'
+  ) {
+    return {
+      kind: 'provider',
+      label: 'App Store',
+      url: 'https://apps.apple.com/account/subscriptions',
+    }
+  }
+  if (
+    subscription.source === 'google_play' &&
+    subscription.manageVia === 'google'
+  ) {
+    return {
+      kind: 'provider',
+      label: 'Google Play',
+      url: 'https://play.google.com/store/account/subscriptions',
+    }
+  }
+  return { kind: 'unavailable' }
+}
+
 const requestConfig = (options: RequestOptions) =>
   options.signal ? { signal: options.signal } : {}
 
@@ -20,8 +61,8 @@ export const billingApi = {
    */
   async getSubscription(
     options: RequestOptions = {},
-  ): Promise<SubscriptionDto> {
-    const resp = await apiClient.get<SubscriptionDto>(
+  ): Promise<ProviderAwareSubscriptionDto> {
+    const resp = await apiClient.get<ProviderAwareSubscriptionDto>(
       '/billing/subscription',
       requestConfig(options),
     )

@@ -61,3 +61,5 @@ jobs:
       enable_deployment: ${{ (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.enable_deployment) }}
       auto_qa_deploy: ${{ github.event_name == 'push' && github.ref_name == 'develop' }}
       run_build: true
+      core_contract: ${{ vars.CORE_OPENAPI_IMMUTABLE_URL }}
+      identity_contract: ${{ vars.IDENTITY_OPENAPI_IMMUTABLE_URL }}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { cabinetModules, type CabinetModuleKey } from './module-registry'
 
-describe('commerce module release registry', () => {
+describe('integrated cabinet module release registry', () => {
   it.each<CabinetModuleKey>([
     'cars',
     'intakes',
@@ -10,14 +10,10 @@ describe('commerce module release registry', () => {
     'customers',
     'orders',
     'cash',
+    'team',
+    'reports',
+    'business',
   ])('releases %s through the existing access boundary', (module) => {
     expect(cabinetModules[module].released).toBe(true)
   })
-
-  it.each<CabinetModuleKey>(['team', 'reports', 'business'])(
-    'does not release unrelated %s work',
-    (module) => {
-      expect(cabinetModules[module].released).toBe(false)
-    },
-  )
 })

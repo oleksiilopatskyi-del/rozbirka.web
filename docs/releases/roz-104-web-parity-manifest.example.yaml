@@ -1,0 +1,101 @@
+schemaVersion: 1
+release: qa-YYYY-MM-DD-sequence
+environment: qa
+components:
+  mobile-web-parity/service/rozbirka-web/primary:
+    role: Frontend
+    service: rozbirka.web
+    repository: rozbirka.web
+    commit: 0000000000000000000000000000000000000000
+    artifact: replace-with-immutable-artifact-id
+migrations: []
+configuration:
+  inventory:
+    development:
+      source: .env.development
+      cabinetParityCompatibility:
+        version: 1
+        allowMissingEnvelope: true
+    test:
+      source: .env.test
+      cabinetParityCompatibility:
+        version: 1
+        allowMissingEnvelope: true
+    qa:
+      source: .env.qa
+      cabinetParityCompatibility:
+        version: 1
+        allowMissingEnvelope: false
+    production:
+      source: .env.production
+      cabinetParityCompatibility:
+        version: 1
+        allowMissingEnvelope: false
+  compatibilityBuildGuard:
+    qa: not-recorded
+    production: not-recorded
+  cabinetParityRollout:
+    source: 'GET /me/permissions.cabinetParityRollout'
+    gatedModules:
+      - team
+      - reports
+      - business
+    preExistingModulesUnaffected:
+      - profile
+      - billing
+      - plans
+      - payments
+    controlPlane: REPLACE-BEFORE-ROLLOUT
+    controlPlaneOwner: REPLACE-BEFORE-ROLLOUT
+    authorizedOperatorRole: REPLACE-BEFORE-ROLLOUT
+    secondaryApproverRole: REPLACE-BEFORE-ROLLOUT
+    auditLog: REPLACE-BEFORE-ROLLOUT
+    propagationBoundSeconds: 300
+    version: 1
+    mode: 'off'
+    canaryPercent: 0
+    emergencyOff: true
+issues:
+  - ROZ-104
+  - ROZ-114
+  - ROZ-116
+  - ROZ-117
+  - ROZ-118
+  - ROZ-119
+  - ROZ-120
+evidence:
+  ci: not-recorded
+  deployment: not-recorded
+  health: not-recorded
+  smoke: not-recorded
+  accessibility: not-recorded
+  performance: not-recorded
+  rollbackRehearsal: not-executed
+  dashboards:
+    apiErrors: REPLACE-BEFORE-ROLLOUT
+    webVitals: REPLACE-BEFORE-ROLLOUT
+    clientErrors: REPLACE-BEFORE-ROLLOUT
+    privacyAlerts: REPLACE-BEFORE-ROLLOUT
+    cohortSampleCount: REPLACE-BEFORE-ROLLOUT
+  propagationVerification: not-recorded
+  fleetEnvelopeCompleteness:
+    observationWindowHours: 24
+    backendVersions: not-recorded
+    deploymentIds: not-recorded
+    authenticatedTenants: not-recorded
+    omittedEnvelopes: not-recorded
+    nullEnvelopes: not-recorded
+    malformedEnvelopes: not-recorded
+    query: REPLACE-BEFORE-ROLLOUT
+    link: not-recorded
+promotionReadiness:
+  blocked: true
+  unblockOnlyWhen:
+    - qa-and-production-compatibility-build-guards-green
+    - fleet-envelope-omitted-count-zero
+    - fleet-envelope-null-count-zero
+    - fleet-envelope-malformed-count-zero
+    - all-replace-before-rollout-placeholders-resolved
+signOff:
+  product: not-recorded
+  qa: not-recorded

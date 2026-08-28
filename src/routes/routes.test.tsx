@@ -122,6 +122,9 @@ describe('production route boundary', () => {
     ['settings/billing/plans', 'PlansScreen'],
     ['settings/billing/payments', 'PaymentsScreen'],
     ['settings/profile', 'ProfileScreen'],
+    ['settings/business', 'BusinessSettingsScreen'],
+    ['reports', 'ReportsScreen'],
+    ['team', 'TeamScreen'],
   ])(
     'loads %s through its distinct released screen',
     async (path, screenName) => {
@@ -138,16 +141,4 @@ describe('production route boundary', () => {
       ).toBe(screenName)
     },
   )
-
-  it('keeps unrelated unreleased module routes on the shared lazy boundary', async () => {
-    const route = cabinetRoute().children?.find(
-      (child) => child.path === 'team',
-    )
-    const loaded = await loadRoute(route!)
-    const element = loaded.element as ReactElement
-
-    expect(
-      typeof element.type === 'function' ? element.type.name : element.type,
-    ).toBe('CabinetModuleRoute')
-  })
 })

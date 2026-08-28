@@ -78,6 +78,13 @@ const freezeEntitlement = (
 ): TenantEntitlementSnapshot =>
   cloneAndFreeze(entitlement) as TenantEntitlementSnapshot
 
+const freezeCabinetParityRollout = (
+  rollout: NonNullable<MePermissionsDto['cabinetParityRollout']>,
+): NonNullable<TenantAccessSnapshot['cabinetParityRollout']> =>
+  cloneAndFreeze(rollout) as NonNullable<
+    TenantAccessSnapshot['cabinetParityRollout']
+  >
+
 export type TenantTransitionResult =
   | {
       kind: 'committed'
@@ -185,6 +192,16 @@ export const createTenantTransition = (
             loadedSubscription === null
               ? null
               : freezeSubscription(loadedSubscription),
+          ...(loadedAccess.cabinetParityRollout === undefined
+            ? {}
+            : {
+                cabinetParityRollout:
+                  loadedAccess.cabinetParityRollout === null
+                    ? null
+                    : freezeCabinetParityRollout(
+                        loadedAccess.cabinetParityRollout,
+                      ),
+              }),
         })
 
         dependencies.commit(target, snapshot)
