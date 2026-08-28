@@ -84,7 +84,7 @@ export const cabinetModules: Readonly<
   cars: {
     key: 'cars',
     routeSegment: '/cars',
-    released: false,
+    released: true,
     viewPermission: 'cars.view',
     mutationPermission: 'cars.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
@@ -94,7 +94,7 @@ export const cabinetModules: Readonly<
   parts: {
     key: 'parts',
     routeSegment: '/parts',
-    released: false,
+    released: true,
     viewPermission: 'parts.view',
     mutationPermission: 'parts.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
@@ -104,7 +104,7 @@ export const cabinetModules: Readonly<
   orders: {
     key: 'orders',
     routeSegment: '/orders',
-    released: false,
+    released: true,
     viewPermission: 'orders.view',
     mutationPermission: 'orders.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
@@ -117,7 +117,7 @@ export const cabinetModules: Readonly<
   customers: {
     key: 'customers',
     routeSegment: '/customers',
-    released: false,
+    released: true,
     viewPermission: 'customers.view',
     mutationPermission: 'customers.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
@@ -126,7 +126,7 @@ export const cabinetModules: Readonly<
   cash: {
     key: 'cash',
     routeSegment: '/cash',
-    released: false,
+    released: true,
     viewPermission: 'finance.view',
     mutationPermission: 'finance.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
@@ -147,7 +147,7 @@ export const cabinetModules: Readonly<
   intakes: {
     key: 'intakes',
     routeSegment: '/intakes',
-    released: false,
+    released: true,
     viewPermission: 'intakes.view',
     mutationPermission: 'intakes.manage',
     requiredFeature: FEATURES.IntakeManagement,
@@ -158,7 +158,7 @@ export const cabinetModules: Readonly<
   stickers: {
     key: 'stickers',
     routeSegment: '/stickers',
-    released: false,
+    released: true,
     viewPermission: 'parts.view',
     mutationPermission: 'stickers.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,

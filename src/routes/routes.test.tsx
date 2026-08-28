@@ -89,6 +89,35 @@ describe('production route boundary', () => {
 
   it.each([
     ['dashboard', 'DashboardScreen'],
+    ['cars', 'CarsScreen'],
+    ['cars/new', 'CarsScreen'],
+    ['cars/:carId', 'CarsScreen'],
+    ['cars/:carId/edit', 'CarsScreen'],
+    ['cars/:carId/warehouse', 'CarsScreen'],
+    ['intakes', 'IntakesScreen'],
+    ['intakes/new', 'IntakesScreen'],
+    ['intakes/batch', 'IntakesScreen'],
+    ['intakes/:intakeId', 'IntakesScreen'],
+    ['intakes/:intakeId/edit', 'IntakesScreen'],
+    ['intakes/:intakeId/parts/new', 'IntakesScreen'],
+    ['parts', 'PartsScreen'],
+    ['parts/new', 'PartsScreen'],
+    ['parts/:partId', 'PartsScreen'],
+    ['parts/:partId/edit', 'PartsScreen'],
+    ['scan', 'ScannerScreen'],
+    ['stickers', 'StickersScreen'],
+    ['customers', 'CustomersScreen'],
+    ['customers/new', 'CustomersScreen'],
+    ['customers/:customerId', 'CustomersScreen'],
+    ['customers/:customerId/edit', 'CustomersScreen'],
+    ['orders', 'OrdersScreen'],
+    ['orders/new', 'OrdersScreen'],
+    ['orders/:orderId', 'OrdersScreen'],
+    ['orders/:orderId/items/new', 'OrdersScreen'],
+    ['cash', 'CashScreen'],
+    ['cash/new', 'CashScreen'],
+    ['cash/:registerId', 'CashScreen'],
+    ['cash/:registerId/edit', 'CashScreen'],
     ['settings/billing/overview', 'SubscriptionScreen'],
     ['settings/billing/plans', 'PlansScreen'],
     ['settings/billing/payments', 'PaymentsScreen'],
@@ -110,9 +139,9 @@ describe('production route boundary', () => {
     },
   )
 
-  it('keeps unreleased module routes on the shared lazy boundary', async () => {
+  it('keeps unrelated unreleased module routes on the shared lazy boundary', async () => {
     const route = cabinetRoute().children?.find(
-      (child) => child.path === 'cars',
+      (child) => child.path === 'team',
     )
     const loaded = await loadRoute(route!)
     const element = loaded.element as ReactElement

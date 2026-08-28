@@ -26,8 +26,9 @@ const cabinetModuleRoute = (module: CabinetModuleKey): RouteObject => ({
 const cabinetScreenRoute = (
   module: CabinetModuleKey,
   loadScreen: () => Promise<ComponentType<CabinetModuleScreenProps>>,
+  path = cabinetModules[module].routeSegment.slice(1),
 ): RouteObject => ({
-  path: cabinetModules[module].routeSegment.slice(1),
+  path,
   hydrateFallbackElement,
   lazy: async () => {
     const [{ ModuleBoundary }, Screen] = await Promise.all([
@@ -61,7 +62,125 @@ const releasedCabinetRoutes: Partial<Record<CabinetModuleKey, RouteObject>> = {
     const { ProfileScreen } = await import('@/cabinet/profile/profile-screen')
     return ProfileScreen
   }),
+  cars: cabinetScreenRoute('cars', async () => {
+    const { CarsScreen } = await import('@/cabinet/cars/CarsScreen')
+    return CarsScreen
+  }),
+  intakes: cabinetScreenRoute('intakes', async () => {
+    const { IntakesScreen } = await import('@/cabinet/intakes/IntakesScreen')
+    return IntakesScreen
+  }),
+  parts: cabinetScreenRoute('parts', async () => {
+    const { PartsScreen } = await import('@/cabinet/parts/PartsScreen')
+    return PartsScreen
+  }),
+  stickers: cabinetScreenRoute('stickers', async () => {
+    const { StickersScreen } = await import('@/cabinet/stickers/StickersScreen')
+    return StickersScreen
+  }),
+  customers: cabinetScreenRoute('customers', async () => {
+    const { CustomersScreen } =
+      await import('@/cabinet/customers/CustomersScreen')
+    return CustomersScreen
+  }),
+  orders: cabinetScreenRoute('orders', async () => {
+    const { OrdersScreen } = await import('@/cabinet/orders/OrdersScreen')
+    return OrdersScreen
+  }),
+  cash: cabinetScreenRoute('cash', async () => {
+    const { CashScreen } = await import('@/cabinet/cash/CashScreen')
+    return CashScreen
+  }),
 }
+
+const commerceDetailRoutes: RouteObject[] = [
+  ...[
+    'cars/new',
+    'cars/:carId',
+    'cars/:carId/edit',
+    'cars/:carId/warehouse',
+  ].map((path) =>
+    cabinetScreenRoute(
+      'cars',
+      async () => {
+        const { CarsScreen } = await import('@/cabinet/cars/CarsScreen')
+        return CarsScreen
+      },
+      path,
+    ),
+  ),
+  ...[
+    'intakes/new',
+    'intakes/batch',
+    'intakes/:intakeId',
+    'intakes/:intakeId/edit',
+    'intakes/:intakeId/parts/new',
+  ].map((path) =>
+    cabinetScreenRoute(
+      'intakes',
+      async () => {
+        const { IntakesScreen } =
+          await import('@/cabinet/intakes/IntakesScreen')
+        return IntakesScreen
+      },
+      path,
+    ),
+  ),
+  ...['parts/new', 'parts/:partId', 'parts/:partId/edit'].map((path) =>
+    cabinetScreenRoute(
+      'parts',
+      async () => {
+        const { PartsScreen } = await import('@/cabinet/parts/PartsScreen')
+        return PartsScreen
+      },
+      path,
+    ),
+  ),
+  cabinetScreenRoute(
+    'parts',
+    async () => {
+      const { ScannerScreen } = await import('@/cabinet/scanners/ScannerScreen')
+      return ScannerScreen
+    },
+    'scan',
+  ),
+  ...[
+    'customers/new',
+    'customers/:customerId',
+    'customers/:customerId/edit',
+  ].map((path) =>
+    cabinetScreenRoute(
+      'customers',
+      async () => {
+        const { CustomersScreen } =
+          await import('@/cabinet/customers/CustomersScreen')
+        return CustomersScreen
+      },
+      path,
+    ),
+  ),
+  ...['orders/new', 'orders/:orderId', 'orders/:orderId/items/new'].map(
+    (path) =>
+      cabinetScreenRoute(
+        'orders',
+        async () => {
+          const { OrdersScreen } = await import('@/cabinet/orders/OrdersScreen')
+          return OrdersScreen
+        },
+        path,
+      ),
+  ),
+  ...['cash/new', 'cash/:registerId', 'cash/:registerId/edit'].map((path) =>
+    cabinetScreenRoute(
+      'cash',
+      async () => {
+        const { CashScreen } = await import('@/cabinet/cash/CashScreen')
+        return CashScreen
+      },
+      path,
+    ),
+  ),
+]
 
 const cabinetChildren = (): RouteObject[] => [
   { index: true, element: <Navigate to="dashboard" replace /> },
@@ -69,6 +188,7 @@ const cabinetChildren = (): RouteObject[] => [
     const key = module as CabinetModuleKey
     return releasedCabinetRoutes[key] ?? cabinetModuleRoute(key)
   }),
+  ...commerceDetailRoutes,
   {
     path: '*',
     hydrateFallbackElement,
