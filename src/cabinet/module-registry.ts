@@ -136,7 +136,7 @@ export const cabinetModules: Readonly<
   team: {
     key: 'team',
     routeSegment: '/team',
-    released: false,
+    released: true,
     viewPermission: 'team.view',
     mutationPermission: 'team.manage',
     requiredFeature: FEATURES.TeamCollaboration,

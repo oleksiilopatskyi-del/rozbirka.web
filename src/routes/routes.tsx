@@ -48,6 +48,10 @@ const releasedCabinetRoutes: Partial<Record<CabinetModuleKey, RouteObject>> = {
     const { ReportsScreen } = await import('@/cabinet/reports/ReportsScreen')
     return ReportsScreen
   }),
+  team: cabinetScreenRoute('team', async () => {
+    const { TeamScreen } = await import('@/cabinet/team/TeamScreen')
+    return TeamScreen
+  }),
   billing: cabinetScreenRoute('billing', async () => {
     const { SubscriptionScreen } =
       await import('@/cabinet/billing/subscription-screen')
