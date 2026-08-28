@@ -235,7 +235,7 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
   }
 
   return (
-    <section className="mx-auto grid w-full max-w-6xl gap-8">
+    <section className="cabinet-access-quality mx-auto grid w-full max-w-6xl gap-8">
       <header className="grid gap-2">
         <p className="text-brand text-xs font-medium tracking-[0.18em] uppercase">
           Налаштування доступу
@@ -593,7 +593,7 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
           {editingRole && (
             <Dialog.Content
               aria-label={`Роль: ${editingRole.name}`}
-              className="bg-surface-2 fixed inset-x-3 top-1/2 z-50 max-h-[90dvh] max-w-lg -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/10 p-4 text-white sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2"
+              className="cabinet-access-quality bg-surface-2 fixed inset-x-3 top-1/2 z-50 max-h-[90dvh] max-w-lg -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/10 p-4 text-white sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2"
               onCloseAutoFocus={restoreFocus}
             >
               <Dialog.Title>{`Роль: ${editingRole.name}`}</Dialog.Title>
@@ -658,7 +658,7 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
           {permissionMember && (
             <Dialog.Content
               aria-label={`Права: ${permissionMember.name}`}
-              className="bg-surface-2 fixed inset-x-3 top-1/2 z-50 max-h-[90dvh] max-w-lg -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/10 p-4 text-white sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2"
+              className="cabinet-access-quality bg-surface-2 fixed inset-x-3 top-1/2 z-50 max-h-[90dvh] max-w-lg -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/10 p-4 text-white sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2"
               onCloseAutoFocus={restoreFocus}
             >
               <Dialog.Title>{`Права: ${permissionMember.name}`}</Dialog.Title>
@@ -707,7 +707,7 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
           {confirmation && (
             <AlertDialog.Content
               aria-label={confirmation.title}
-              className="bg-surface-2 fixed inset-x-3 top-1/2 z-50 max-w-md -translate-y-1/2 rounded-2xl border border-white/10 p-4 text-white sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2"
+              className="cabinet-access-quality bg-surface-2 fixed inset-x-3 top-1/2 z-50 max-w-md -translate-y-1/2 rounded-2xl border border-white/10 p-4 text-white sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2"
               onCloseAutoFocus={restoreFocus}
             >
               <AlertDialog.Title>{confirmation.title}</AlertDialog.Title>

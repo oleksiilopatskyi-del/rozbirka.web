@@ -344,7 +344,7 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = () => {
   return (
     <section
       aria-labelledby="reports-title"
-      className="mx-auto grid w-full max-w-4xl gap-6"
+      className="cabinet-access-quality mx-auto grid w-full max-w-4xl gap-6"
     >
       <header className="grid gap-2">
         <p className="text-brand text-xs font-medium tracking-[0.18em] uppercase">

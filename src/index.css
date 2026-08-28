@@ -136,6 +136,16 @@ html {
   padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
 }
 
+.cabinet-access-quality :is(button, a, select, input:not([type='checkbox'])) {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.cabinet-access-quality label:has(input[type='checkbox']) {
+  min-height: 2.75rem;
+  align-items: center;
+}
+
 .cabinet-rail-tooltip {
   position: absolute;
   top: 50%;
