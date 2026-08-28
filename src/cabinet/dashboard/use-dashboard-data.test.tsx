@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dashboardApi } from '@/api/dashboard'
@@ -123,6 +124,23 @@ afterEach(() => {
 })
 
 describe('useDashboardData tenant lifecycle', () => {
+  it('starts one summary and one current-period analytics request under StrictMode', async () => {
+    vi.mocked(dashboardApi.getSummary).mockReturnValue(
+      deferred<DashboardData>().promise,
+    )
+    vi.mocked(dashboardApi.getAnalytics).mockReturnValue(
+      deferred<DashboardAnalytics>().promise,
+    )
+
+    renderHook(() => useDashboardData('week'), { wrapper: StrictMode })
+
+    await waitFor(() =>
+      expect(dashboardApi.getSummary).toHaveBeenCalledTimes(1),
+    )
+    expect(dashboardApi.getAnalytics).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(dashboardApi.getAnalytics).mock.calls[0]?.[0]).toBe('week')
+  })
+
   it('waits for a ready snapshot and settles summary and analytics independently', async () => {
     const summaryRequest = deferred<DashboardData>()
     const analyticsRequest = deferred<DashboardAnalytics>()
@@ -143,8 +161,10 @@ describe('useDashboardData tenant lifecycle', () => {
     vi.mocked(useCabinet).mockReturnValue(cabinet())
     view.rerender({ selectedPeriod: 'week' })
 
-    expect(dashboardApi.getSummary).toHaveBeenCalledTimes(1)
-    expect(dashboardApi.getAnalytics).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      expect(dashboardApi.getSummary).toHaveBeenCalledTimes(1)
+      expect(dashboardApi.getAnalytics).toHaveBeenCalledTimes(1)
+    })
     expect(vi.mocked(dashboardApi.getAnalytics).mock.calls[0]?.[0]).toBe('week')
     expect(
       vi.mocked(dashboardApi.getAnalytics).mock.calls[0]?.[1]?.signal,
@@ -183,13 +203,19 @@ describe('useDashboardData tenant lifecycle', () => {
       .mockReturnValueOnce(newAnalytics.promise)
 
     const view = renderData('week')
+    await waitFor(() => {
+      expect(dashboardApi.getSummary).toHaveBeenCalledTimes(1)
+      expect(dashboardApi.getAnalytics).toHaveBeenCalledTimes(1)
+    })
     const oldSignal = vi.mocked(dashboardApi.getAnalytics).mock.calls[0]?.[1]
       ?.signal
 
     view.rerender({ selectedPeriod: 'month' })
 
-    expect(dashboardApi.getSummary).toHaveBeenCalledTimes(1)
-    expect(dashboardApi.getAnalytics).toHaveBeenCalledTimes(2)
+    await waitFor(() => {
+      expect(dashboardApi.getSummary).toHaveBeenCalledTimes(1)
+      expect(dashboardApi.getAnalytics).toHaveBeenCalledTimes(2)
+    })
     expect(vi.mocked(dashboardApi.getAnalytics).mock.calls[1]?.[0]).toBe(
       'month',
     )
@@ -219,9 +245,11 @@ describe('useDashboardData tenant lifecycle', () => {
     vi.mocked(dashboardApi.getSummary).mockResolvedValue(summary('Initial'))
     vi.mocked(dashboardApi.getAnalytics).mockResolvedValue(analytics('week', 1))
     const view = renderData()
-    await waitFor(() =>
-      expect(view.result.current.analytics.status).toBe('ready'),
-    )
+    await waitFor(() => {
+      expect(dashboardApi.getSummary).toHaveBeenCalledTimes(1)
+      expect(dashboardApi.getAnalytics).toHaveBeenCalledTimes(1)
+      expect(view.result.current.analytics.status).toBe('ready')
+    })
 
     const refreshedSummary = deferred<DashboardData>()
     const refreshedAnalytics = deferred<DashboardAnalytics>()
@@ -352,6 +380,10 @@ describe('useDashboardData tenant lifecycle', () => {
       .mockReturnValueOnce(oldAnalytics.promise)
       .mockReturnValueOnce(newAnalytics.promise)
     const view = renderData()
+    await waitFor(() => {
+      expect(dashboardApi.getSummary).toHaveBeenCalledTimes(1)
+      expect(dashboardApi.getAnalytics).toHaveBeenCalledTimes(1)
+    })
     const oldSummarySignal = vi.mocked(dashboardApi.getSummary).mock
       .calls[0]?.[0]?.signal
 
@@ -363,6 +395,10 @@ describe('useDashboardData tenant lifecycle', () => {
     )
     view.rerender({ selectedPeriod: 'week' })
 
+    await waitFor(() => {
+      expect(dashboardApi.getSummary).toHaveBeenCalledTimes(2)
+      expect(dashboardApi.getAnalytics).toHaveBeenCalledTimes(2)
+    })
     expect(oldSummarySignal?.aborted).toBe(true)
     await act(() => {
       newSummary.resolve(summary('New tenant'))

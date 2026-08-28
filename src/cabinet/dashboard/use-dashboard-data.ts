@@ -303,14 +303,30 @@ export function useDashboardData(period: DashboardPeriod): DashboardDataState {
 
   useEffect(() => {
     if (scopeKey === null || activeKeyRef.current !== scopeKey) return
-    void loadSummary(scopeKey)
-    return () => abortSummary(scopeKey)
+    let start = true
+    queueMicrotask(() => {
+      if (start && activeKeyRef.current === scopeKey) {
+        void loadSummary(scopeKey)
+      }
+    })
+    return () => {
+      start = false
+      abortSummary(scopeKey)
+    }
   }, [abortSummary, loadSummary, scopeKey])
 
   useEffect(() => {
     if (scopeKey === null || activeKeyRef.current !== scopeKey) return
-    void loadAnalytics(scopeKey, period)
-    return () => abortAnalytics(scopeKey, period)
+    let start = true
+    queueMicrotask(() => {
+      if (start && activeKeyRef.current === scopeKey) {
+        void loadAnalytics(scopeKey, period)
+      }
+    })
+    return () => {
+      start = false
+      abortAnalytics(scopeKey, period)
+    }
   }, [abortAnalytics, loadAnalytics, period, scopeKey])
 
   const refresh = useCallback((): Promise<void> => {
