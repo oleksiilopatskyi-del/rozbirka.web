@@ -94,3 +94,20 @@ it('never shows first-tenant onboarding when a tenant already exists', async () 
   )
   expect(screen.queryByText('Перший крок')).toBeNull()
 })
+
+it('renders first-tenant onboarding for an authenticated user with no tenants', () => {
+  const current = vi.mocked(useAuth)()
+  vi.mocked(useAuth).mockReturnValue({
+    ...current,
+    tenant: null,
+    tenants: [],
+  })
+
+  renderAccount()
+
+  expect(
+    screen.getByRole('heading', { name: /Створіть/ }),
+  ).toBeInTheDocument()
+  expect(screen.getByLabelText('Назва розбірки')).toBeInTheDocument()
+  expect(screen.queryByLabelText('Поточний маршрут')).toBeNull()
+})
