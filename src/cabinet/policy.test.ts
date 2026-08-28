@@ -477,7 +477,7 @@ describe('cabinetModules', () => {
     ).toBe(true)
   })
 
-  it('keeps business modules unavailable until they are released', () => {
+  it('publishes only the implemented business modules', () => {
     expect(
       Object.fromEntries(
         Object.entries(cabinetModules).map(([key, definition]) => [
@@ -495,7 +495,7 @@ describe('cabinetModules', () => {
       cash: false,
       reports: false,
       team: false,
-      business: false,
+      business: true,
     })
   })
 

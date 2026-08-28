@@ -223,7 +223,7 @@ export const cabinetModules: Readonly<
   business: {
     key: 'business',
     routeSegment: '/settings/business',
-    released: false,
+    released: true,
     viewPermission: 'team.view',
     mutationPermission: 'team.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,

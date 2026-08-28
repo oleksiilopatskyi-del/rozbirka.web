@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { billingApi } from '@/api/billing'
+import {
+  billingApi,
+  resolveProviderManagement,
+  type ProviderAwareSubscriptionDto,
+} from '@/api/billing'
 import { normalizeApiProblem } from '@/api/errors'
 import type { BillingState, LimitUsageDto, SubscriptionDto } from '@/api/types'
 import type { TenantAccessSnapshot } from '../access-types'
@@ -64,6 +68,14 @@ export function SubscriptionScreen() {
     let scope: ReturnType<typeof requireLatestMutation> | null = null
     try {
       scope = requireLatestMutation()
+      if (!hasMonoManagement(latestSnapshotRef.current?.subscription)) {
+        setMutationState({
+          kind: 'mutation-error',
+          generation: scope.generation,
+          message: 'Керування підпискою недоступне.',
+        })
+        return
+      }
       setMutationState({
         kind: 'pending',
         generation: scope.generation,
@@ -91,6 +103,14 @@ export function SubscriptionScreen() {
     let cancellationCompleted = false
     try {
       scope = requireLatestMutation()
+      if (!hasMonoManagement(latestSnapshotRef.current?.subscription)) {
+        setMutationState({
+          kind: 'mutation-error',
+          generation: scope.generation,
+          message: 'Керування підпискою недоступне.',
+        })
+        return
+      }
       setMutationState({
         kind: 'pending',
         generation: scope.generation,
@@ -161,6 +181,8 @@ function SubscriptionPanel({
   onSeePlans: () => void
 }) {
   const accessEnded = subscription.state === 'blocked'
+  const providerSubscription = subscription as ProviderAwareSubscriptionDto
+  const management = resolveProviderManagement(providerSubscription)
   const stateMeta: Record<BillingState, { label: string }> = {
     none: { label: 'Початок' },
     trial: { label: 'Пробний період' },
@@ -246,19 +268,31 @@ function SubscriptionPanel({
         )}
 
         <div className="flex flex-wrap gap-3">
-          {subscription.canReactivate && subscription.state !== 'blocked' && (
-            <BillingMutationGate decision={manageDecision}>
-              <button
-                type="button"
-                onClick={onSubscribe}
-                disabled={busy}
-                className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80 disabled:opacity-50"
-              >
-                Поновити підписку
-              </button>
-            </BillingMutationGate>
+          {management.kind === 'provider' && (
+            <a
+              href={management.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80"
+            >
+              Керувати в {management.label}
+            </a>
           )}
-          {subscription.canCancel && (
+          {management.kind === 'mono' &&
+            subscription.canReactivate &&
+            subscription.state !== 'blocked' && (
+              <BillingMutationGate decision={manageDecision}>
+                <button
+                  type="button"
+                  onClick={onSubscribe}
+                  disabled={busy}
+                  className="inline-flex h-14 w-fit items-center gap-3 rounded-full bg-black px-7 text-[15px] text-white transition-colors hover:bg-black/80 disabled:opacity-50"
+                >
+                  Поновити підписку
+                </button>
+              </BillingMutationGate>
+            )}
+          {management.kind === 'mono' && subscription.canCancel && (
             <BillingMutationGate decision={manageDecision}>
               <button
                 type="button"
@@ -270,22 +304,43 @@ function SubscriptionPanel({
               </button>
             </BillingMutationGate>
           )}
-          <button
-            type="button"
-            onClick={onSeePlans}
-            className={cn(
-              'inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] transition-colors',
-              subscription.canReactivate && subscription.state !== 'blocked'
-                ? 'text-black/80 hover:text-black'
-                : 'bg-black text-white hover:bg-black/80',
-            )}
-          >
-            {accessEnded ? 'Оформити підписку' : 'Дивитись тарифи'}
-          </button>
+          {management.kind === 'mono' && (
+            <button
+              type="button"
+              onClick={onSeePlans}
+              className={cn(
+                'inline-flex h-14 w-fit items-center gap-3 rounded-full px-7 text-[15px] transition-colors',
+                subscription.canReactivate && subscription.state !== 'blocked'
+                  ? 'text-black/80 hover:text-black'
+                  : 'bg-black text-white hover:bg-black/80',
+              )}
+            >
+              {accessEnded ? 'Оформити підписку' : 'Дивитись тарифи'}
+            </button>
+          )}
+          {management.kind === 'unavailable' && (
+            <p className="text-sm text-black/75">
+              Керування підпискою недоступне. Спробуйте оновити сторінку або
+              зверніться до підтримки.
+            </p>
+          )}
         </div>
       </div>
       <UsageBlock usage={subscription.usage} onUpgrade={onSeePlans} />
     </div>
+  )
+}
+
+function hasMonoManagement(subscription: unknown) {
+  return (
+    subscription !== null &&
+    subscription !== undefined &&
+    resolveProviderManagement(
+      subscription as Pick<
+        ProviderAwareSubscriptionDto,
+        'source' | 'manageVia'
+      >,
+    ).kind === 'mono'
   )
 }
 

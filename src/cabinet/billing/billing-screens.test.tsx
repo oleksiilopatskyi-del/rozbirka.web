@@ -3,9 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { AxiosError, AxiosHeaders, CanceledError } from 'axios'
 import { MemoryRouter } from 'react-router'
 import type { ReactNode } from 'react'
+import type * as BillingModule from '@/api/billing'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { billingApi } from '@/api/billing'
-import type { PublicPlanDto, SubscriptionDto } from '@/api/types'
+import { billingApi, type ProviderAwareSubscriptionDto } from '@/api/billing'
+import type { PublicPlanDto } from '@/api/types'
 import { useCabinet, type CabinetContextValue } from '../CabinetContext'
 import { tenantRequestScope } from '../tenant-request-scope'
 import { PaymentsScreen } from './payments-screen'
@@ -14,7 +15,8 @@ import { SubscriptionScreen } from './subscription-screen'
 
 /* eslint-disable @typescript-eslint/unbound-method -- Vitest resolves object methods into typed mocks. */
 
-vi.mock('@/api/billing', () => ({
+vi.mock('@/api/billing', async (importOriginal) => ({
+  ...(await importOriginal<typeof BillingModule>()),
   billingApi: {
     getSubscription: vi.fn(),
     getPlans: vi.fn(),
@@ -26,7 +28,7 @@ vi.mock('@/api/billing', () => ({
 }))
 vi.mock('../CabinetContext', () => ({ useCabinet: vi.fn() }))
 
-const subscription: SubscriptionDto = {
+const subscription: ProviderAwareSubscriptionDto = {
   state: 'trial',
   planCode: 'pro_monthly',
   planName: 'Pro',
@@ -50,9 +52,11 @@ const subscription: SubscriptionDto = {
     cashRegisters: { used: 0, max: 5 },
   },
   features: [],
+  source: 'mono',
+  manageVia: 'web',
 }
 
-const cancellableSubscription: SubscriptionDto = {
+const cancellableSubscription: ProviderAwareSubscriptionDto = {
   ...subscription,
   state: 'active',
   amount: 29,
@@ -126,7 +130,7 @@ function deferred<T>() {
 
 const cabinet = (
   permissions = ['billing.view', 'billing.manage'],
-  currentSubscription: SubscriptionDto = subscription,
+  currentSubscription: ProviderAwareSubscriptionDto = subscription,
   generation = 4,
 ) =>
   ({
@@ -184,6 +188,134 @@ it('uses the cabinet subscription snapshot without loading it again', () => {
   expect(screen.getByText('Pro')).toBeInTheDocument()
   expect(screen.getByText('7 днів')).toBeInTheDocument()
   expect(billingApi.getSubscription).not.toHaveBeenCalled()
+})
+
+it('routes native subscriptions to their provider without Mono controls', () => {
+  vi.mocked(useCabinet).mockReturnValue(
+    cabinet(undefined, {
+      ...cancellableSubscription,
+      canReactivate: true,
+      source: 'apple_iap',
+      manageVia: 'apple',
+    }),
+  )
+
+  renderScreen(<SubscriptionScreen />)
+
+  expect(
+    screen.getByRole('link', { name: 'Керувати в App Store' }),
+  ).toHaveAttribute('href', 'https://apps.apple.com/account/subscriptions')
+  expect(screen.queryByRole('button', { name: 'Скасувати' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Поновити підписку' })).toBeNull()
+})
+
+it('never offers Mono checkout for native subscriptions in the plans screen', async () => {
+  vi.mocked(useCabinet).mockReturnValue(
+    cabinet(undefined, {
+      ...subscription,
+      source: 'google_play',
+      manageVia: 'google',
+    }),
+  )
+  vi.mocked(billingApi.getPlans).mockResolvedValue([litePlan])
+
+  renderScreen(<PlansScreen />)
+
+  expect(await screen.findByText('Lite')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Обрати' })).toBeNull()
+  expect(screen.getByText(/Google Play/)).toBeInTheDocument()
+})
+
+it.each([
+  ['apple_iap', 'web'],
+  ['mono', 'apple'],
+  ['apple_iap', null],
+  [null, 'web'],
+] as const)(
+  'fails closed for mismatched provider metadata (%s, %s)',
+  (source, manageVia) => {
+    vi.mocked(useCabinet).mockReturnValue(
+      cabinet(undefined, {
+        ...cancellableSubscription,
+        canReactivate: true,
+        source,
+        manageVia,
+      }),
+    )
+
+    renderScreen(<SubscriptionScreen />)
+
+    expect(screen.queryByRole('button', { name: 'Скасувати' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Поновити підписку' }),
+    ).toBeNull()
+    expect(screen.queryByRole('link', { name: /Керувати в/ })).toBeNull()
+    expect(
+      screen.getByText(/Керування підпискою недоступне/),
+    ).toBeInTheDocument()
+  },
+)
+
+it('revalidates the latest provider before dispatching Mono reactivation', async () => {
+  const currentCabinet = cabinet(undefined, {
+    ...cancellableSubscription,
+    canReactivate: true,
+  })
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  const user = userEvent.setup()
+  renderScreen(<SubscriptionScreen />)
+
+  const currentSnapshot = currentCabinet.snapshot
+  if (!currentSnapshot) throw new Error('Expected ready cabinet snapshot')
+  currentSnapshot.subscription = {
+    ...cancellableSubscription,
+    source: 'apple_iap',
+    manageVia: 'apple',
+  }
+  await user.click(screen.getByRole('button', { name: 'Поновити підписку' }))
+
+  expect(billingApi.subscribe).not.toHaveBeenCalled()
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Керування підпискою недоступне.',
+  )
+})
+
+it('revalidates the latest provider before dispatching Mono cancellation', async () => {
+  const currentCabinet = cabinet(undefined, cancellableSubscription)
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  const user = userEvent.setup()
+  renderScreen(<SubscriptionScreen />)
+
+  const currentSnapshot = currentCabinet.snapshot
+  if (!currentSnapshot) throw new Error('Expected ready cabinet snapshot')
+  currentSnapshot.subscription = {
+    ...cancellableSubscription,
+    source: 'google_play',
+    manageVia: 'google',
+  }
+  await user.click(screen.getByRole('button', { name: 'Скасувати' }))
+
+  expect(billingApi.cancel).not.toHaveBeenCalled()
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Керування підпискою недоступне.',
+  )
+})
+
+it('uses source-appropriate payment copy for native subscriptions', async () => {
+  vi.mocked(useCabinet).mockReturnValue(
+    cabinet(undefined, {
+      ...cancellableSubscription,
+      source: 'apple_iap',
+      manageVia: 'apple',
+    }),
+  )
+  renderScreen(<PaymentsScreen />)
+
+  expect(
+    await screen.findByText(/Спосіб оплати керується App Store/),
+  ).toBeInTheDocument()
+  expect(screen.queryByText(/Monobank/)).toBeNull()
 })
 
 it('loads plans with a signal that aborts on tenant transition', async () => {
@@ -278,6 +410,54 @@ it('prevents stale-authorized pending checkout navigation', async () => {
   checkout.dispatchEvent(event)
 
   expect(event.defaultPrevented).toBe(true)
+})
+
+it('prevents pending Mono checkout navigation after provider management changes', async () => {
+  vi.mocked(billingApi.getPayments).mockResolvedValue(paymentPage())
+  const currentCabinet = cabinet()
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  renderScreen(<PaymentsScreen />)
+  const checkout = await screen.findByRole('link', {
+    name: 'Продовжити оплату',
+  })
+  const currentSnapshot = currentCabinet.snapshot
+  if (!currentSnapshot) throw new Error('Expected ready cabinet snapshot')
+  currentSnapshot.subscription = {
+    ...cancellableSubscription,
+    source: 'apple_iap',
+    manageVia: 'apple',
+  }
+
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+  checkout.dispatchEvent(event)
+
+  expect(event.defaultPrevented).toBe(true)
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Керування підпискою недоступне.',
+  )
+})
+
+it('prevents pending Mono payment cancellation after provider management changes', async () => {
+  vi.mocked(billingApi.getPayments).mockResolvedValue(paymentPage())
+  const currentCabinet = cabinet()
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  const user = userEvent.setup()
+  renderScreen(<PaymentsScreen />)
+  const cancel = await screen.findByRole('button', { name: 'Скасувати' })
+  const currentSnapshot = currentCabinet.snapshot
+  if (!currentSnapshot) throw new Error('Expected ready cabinet snapshot')
+  currentSnapshot.subscription = {
+    ...cancellableSubscription,
+    source: 'google_play',
+    manageVia: 'google',
+  }
+
+  await user.click(cancel)
+
+  expect(billingApi.cancelPayment).not.toHaveBeenCalled()
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Керування підпискою недоступне.',
+  )
 })
 
 it('shows a retryable plans error instead of treating a network failure as empty', async () => {

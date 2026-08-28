@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { CreditCard } from 'lucide-react'
-import { billingApi } from '@/api/billing'
+import {
+  billingApi,
+  resolveProviderManagement,
+  type ProviderAwareSubscriptionDto,
+} from '@/api/billing'
 import { normalizeApiProblem } from '@/api/errors'
 import type {
   PagedResult,
@@ -39,6 +43,11 @@ type PaymentMutationState =
   | { kind: 'idle' }
   | { kind: 'pending'; generation: number; paymentId: string }
   | { kind: 'mutation-error'; generation: number; message: string }
+
+type PaymentSubscription = Readonly<
+  Pick<SubscriptionDto, 'cardBrand' | 'cardLast4'>
+> &
+  Partial<Pick<ProviderAwareSubscriptionDto, 'source' | 'manageVia'>>
 
 export function PaymentsScreen() {
   const { cabinet, controlDecision, requireLatestMutation } =
@@ -93,6 +102,14 @@ export function PaymentsScreen() {
     let cancellationCompleted = false
     try {
       scope = requireLatestMutation()
+      if (!hasMonoManagement(latestSnapshotRef.current?.subscription)) {
+        setMutationState({
+          kind: 'mutation-error',
+          generation: scope.generation,
+          message: 'Керування підпискою недоступне.',
+        })
+        return
+      }
       setMutationState({
         kind: 'pending',
         generation: scope.generation,
@@ -130,6 +147,9 @@ export function PaymentsScreen() {
 
   const paymentMethod = (
     <PaymentMethod subscription={cabinet.snapshot?.subscription ?? null} />
+  )
+  const canManageMonoPayments = hasMonoManagement(
+    cabinet.snapshot?.subscription ?? null,
   )
 
   if (currentPaymentsState.kind === 'error') {
@@ -206,26 +226,40 @@ export function PaymentsScreen() {
                   </p>
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
-                  {item.status === 'pending' && item.checkoutUrl && (
-                    <BillingMutationGate decision={controlDecision}>
-                      <a
-                        href={item.checkoutUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(event) => {
-                          try {
-                            requireLatestMutation()
-                          } catch {
-                            event.preventDefault()
-                          }
-                        }}
-                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-white/[0.06] px-3 py-2 text-center text-[12px] font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.10]"
-                      >
-                        Продовжити оплату
-                      </a>
-                    </BillingMutationGate>
-                  )}
-                  {item.status === 'pending' && (
+                  {canManageMonoPayments &&
+                    item.status === 'pending' &&
+                    item.checkoutUrl && (
+                      <BillingMutationGate decision={controlDecision}>
+                        <a
+                          href={item.checkoutUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(event) => {
+                            try {
+                              requireLatestMutation()
+                              if (
+                                !hasMonoManagement(
+                                  latestSnapshotRef.current?.subscription,
+                                )
+                              ) {
+                                event.preventDefault()
+                                setMutationState({
+                                  kind: 'mutation-error',
+                                  generation: generation ?? -1,
+                                  message: 'Керування підпискою недоступне.',
+                                })
+                              }
+                            } catch {
+                              event.preventDefault()
+                            }
+                          }}
+                          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-white/[0.06] px-3 py-2 text-center text-[12px] font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.10]"
+                        >
+                          Продовжити оплату
+                        </a>
+                      </BillingMutationGate>
+                    )}
+                  {canManageMonoPayments && item.status === 'pending' && (
                     <BillingMutationGate decision={controlDecision}>
                       <button
                         type="button"
@@ -302,8 +336,16 @@ function isCurrentScope(
 function PaymentMethod({
   subscription,
 }: {
-  subscription: Pick<SubscriptionDto, 'cardBrand' | 'cardLast4'> | null
+  subscription: PaymentSubscription | null
 }) {
+  const management = subscription
+    ? resolveProviderManagement(
+        subscription as unknown as Pick<
+          ProviderAwareSubscriptionDto,
+          'source' | 'manageVia'
+        >,
+      )
+    : { kind: 'unavailable' as const }
   const hasCard = Boolean(subscription?.cardLast4)
   return (
     <section>
@@ -312,7 +354,15 @@ function PaymentMethod({
         subtitle="Карта, з якої списується підписка"
       />
       <div className="bg-surface-1 rounded-(--radius-card) flex flex-col gap-6 p-8 ring-1 ring-white/[0.04] lg:p-10">
-        {hasCard ? (
+        {management.kind === 'provider' ? (
+          <p className="text-[14px] text-neutral-500">
+            Спосіб оплати керується {management.label}.
+          </p>
+        ) : management.kind === 'unavailable' ? (
+          <p className="text-[14px] text-neutral-500">
+            Інформація про спосіб оплати наразі недоступна.
+          </p>
+        ) : hasCard ? (
           <div className="flex items-center gap-4">
             <div className="bg-brand/10 ring-brand/30 grid size-14 place-items-center rounded-2xl ring-1">
               <CreditCard className="text-brand size-6" aria-hidden />
@@ -335,6 +385,18 @@ function PaymentMethod({
         )}
       </div>
     </section>
+  )
+}
+
+function hasMonoManagement(subscription: unknown) {
+  return (
+    subscription !== null &&
+    resolveProviderManagement(
+      subscription as Pick<
+        ProviderAwareSubscriptionDto,
+        'source' | 'manageVia'
+      >,
+    ).kind === 'mono'
   )
 }
 

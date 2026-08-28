@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { billingApi } from '@/api/billing'
+import {
+  billingApi,
+  resolveProviderManagement,
+  type ProviderAwareSubscriptionDto,
+} from '@/api/billing'
 import { normalizeApiProblem } from '@/api/errors'
 import type { PublicPlanDto } from '@/api/types'
 import { readPlanCode } from '@/lib/plan-selection'
@@ -98,6 +102,14 @@ export function PlansScreen() {
     let scope: ReturnType<typeof requireLatestMutation> | null = null
     try {
       scope = requireLatestMutation()
+      if (!hasMonoManagement(latestSnapshotRef.current?.subscription)) {
+        setCheckoutState({
+          kind: 'mutation-error',
+          generation: scope.generation,
+          message: 'Керування підпискою недоступне.',
+        })
+        return
+      }
       setCheckoutState({ kind: 'pending', generation: scope.generation })
       const { checkoutUrl } = await billingApi.subscribe(
         { planCode },
@@ -134,6 +146,11 @@ export function PlansScreen() {
   if (currentPlansState.kind === 'empty') return <EmptyBillingPanel />
 
   const currentCode = cabinet.snapshot?.subscription?.planCode
+  const providerSubscription = cabinet.snapshot
+    ?.subscription as ProviderAwareSubscriptionDto | null
+  const management = providerSubscription
+    ? resolveProviderManagement(providerSubscription)
+    : { kind: 'unavailable' as const }
   const recommendedCode = 'pro_monthly'
   const checkoutForGeneration =
     checkoutState.kind !== 'idle' && checkoutState.generation === generation
@@ -153,6 +170,18 @@ export function PlansScreen() {
           className="rounded-2xl border border-red-500/30 bg-red-500/[0.06] px-5 py-4 text-[14px] text-red-200"
         >
           {checkoutForGeneration.message}
+        </p>
+      )}
+      {management.kind === 'provider' && (
+        <p className="rounded-2xl border border-white/[0.1] px-5 py-4 text-[14px] text-neutral-300">
+          Цією підпискою керує {management.label}. Змінюйте або скасовуйте її в
+          налаштуваннях магазину.
+        </p>
+      )}
+      {management.kind === 'unavailable' && (
+        <p className="rounded-2xl border border-white/[0.1] px-5 py-4 text-[14px] text-neutral-300">
+          Керування підпискою недоступне. Оновіть сторінку або зверніться до
+          підтримки.
         </p>
       )}
       <ul role="list" className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -209,7 +238,7 @@ export function PlansScreen() {
                 >
                   Поточний тариф
                 </button>
-              ) : (
+              ) : management.kind === 'mono' ? (
                 <BillingMutationGate decision={controlDecision}>
                   <button
                     type="button"
@@ -225,7 +254,7 @@ export function PlansScreen() {
                     Обрати
                   </button>
                 </BillingMutationGate>
-              )}
+              ) : null}
             </li>
           )
         })}
@@ -252,6 +281,19 @@ function BillingLoadError({
         Спробувати ще раз
       </button>
     </div>
+  )
+}
+
+function hasMonoManagement(subscription: unknown) {
+  return (
+    subscription !== null &&
+    subscription !== undefined &&
+    resolveProviderManagement(
+      subscription as Pick<
+        ProviderAwareSubscriptionDto,
+        'source' | 'manageVia'
+      >,
+    ).kind === 'mono'
   )
 }
 
