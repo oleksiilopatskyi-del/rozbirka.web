@@ -636,7 +636,9 @@ it('loads existing edit values and updates every field accepted by the immutable
   )
 
   expect(await screen.findByLabelText('Назва')).toHaveValue('Front bumper')
-  expect(screen.getByText('CAR-01 · Ford Focus (2018)')).toBeInTheDocument()
+  expect(
+    await screen.findByText('CAR-01 · Ford Focus (2018)'),
+  ).toBeInTheDocument()
   expect(screen.queryByLabelText('ID джерела')).not.toBeInTheDocument()
   expect(screen.getByLabelText('OEM-код')).toHaveValue('OEM-read-only')
   expect(screen.getByLabelText('Кількість')).toHaveValue(2)
