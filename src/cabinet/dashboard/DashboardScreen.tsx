@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useSearchParams } from 'react-router'
 import { useCabinet } from '../CabinetContext'
 import { readDashboardPeriod, writeDashboardPeriod } from './dashboard-period'
+import { useDashboardData, type DashboardLoadable } from './use-dashboard-data'
 import type { DashboardPeriod } from '@/api/dashboard-contract'
 
 const periodLabels: Readonly<Record<DashboardPeriod, string>> = {
@@ -14,6 +15,7 @@ export function DashboardScreen() {
   const { targetTenant } = useCabinet()
   const [searchParams, setSearchParams] = useSearchParams()
   const selection = readDashboardPeriod(searchParams)
+  const dashboard = useDashboardData(selection.period)
   const tenantName = targetTenant?.name ?? 'вашій розбірці'
 
   useEffect(() => {
@@ -60,7 +62,70 @@ export function DashboardScreen() {
         <p className="mt-2 max-w-xl text-sm leading-6 text-neutral-400">
           Доступні для вашої ролі розділи зібрані в навігації кабінету.
         </p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <DashboardStatus
+            label="Стан зведення"
+            loadable={dashboard.summary}
+            messages={{
+              loading: 'Завантажуємо зведення…',
+              ready: 'Зведення готове.',
+              error: 'Не вдалося завантажити зведення.',
+            }}
+            retry={() => dashboard.retrySummary()}
+          />
+          <DashboardStatus
+            label="Стан аналітики"
+            loadable={dashboard.analytics}
+            messages={{
+              loading: 'Завантажуємо аналітику…',
+              ready: 'Аналітика готова.',
+              error: 'Не вдалося завантажити аналітику.',
+            }}
+            retry={() => dashboard.retryAnalytics()}
+          />
+        </div>
+        <button
+          className="mt-4 min-h-11 rounded-full border border-white/[0.12] px-4 text-sm text-white disabled:opacity-60"
+          disabled={dashboard.refreshing}
+          onClick={() => void dashboard.refresh()}
+          type="button"
+        >
+          {dashboard.refreshing ? 'Оновлюємо…' : 'Оновити дані'}
+        </button>
       </div>
     </section>
+  )
+}
+
+interface DashboardStatusProps {
+  label: string
+  loadable: DashboardLoadable<unknown>
+  messages: { loading: string; ready: string; error: string }
+  retry: () => Promise<void>
+}
+
+function DashboardStatus({
+  label,
+  loadable,
+  messages,
+  retry,
+}: DashboardStatusProps) {
+  return (
+    <div
+      aria-label={label}
+      className="rounded-2xl border border-white/[0.06] p-4 text-sm text-neutral-400"
+      role={loadable.status === 'error' ? 'alert' : 'status'}
+    >
+      <p>{messages[loadable.status]}</p>
+      {loadable.status === 'error' ? (
+        <button
+          className="mt-3 min-h-11 rounded-full border border-white/[0.12] px-4 text-white"
+          onClick={() => void retry()}
+          type="button"
+        >
+          Спробувати ще раз
+        </button>
+      ) : null}
+    </div>
   )
 }

@@ -6,8 +6,10 @@ import type { Tenant } from '@/api/types'
 import type { TenantAccessSnapshot } from '../access-types'
 import { useCabinet, type CabinetContextValue } from '../CabinetContext'
 import { DashboardScreen } from './DashboardScreen'
+import { useDashboardData, type DashboardDataState } from './use-dashboard-data'
 
 vi.mock('../CabinetContext', () => ({ useCabinet: vi.fn() }))
+vi.mock('./use-dashboard-data', () => ({ useDashboardData: vi.fn() }))
 
 const tenant: Tenant = {
   id: 'tenant-1',
@@ -68,6 +70,66 @@ beforeEach(() => {
     retry: vi.fn(),
     switchTenant: vi.fn(),
   } satisfies CabinetContextValue)
+  vi.mocked(useDashboardData).mockReturnValue({
+    summary: { status: 'loading', data: null, error: null },
+    analytics: { status: 'loading', data: null, error: null },
+    refreshing: false,
+    refresh: vi.fn(),
+    retrySummary: vi.fn(),
+    retryAnalytics: vi.fn(),
+  } satisfies DashboardDataState)
+})
+
+it('renders independent dashboard request status landmarks', () => {
+  vi.mocked(useDashboardData).mockReturnValue({
+    summary: {
+      status: 'ready',
+      data: {
+        userName: 'Maksym',
+        role: 'owner',
+        yardName: 'Koval Auto',
+        yardCity: 'Київ',
+        isYardEmpty: false,
+        todaySalesCount: 2,
+        availablePartsCount: 10,
+        intakesCount: 1,
+        revenue: null,
+        todayNewPartsCount: 1,
+        lastActivity: null,
+        activeCarsCount: 3,
+        outOfStockPartsCount: 0,
+        customersCount: 4,
+        totalBalanceUah: 500,
+        teamMembersCount: 2,
+        totalInvested: 100,
+        totalRecouped: 50,
+        carsInWork: 3,
+        totalPartsSold: 6,
+        myPartsToday: 1,
+        lastMyActivity: null,
+      },
+      error: null,
+    },
+    analytics: {
+      status: 'error',
+      data: null,
+      error: { kind: 'network', message: 'Немає з’єднання з мережею.' },
+    },
+    refreshing: false,
+    refresh: vi.fn(),
+    retrySummary: vi.fn(),
+    retryAnalytics: vi.fn(),
+  })
+
+  renderDashboard(['/app/koval/dashboard?period=month'])
+
+  expect(
+    screen.getByRole('status', { name: 'Стан зведення' }),
+  ).toHaveTextContent('Зведення готове')
+  expect(
+    screen.getByRole('alert', { name: 'Стан аналітики' }),
+  ).toHaveTextContent('Не вдалося завантажити аналітику')
+  expect(useDashboardData).toHaveBeenCalledWith('month')
 })
 
 it('uses week for a missing period without changing the URL', () => {
