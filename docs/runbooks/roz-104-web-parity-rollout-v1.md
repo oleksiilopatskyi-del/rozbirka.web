@@ -53,6 +53,13 @@ The `configuration` string has this v1 shape:
 
 Modes progress in one direction per observed gate: `off` → `internal` → `canary` → `on`. `emergencyOff: true` overrides every mode. A present malformed envelope, missing `cabinet-parity` grant, malformed configuration, or unsupported version fails closed. `internal` requires the server-issued `internal` audience; no client-provided role, query parameter, storage value, or boolean is trusted.
 
+The `cabinet-parity-v1` flag gates only the routes newly released by this
+initiative: team, reports, and business settings. Profile, billing overview,
+plans, and payments were already released at the initiative baseline and stay
+available under their existing permission rules in every flag mode, including
+`off` and emergency-off. Those existing screens may contain improvements from
+this release, but rollback of the parity flag must not remove their routes.
+
 For backwards compatibility only, omission of the entire
 `cabinetParityRollout` property preserves the currently released behavior when
 the separate v1 compatibility configuration explicitly sets
@@ -166,7 +173,7 @@ Stop promotion and execute rollback when any condition occurs:
 Fast rollback is a configuration action owned by the authorized operator/pipeline:
 
 1. The primary authorized operator sets the same flag version to `emergencyOff=true`, `mode=off`, and `canaryPercent=0`; the secondary approver verifies the audit entry as soon as incident response permits.
-2. Within the five-minute propagation bound, verify two new or refreshed authenticated sessions receive the disabled envelope and parity routes fail closed. Escalate to the control-plane owner if the bound is exceeded.
+2. Within the five-minute propagation bound, verify two new or refreshed authenticated sessions receive the disabled envelope; team, reports, and business routes fail closed; and profile, billing overview, plans, and payments remain available under their existing permissions. Escalate to the control-plane owner if the bound is exceeded.
 3. If the failure exists outside flagged modules, promote the previously recorded immutable production artifact through the approved pipeline; never rebuild it.
 4. Run health and the minimal authenticated smoke set, then record returned correlation IDs and artifact identity.
 5. Keep rollout off until the incident has a regression test, a new immutable artifact passes QA, and a new release decision is approved.
@@ -177,6 +184,7 @@ Rollback rehearsal status: not executed. Required evidence is an operator/pipeli
 
 - Login and refresh recovery preserve the intended tenant without duplicate requests.
 - Tenant switching aborts stale requests and shows no previous-tenant data.
+- With the flag off or emergency-off, team, reports, and business settings fail closed while profile, billing overview, plans, and payments remain available under their existing permissions.
 - Team member, role, permission override, and invitation actions enforce effective permissions immediately before dispatch.
 - System roles cannot be mutated or removed.
 - Profile and business updates round-trip; account deletion requires explicit re-confirmation.

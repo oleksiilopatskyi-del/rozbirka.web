@@ -208,7 +208,7 @@ describe('evaluateModuleAccess', () => {
   it('allows a missing envelope only when explicit v1 compatibility is enabled', () => {
     expect(
       evaluateModuleAccess(
-        cabinetModules.profile,
+        cabinetModules.team,
         rolloutAccess(undefined),
         'view',
         { version: 1, allowMissingEnvelope: true },
@@ -217,7 +217,7 @@ describe('evaluateModuleAccess', () => {
 
     expect(
       evaluateModuleAccess(
-        cabinetModules.profile,
+        cabinetModules.team,
         rolloutAccess(undefined),
         'view',
         { version: 1, allowMissingEnvelope: false },
@@ -263,7 +263,7 @@ describe('evaluateModuleAccess', () => {
     (_name, configuration, audiences, expected) => {
       expect(
         evaluateModuleAccess(
-          cabinetModules.profile,
+          cabinetModules.team,
           rolloutAccess(configuration, { audiences: [...audiences] }),
           'view',
         ),
@@ -274,26 +274,40 @@ describe('evaluateModuleAccess', () => {
   it('fails closed when the configured server envelope omits its grant', () => {
     expect(
       evaluateModuleAccess(
-        cabinetModules.profile,
+        cabinetModules.team,
         rolloutAccess(rolloutConfiguration('on'), { grants: [] }),
         'view',
       ),
     ).toEqual({ kind: 'unreleased' })
   })
 
-  it('gates every delivered parity surface with the same configured policy', () => {
+  it.each([
+    ['off', rolloutConfiguration('off')],
+    ['emergency off', rolloutConfiguration('on', 100, true)],
+  ] as const)(
+    '%s preserves pre-initiative account routes while gating new parity routes',
+    (_name, configuration) => {
+      const access = rolloutAccess(configuration)
+
+      for (const key of ['billing', 'plans', 'payments', 'profile'] as const) {
+        expect(
+          evaluateModuleAccess(cabinetModules[key], access, 'view'),
+        ).toEqual({ kind: 'allowed' })
+      }
+
+      for (const key of ['team', 'reports', 'business'] as const) {
+        expect(
+          evaluateModuleAccess(cabinetModules[key], access, 'view'),
+        ).toEqual({ kind: 'unreleased' })
+      }
+    },
+  )
+
+  it('gates every newly released parity surface with the same configured policy', () => {
     const disabled = rolloutAccess(rolloutConfiguration('off'))
     const enabled = rolloutAccess(rolloutConfiguration('on'))
 
-    for (const key of [
-      'team',
-      'reports',
-      'profile',
-      'business',
-      'billing',
-      'plans',
-      'payments',
-    ] as const) {
+    for (const key of ['team', 'reports', 'business'] as const) {
       expect(
         evaluateModuleAccess(cabinetModules[key], disabled, 'view'),
       ).toEqual({ kind: 'unreleased' })

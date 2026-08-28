@@ -181,7 +181,6 @@ export const cabinetModules: Readonly<
     key: 'billing',
     routeSegment: '/settings/billing/overview',
     released: true,
-    rollout: 'cabinet-parity-v1',
     viewPermission: 'billing.view',
     mutationPermission: 'billing.manage',
     navigation: {
@@ -194,7 +193,6 @@ export const cabinetModules: Readonly<
     key: 'plans',
     routeSegment: '/settings/billing/plans',
     released: true,
-    rollout: 'cabinet-parity-v1',
     viewPermission: 'billing.view',
     mutationPermission: 'billing.manage',
     navigation: {
@@ -207,7 +205,6 @@ export const cabinetModules: Readonly<
     key: 'payments',
     routeSegment: '/settings/billing/payments',
     released: true,
-    rollout: 'cabinet-parity-v1',
     viewPermission: 'billing.view',
     mutationPermission: 'billing.manage',
     navigation: {
@@ -220,7 +217,6 @@ export const cabinetModules: Readonly<
     key: 'profile',
     routeSegment: '/settings/profile',
     released: true,
-    rollout: 'cabinet-parity-v1',
     navigation: {
       label: 'Профіль',
       icon: UserRound,

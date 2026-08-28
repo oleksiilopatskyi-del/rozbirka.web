@@ -36,6 +36,15 @@ configuration:
     production: not-recorded
   cabinetParityRollout:
     source: 'GET /me/permissions.cabinetParityRollout'
+    gatedModules:
+      - team
+      - reports
+      - business
+    preExistingModulesUnaffected:
+      - profile
+      - billing
+      - plans
+      - payments
     controlPlane: REPLACE-BEFORE-ROLLOUT
     controlPlaneOwner: REPLACE-BEFORE-ROLLOUT
     authorizedOperatorRole: REPLACE-BEFORE-ROLLOUT
