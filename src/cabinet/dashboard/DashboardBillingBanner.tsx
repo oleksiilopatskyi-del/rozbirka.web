@@ -85,7 +85,7 @@ function trialMessage(snapshot: TenantAccessSnapshot): string {
 
 function quotaGuidance(snapshot: TenantAccessSnapshot): BillingGuidance | null {
   const exhausted = Object.entries(snapshot.entitlement?.usage ?? {}).find(
-    ([, usage]) => usage.max !== null && usage.used >= usage.max,
+    ([, usage]) => usage.max != null && usage.used >= usage.max,
   )
   if (exhausted === undefined) return null
 

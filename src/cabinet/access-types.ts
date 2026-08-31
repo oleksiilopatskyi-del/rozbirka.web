@@ -1,4 +1,5 @@
-import type { BillingState, PlanUsageDto, SubscriptionDto } from '../api/types'
+import type { components as CoreComponents } from '../api/generated/core'
+import type { SubscriptionDto } from '../api/types'
 import type { CabinetParityRolloutEnvelopeV1 } from '../config/cabinet-feature-flags'
 
 export const ALL_PERMISSIONS = [
@@ -26,23 +27,20 @@ export const ALL_PERMISSIONS = [
 /** Canonical permissions accepted when authoring the cabinet registry. */
 export type Permission = (typeof ALL_PERMISSIONS)[number]
 
-export interface MePermissionsDto {
-  role: string
-  permissions: string[]
-  features: string[]
-  /** Additive backend contract; optional only while older deployments roll out. */
-  entitlement?: TenantEntitlementDto | null
-  /**
-   * Optional during the backwards-compatible rollout of the server contract.
-   * When present, the client validates it and fails parity modules closed.
-   */
-  cabinetParityRollout?: CabinetParityRolloutEnvelopeV1 | null
+export type CoreMePermissionsDto = CoreComponents['schemas']['MePermissionsDto']
+
+/**
+ * The generated Core response, with the one temporary relaxation required while
+ * older Core deployments can still omit the rollout envelope.
+ */
+export type MePermissionsDto = Omit<
+  CoreMePermissionsDto,
+  'cabinetParityRollout'
+> & {
+  cabinetParityRollout?: CoreMePermissionsDto['cabinetParityRollout'] | null
 }
 
-export interface TenantEntitlementDto {
-  state: BillingState
-  usage: PlanUsageDto
-}
+export type TenantEntitlementDto = NonNullable<MePermissionsDto['entitlement']>
 
 type DeepReadonly<T> = T extends readonly (infer Item)[]
   ? readonly DeepReadonly<Item>[]

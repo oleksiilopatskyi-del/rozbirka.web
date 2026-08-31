@@ -1,3 +1,5 @@
+import type { components as CoreComponents } from '../api/generated/core'
+
 export type CabinetParityRolloutMode = 'off' | 'internal' | 'canary' | 'on'
 
 export interface CabinetParityRolloutV1 {
@@ -7,17 +9,11 @@ export interface CabinetParityRolloutV1 {
   emergencyOff: boolean
 }
 
-export interface CabinetParityRolloutSubject {
-  version: 1
-  subjectId: string
-  grants: readonly string[]
-  audiences: readonly string[]
-}
+export type CabinetParityRolloutSubject =
+  CoreComponents['schemas']['CabinetParityRolloutClaimDto']
 
-export interface CabinetParityRolloutEnvelopeV1 {
-  configuration: string
-  claim: CabinetParityRolloutSubject
-}
+export type CabinetParityRolloutEnvelopeV1 =
+  CoreComponents['schemas']['CabinetParityRolloutEnvelopeDto']
 
 export interface CabinetParityCompatibilityV1 {
   version: 1
@@ -142,8 +138,8 @@ const parseClaim = (value: unknown): CabinetParityRolloutSubject | null => {
   return {
     version: 1,
     subjectId: claim['subjectId'],
-    grants: claim['grants'],
-    audiences: claim['audiences'],
+    grants: [...claim['grants']],
+    audiences: [...claim['audiences']],
   }
 }
 

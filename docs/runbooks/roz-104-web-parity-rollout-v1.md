@@ -23,8 +23,8 @@ Required evidence before any rollout action:
 ## Versioned flag contract
 
 The authenticated, tenant-scoped `GET /me/permissions` response is the only
-browser runtime source for this flag. It may add this server-controlled
-envelope:
+browser runtime source for this flag. The current Core OpenAPI requires this
+server-controlled envelope:
 
 ```json
 {

@@ -107,7 +107,7 @@ export const evaluateModuleAccess = (
     }
 
     const usage = entitlement.usage[definition.quotaResource]
-    if (usage.max !== null && usage.used >= usage.max) {
+    if (usage.max != null && usage.used >= usage.max) {
       return {
         kind: 'quota-exhausted',
         resource: definition.quotaResource,
