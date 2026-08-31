@@ -1,8 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router'
+import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useCabinet } from '../CabinetContext'
+import { tenantRequestScope } from '../tenant-request-scope'
 import { OrdersScreen } from './OrdersScreen'
 
 const orderMocks = vi.hoisted(() => ({
@@ -51,15 +52,21 @@ const cabinet = (
 ) =>
   ({
     status: 'ready',
-    targetTenant: { slug: 'garage' },
+    targetTenant: { id: 'tenant-1', slug: 'garage' },
     snapshot: {
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      generation: 1,
       permissions: new Set(permissions),
       features: new Set(),
       entitlement: { state: entitlementState, usage: {} },
     },
     error: null,
   }) as unknown as ReturnType<typeof useCabinet>
-afterEach(() => vi.clearAllMocks())
+afterEach(() => {
+  vi.clearAllMocks()
+  vi.restoreAllMocks()
+})
 beforeEach(() => {
   vi.mocked(useCabinet).mockReturnValue(cabinet())
   orderMocks.list.mockResolvedValue({
@@ -97,6 +104,65 @@ it('prevents a duplicate canonical create while the first request is pending', a
   expect(orderMocks.create).toHaveBeenCalledOnce()
   expect(submit).toBeDisabled()
   resolve({ id: 'order-1' })
+})
+
+it.each(['parts.view', 'customers.view'])(
+  'blocks canonical creation when %s is revoked after render',
+  async (permission) => {
+    const access = cabinet()
+    vi.mocked(useCabinet).mockReturnValue(access)
+    orderMocks.create.mockResolvedValue({ id: 'order-1' })
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/app/garage/orders/new']}>
+        <OrdersScreen definition={definition} />
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText('ID запчастини'), 'part-1')
+    await user.type(screen.getByLabelText('Кількість'), '1')
+    await user.type(screen.getByLabelText('Ціна за одиницю'), '250')
+    ;(access.snapshot!.permissions as Set<string>).delete(permission)
+    await user.click(
+      screen.getByRole('button', { name: 'Створити замовлення' }),
+    )
+
+    expect(orderMocks.create).not.toHaveBeenCalled()
+  },
+)
+
+it('blocks add-item replacement when parts.view is revoked after render', async () => {
+  const access = cabinet()
+  vi.mocked(useCabinet).mockReturnValue(access)
+  orderMocks.getById.mockResolvedValue({
+    items: [
+      {
+        id: 'item-1',
+        partId: 'part-1',
+        partName: 'Ліхтар',
+        quantity: 1,
+        unitPrice: 100,
+        totalPrice: 100,
+      },
+    ],
+  })
+  orderMocks.updateItems.mockResolvedValue({ id: 'order-1' })
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/garage/orders/order-1/items/new']}>
+      <OrdersScreen definition={definition} />
+    </MemoryRouter>,
+  )
+
+  await user.type(screen.getByLabelText('ID запчастини'), 'part-2')
+  await user.type(screen.getByLabelText('Кількість'), '1')
+  await user.type(screen.getByLabelText('Ціна за одиницю'), '75')
+  const submit = await screen.findByRole('button', { name: 'Додати позицію' })
+  await waitFor(() => expect(submit).toBeEnabled())
+  ;(access.snapshot!.permissions as Set<string>).delete('parts.view')
+  await user.click(submit)
+
+  expect(orderMocks.updateItems).not.toHaveBeenCalled()
 })
 
 it.each([
@@ -142,11 +208,14 @@ it('creates a customer inline before canonical order creation', async () => {
   await user.type(screen.getByLabelText('Ціна за одиницю'), '250')
   await user.click(screen.getByRole('button', { name: 'Створити замовлення' }))
 
-  expect(customerMocks.create).toHaveBeenCalledWith({
-    name: 'Нова Ірина',
-    phone: '+380501112233',
-    notes: null,
-  })
+  expect(customerMocks.create).toHaveBeenCalledWith(
+    {
+      name: 'Нова Ірина',
+      phone: '+380501112233',
+      notes: null,
+    },
+    { signal: tenantRequestScope.signal },
+  )
   expect(orderMocks.create).toHaveBeenCalledWith(
     expect.objectContaining({ customerId: 'customer-new' }),
   )
@@ -173,6 +242,29 @@ it.each([
   ).not.toBeInTheDocument()
   expect(customerMocks.create).not.toHaveBeenCalled()
 })
+
+it.each(['orders.manage', 'customers.view', 'customers.manage'])(
+  'blocks inline customer creation when %s is revoked after render',
+  async (permission) => {
+    const access = cabinet()
+    vi.mocked(useCabinet).mockReturnValue(access)
+    customerMocks.create.mockResolvedValue({
+      customer: { id: 'customer-new', name: 'Нова Ірина' },
+    })
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/app/garage/orders/new']}>
+        <OrdersScreen definition={definition} />
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText('Ім’я нового клієнта'), 'Нова Ірина')
+    ;(access.snapshot!.permissions as Set<string>).delete(permission)
+    await user.click(screen.getByRole('button', { name: 'Створити клієнта' }))
+
+    expect(customerMocks.create).not.toHaveBeenCalled()
+  },
+)
 
 it('reuses an active duplicate-phone customer in the pending order', async () => {
   customerMocks.create.mockRejectedValue({
@@ -257,10 +349,51 @@ it('reactivates an inactive duplicate-phone customer before selecting it', async
   await user.type(screen.getByLabelText('Ціна за одиницю'), '250')
   await user.click(screen.getByRole('button', { name: 'Створити замовлення' }))
 
-  expect(customerMocks.activate).toHaveBeenCalledWith('customer-inactive')
+  expect(customerMocks.activate).toHaveBeenCalledWith('customer-inactive', {
+    signal: tenantRequestScope.signal,
+  })
   expect(orderMocks.create).toHaveBeenCalledWith(
     expect.objectContaining({ customerId: 'customer-inactive' }),
   )
+})
+
+it('blocks duplicate-customer reactivation when customers.view is revoked after render', async () => {
+  const access = cabinet()
+  vi.mocked(useCabinet).mockReturnValue(access)
+  customerMocks.create.mockRejectedValue({
+    response: {
+      status: 409,
+      data: {
+        error: {
+          code: 'CUSTOMER_PHONE_EXISTS',
+          customerId: 'customer-inactive',
+          customerName: 'Олена',
+          isActive: false,
+          message: 'Телефон уже використовується',
+        },
+      },
+    },
+  })
+  customerMocks.activate.mockResolvedValue({
+    id: 'customer-inactive',
+    name: 'Олена',
+  })
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/garage/orders/new']}>
+      <OrdersScreen definition={definition} />
+    </MemoryRouter>,
+  )
+
+  await user.type(screen.getByLabelText('Ім’я нового клієнта'), 'Нова Олена')
+  await user.click(screen.getByRole('button', { name: 'Створити клієнта' }))
+  const activate = await screen.findByRole('button', {
+    name: 'Активувати Олена',
+  })
+  ;(access.snapshot!.permissions as Set<string>).delete('customers.view')
+  await user.click(activate)
+
+  expect(customerMocks.activate).not.toHaveBeenCalled()
 })
 
 it.each([
@@ -541,6 +674,238 @@ it('passes a payment allocation to Core unchanged when confirming an order', asy
     { payments: [{ accountId: 'cash-1', amount: 250, currency: 'UAH' }] },
     { idempotencyKey: `order-confirm-${generatedId}` },
   )
+})
+
+it('reuses a confirmation key after an ambiguous failure and rotates it when the payment changes', async () => {
+  const order = {
+    id: 'order-1',
+    number: 1,
+    status: 'pending',
+    customerId: null,
+    customerName: null,
+    notes: null,
+    items: [],
+    payments: [],
+    history: [],
+    totalAmount: 250,
+    totalPaid: 0,
+    paymentCurrency: 'UAH',
+    createdAt: '2026-08-28T00:00:00Z',
+    createdByName: 'Олена',
+  } as never
+  orderMocks.getById.mockResolvedValue(order)
+  orderMocks.confirm
+    .mockRejectedValueOnce({
+      kind: 'network',
+      message: 'Немає з’єднання з мережею.',
+    })
+    .mockRejectedValueOnce({
+      kind: 'timeout',
+      message: 'Час очікування запиту минув.',
+    })
+    .mockResolvedValue(order)
+  const randomUUID = vi
+    .spyOn(globalThis.crypto, 'randomUUID')
+    .mockReturnValueOnce('00000000-0000-4000-8000-000000000001')
+    .mockReturnValueOnce('00000000-0000-4000-8000-000000000002')
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/garage/orders/order-1']}>
+      <OrdersScreen definition={definition} />
+    </MemoryRouter>,
+  )
+
+  await screen.findByRole('heading', { name: 'Замовлення #1' })
+  await user.type(screen.getByLabelText('ID рахунку'), 'cash-1')
+  await user.type(screen.getByLabelText('Сума платежу'), '250')
+  await user.type(screen.getByLabelText('Валюта платежу'), 'UAH')
+  const submit = screen.getByRole('button', { name: 'Підтвердити' })
+
+  await user.click(submit)
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Немає з’єднання з мережею.',
+  )
+  await user.click(submit)
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Час очікування запиту минув.',
+  )
+
+  expect(orderMocks.confirm).toHaveBeenNthCalledWith(
+    1,
+    'order-1',
+    expect.any(Object),
+    {
+      idempotencyKey: 'order-confirm-00000000-0000-4000-8000-000000000001',
+    },
+  )
+  expect(orderMocks.confirm).toHaveBeenNthCalledWith(
+    2,
+    'order-1',
+    expect.any(Object),
+    {
+      idempotencyKey: 'order-confirm-00000000-0000-4000-8000-000000000001',
+    },
+  )
+  expect(randomUUID).toHaveBeenCalledOnce()
+
+  await user.clear(screen.getByLabelText('Сума платежу'))
+  await user.type(screen.getByLabelText('Сума платежу'), '200')
+  await user.click(submit)
+
+  expect(orderMocks.confirm).toHaveBeenNthCalledWith(
+    3,
+    'order-1',
+    expect.any(Object),
+    {
+      idempotencyKey: 'order-confirm-00000000-0000-4000-8000-000000000002',
+    },
+  )
+  expect(randomUUID).toHaveBeenCalledTimes(2)
+})
+
+it('rotates a confirmation key when client-side navigation changes the order resource', async () => {
+  const order = (id: string) => ({
+    id,
+    number: id === 'order-1' ? 1 : 2,
+    status: 'pending',
+    customerId: null,
+    customerName: null,
+    notes: null,
+    items: [],
+    payments: [],
+    history: [],
+    totalAmount: 250,
+    totalPaid: 0,
+    paymentCurrency: 'UAH',
+    createdAt: '2026-08-28T00:00:00Z',
+    createdByName: 'Олена',
+  })
+  orderMocks.getById.mockImplementation((id: string) =>
+    Promise.resolve(order(id)),
+  )
+  orderMocks.confirm.mockRejectedValue({
+    kind: 'network',
+    message: 'Немає з’єднання з мережею.',
+  })
+  const randomUUID = vi
+    .spyOn(globalThis.crypto, 'randomUUID')
+    .mockReturnValueOnce('00000000-0000-4000-8000-000000000001')
+    .mockReturnValueOnce('00000000-0000-4000-8000-000000000002')
+  const router = createMemoryRouter(
+    [
+      {
+        path: '/app/:tenant/orders/:orderId',
+        element: <OrdersScreen definition={definition} />,
+      },
+    ],
+    { initialEntries: ['/app/garage/orders/order-1'] },
+  )
+  const user = userEvent.setup()
+  render(<RouterProvider router={router} />)
+
+  await screen.findByRole('heading', { name: 'Замовлення #1' })
+  await user.type(screen.getByLabelText('ID рахунку'), 'cash-1')
+  await user.type(screen.getByLabelText('Сума платежу'), '250')
+  await user.type(screen.getByLabelText('Валюта платежу'), 'UAH')
+  await user.click(screen.getByRole('button', { name: 'Підтвердити' }))
+  expect(await screen.findByRole('alert')).toBeVisible()
+
+  await act(async () => {
+    await router.navigate('/app/garage/orders/order-2')
+  })
+  await screen.findByRole('heading', { name: 'Замовлення #2' })
+  await user.click(screen.getByRole('button', { name: 'Підтвердити' }))
+
+  expect(orderMocks.confirm).toHaveBeenNthCalledWith(
+    1,
+    'order-1',
+    expect.any(Object),
+    {
+      idempotencyKey: 'order-confirm-00000000-0000-4000-8000-000000000001',
+    },
+  )
+  expect(orderMocks.confirm).toHaveBeenNthCalledWith(
+    2,
+    'order-2',
+    expect.any(Object),
+    {
+      idempotencyKey: 'order-confirm-00000000-0000-4000-8000-000000000002',
+    },
+  )
+  expect(randomUUID).toHaveBeenCalledTimes(2)
+})
+
+it('preserves a refund key only for ambiguous retries and rotates after definitive outcomes', async () => {
+  const order = {
+    id: 'order-1',
+    number: 1,
+    status: 'confirmed',
+    customerId: null,
+    customerName: null,
+    notes: null,
+    items: [],
+    payments: [],
+    history: [],
+    totalAmount: 250,
+    totalPaid: 250,
+    paymentCurrency: 'UAH',
+    createdAt: '2026-08-28T00:00:00Z',
+    createdByName: 'Олена',
+  }
+  orderMocks.getById.mockResolvedValue(order)
+  orderMocks.refund
+    .mockRejectedValueOnce({
+      kind: 'network',
+      message: 'Немає з’єднання з мережею.',
+    })
+    .mockRejectedValueOnce({
+      kind: 'validation',
+      message: 'Перевірте причину повернення.',
+    })
+    .mockResolvedValue(order)
+  const randomUUID = vi
+    .spyOn(globalThis.crypto, 'randomUUID')
+    .mockReturnValueOnce('00000000-0000-4000-8000-000000000001')
+    .mockReturnValueOnce('00000000-0000-4000-8000-000000000002')
+    .mockReturnValueOnce('00000000-0000-4000-8000-000000000003')
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/garage/orders/order-1']}>
+      <OrdersScreen definition={definition} />
+    </MemoryRouter>,
+  )
+
+  await screen.findByRole('heading', { name: 'Замовлення #1' })
+  await user.type(screen.getByLabelText('Причина повернення'), 'Помилка каси')
+  const submit = screen.getByRole('button', { name: 'Повернути кошти' })
+  await user.click(submit)
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Немає з’єднання з мережею.',
+  )
+  await user.click(submit)
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Перевірте причину повернення.',
+  )
+  await user.click(submit)
+  await waitFor(() =>
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument(),
+  )
+  await user.click(submit)
+
+  for (const [call, uuid] of [
+    [1, '00000000-0000-4000-8000-000000000001'],
+    [2, '00000000-0000-4000-8000-000000000001'],
+    [3, '00000000-0000-4000-8000-000000000002'],
+    [4, '00000000-0000-4000-8000-000000000003'],
+  ] as const) {
+    expect(orderMocks.refund).toHaveBeenNthCalledWith(
+      call,
+      'order-1',
+      { refundReason: 'Помилка каси' },
+      { idempotencyKey: `order-refund-${uuid}` },
+    )
+  }
+  expect(randomUUID).toHaveBeenCalledTimes(3)
 })
 
 it('hides finance transitions when the snapshot lacks finance.manage', async () => {

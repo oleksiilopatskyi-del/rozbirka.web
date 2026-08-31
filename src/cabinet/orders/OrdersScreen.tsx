@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { normalizeApiProblem } from '@/api/errors'
 import {
@@ -13,6 +13,7 @@ import { useCabinet } from '../CabinetContext'
 import type { Permission } from '../access-types'
 import type { CabinetModuleScreenProps } from '../ModuleBoundary'
 import { evaluateModuleAccess } from '../policy'
+import { useLatestMutationGuard } from '../use-latest-mutation-guard'
 
 const idFromPath = (path: string) => /\/orders\/([^/]+)/.exec(path)?.[1] ?? null
 const errorMessage = (error: unknown) => {
@@ -23,8 +24,33 @@ const errorMessage = (error: unknown) => {
     return 'Замовлення змінилося. Оновіть сторінку та спробуйте ще раз.'
   return problem.message
 }
-const idempotencyKey = (operation: string) =>
-  `${operation}-${crypto.randomUUID()}`
+type OrderReplayOperation = 'order-confirm' | 'order-refund'
+const isAmbiguousMutationFailure = (error: unknown) => {
+  const kind = normalizeApiProblem(error).kind
+  return kind === 'network' || kind === 'timeout'
+}
+const useOrderIdempotencyKeys = () => {
+  const keysRef = useRef(
+    new Map<OrderReplayOperation, { signature: string; key: string }>(),
+  )
+  return {
+    forPayload(
+      tenant: string,
+      operation: OrderReplayOperation,
+      payload: unknown,
+    ) {
+      const signature = JSON.stringify([tenant, operation, payload])
+      const current = keysRef.current.get(operation)
+      if (current?.signature === signature) return current.key
+      const key = `${operation}-${crypto.randomUUID()}`
+      keysRef.current.set(operation, { signature, key })
+      return key
+    },
+    clear(operation: OrderReplayOperation) {
+      keysRef.current.delete(operation)
+    },
+  }
+}
 
 export function OrdersScreen({ definition }: CabinetModuleScreenProps) {
   const location = useLocation()
@@ -197,6 +223,7 @@ function OrderForm({
   orderId,
 }: CabinetModuleScreenProps & { orderId: string | null }) {
   const cabinet = useCabinet()
+  const { requireLatestMutation } = useLatestMutationGuard(definition)
   const mutationsAllowed = canMutate(definition, cabinet)
   const [params] = useSearchParams()
   const navigate = useNavigate()
@@ -306,6 +333,11 @@ function OrderForm({
     setBusy(true)
     setError(null)
     try {
+      const scope = requireLatestMutation({ quota: orderId === null })
+      requireLatestMutation({ permission: 'parts.view', quota: false })
+      if (orderId === null) {
+        requireLatestMutation({ permission: 'customers.view', quota: false })
+      }
       const detail = orderId
         ? await ordersApi.updateItems(
             orderId,
@@ -339,6 +371,7 @@ function OrderForm({
               },
             ],
           })
+      if (scope.signal.aborted) return
       await navigate(`../${detail.id}`, { replace: true })
     } catch (error) {
       setError(errorMessage(error))
@@ -352,11 +385,24 @@ function OrderForm({
     setError(null)
     setCustomerConflict(null)
     try {
-      const result = await customersApi.create({
-        name: newCustomerName.trim(),
-        phone: newCustomerPhone.trim() || null,
-        notes: null,
+      requireLatestMutation()
+      requireLatestMutation({
+        permission: 'customers.manage',
+        quota: false,
       })
+      const scope = requireLatestMutation({
+        permission: 'customers.view',
+        quota: false,
+      })
+      const result = await customersApi.create(
+        {
+          name: newCustomerName.trim(),
+          phone: newCustomerPhone.trim() || null,
+          notes: null,
+        },
+        { signal: scope.signal },
+      )
+      if (scope.signal.aborted) return
       setCustomerId(result.customer.id)
       setNewCustomerName('')
       setNewCustomerPhone('')
@@ -386,7 +432,22 @@ function OrderForm({
     setCustomerBusy(true)
     setError(null)
     try {
-      const customer = await customersApi.activate(customerConflict.customerId)
+      requireLatestMutation({ quota: false })
+      requireLatestMutation({
+        permission: 'customers.manage',
+        quota: false,
+      })
+      const scope = requireLatestMutation({
+        permission: 'customers.view',
+        quota: false,
+      })
+      const customer = await customersApi.activate(
+        customerConflict.customerId,
+        {
+          signal: scope.signal,
+        },
+      )
+      if (scope.signal.aborted) return
       setCustomerId(customer.id)
       setCustomerConflict(null)
       setNewCustomerName('')
@@ -557,6 +618,8 @@ function OrderDetailScreen({
   orderId,
 }: CabinetModuleScreenProps & { orderId: string }) {
   const cabinet = useCabinet()
+  const { requireLatestMutation } = useLatestMutationGuard(definition)
+  const replayKeys = useOrderIdempotencyKeys()
   const location = useLocation()
   const mutationsAllowed = canMutate(definition, cabinet)
   const financeAllowed =
@@ -598,23 +661,44 @@ function OrderDetailScreen({
     void reload(controller.signal)
     return () => controller.abort()
   }, [reload])
-  const transition = async (action: () => Promise<OrderDetail>) => {
+  const transition = async (
+    action: (idempotencyKey?: string) => Promise<OrderDetail>,
+    replay?: { operation: OrderReplayOperation; payload: unknown },
+    permission?: Permission,
+  ) => {
     if (busy) return
     setBusy(true)
     try {
-      acceptOrder(await action())
+      const scope = requireLatestMutation({ quota: false })
+      if (permission) {
+        requireLatestMutation({ permission, quota: false })
+      }
+      const replayKey = replay
+        ? replayKeys.forPayload(
+            scope.tenantId,
+            replay.operation,
+            replay.payload,
+          )
+        : undefined
+      const updated = await action(replayKey)
+      if (replay) replayKeys.clear(replay.operation)
+      if (scope.signal.aborted) return
+      acceptOrder(updated)
       setError(null)
     } catch (error) {
+      if (replay && !isAmbiguousMutationFailure(error))
+        replayKeys.clear(replay.operation)
       setError(errorMessage(error))
     } finally {
       setBusy(false)
     }
   }
-  if (error) return <p role="alert">{error}</p>
+  if (error && !order) return <p role="alert">{error}</p>
   if (!order) return <p role="status">Завантажуємо замовлення…</p>
   return (
     <section className="grid gap-5">
       <h1 className="text-3xl text-white">Замовлення #{order.number}</h1>
+      {error && <p role="alert">{error}</p>}
       <p>Статус: {order.status}</p>
       <p>Клієнт: {order.customerName ?? 'Без клієнта'}</p>
       <p>
@@ -823,21 +907,26 @@ function OrderDetailScreen({
                   !payment.accountId || !payment.amount || !payment.currency,
               )
             }
-            onClick={() =>
-              void transition(() =>
-                ordersApi.confirm(
-                  order.id,
-                  {
-                    payments: paymentDrafts.map((payment) => ({
-                      accountId: payment.accountId,
-                      amount: Number(payment.amount),
-                      currency: payment.currency,
-                    })),
-                  },
-                  { idempotencyKey: idempotencyKey('order-confirm') },
-                ),
+            onClick={() => {
+              const input = {
+                payments: paymentDrafts.map((payment) => ({
+                  accountId: payment.accountId,
+                  amount: Number(payment.amount),
+                  currency: payment.currency,
+                })),
+              }
+              void transition(
+                (idempotencyKey) =>
+                  ordersApi.confirm(order.id, input, {
+                    idempotencyKey: idempotencyKey!,
+                  }),
+                {
+                  operation: 'order-confirm',
+                  payload: { orderId: order.id, input },
+                },
+                'finance.manage',
               )
-            }
+            }}
           >
             Підтвердити
           </button>
@@ -856,12 +945,17 @@ function OrderDetailScreen({
         <form
           onSubmit={(event) => {
             event.preventDefault()
-            void transition(() =>
-              ordersApi.refund(
-                order.id,
-                { refundReason },
-                { idempotencyKey: idempotencyKey('order-refund') },
-              ),
+            const input = { refundReason }
+            void transition(
+              (idempotencyKey) =>
+                ordersApi.refund(order.id, input, {
+                  idempotencyKey: idempotencyKey!,
+                }),
+              {
+                operation: 'order-refund',
+                payload: { orderId: order.id, input },
+              },
+              'finance.manage',
             )
           }}
         >

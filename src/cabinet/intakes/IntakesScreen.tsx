@@ -24,6 +24,7 @@ import { evaluateModuleAccess } from '../policy'
 import type { ModuleAccessDecision } from '../policy'
 import type { CabinetModuleDefinition } from '../module-registry'
 import type { Permission } from '../access-types'
+import { useLatestMutationGuard } from '../use-latest-mutation-guard'
 
 const defaultPageSize = 20
 const positiveInteger = (value: string | null, fallback: number) => {
@@ -163,7 +164,7 @@ export function IntakesScreen(_props: Partial<CabinetModuleScreenProps> = {}) {
         batch={location.pathname.endsWith('/batch')}
         canManageFinance={financeManage}
         title="Нове приймання"
-        submit={(request) => intakesApi.create(request)}
+        submit={(request, signal) => intakesApi.create(request, { signal })}
       />
     )
   }
@@ -175,7 +176,9 @@ export function IntakesScreen(_props: Partial<CabinetModuleScreenProps> = {}) {
         canManageFinance={financeManage}
         intakeId={intakeId}
         title="Редагувати приймання"
-        submit={(request) => intakesApi.update(intakeId, request)}
+        submit={(request, signal) =>
+          intakesApi.update(intakeId, request, { signal })
+        }
       />
     )
   }
@@ -331,6 +334,9 @@ function IntakeDetail({ base, intakeId }: { base: string; intakeId: string }) {
   const [intake, setIntake] = useState<Intake | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const { requireLatestMutation } = useLatestMutationGuard(
+    cabinetModules.intakes,
+  )
   useEffect(() => {
     const controller = new AbortController()
     void intakesApi
@@ -345,7 +351,8 @@ function IntakeDetail({ base, intakeId }: { base: string; intakeId: string }) {
     if (busy || !window.confirm('Видалити приймання?')) return
     setBusy(true)
     try {
-      await intakesApi.remove(intakeId)
+      const scope = requireLatestMutation({ quota: false })
+      await intakesApi.remove(intakeId, { signal: scope.signal })
       void navigate(base)
     } catch (error: unknown) {
       setProblem(normalizeApiProblem(error).message)
@@ -442,7 +449,7 @@ function IntakeForm({
   intakeId?: string
   batch?: boolean
   canManageFinance: boolean
-  submit: (request: CreateIntakeRequest) => Promise<Intake>
+  submit: (request: CreateIntakeRequest, signal: AbortSignal) => Promise<Intake>
 }) {
   const cabinet = useCabinet()
   const params = useParams<{ tenant: string }>()
@@ -458,6 +465,9 @@ function IntakeForm({
   const [media, setMedia] = useState<MediaUploadResult[]>([])
   const [problem, setProblem] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const { requireLatestMutation } = useLatestMutationGuard(
+    cabinetModules.intakes,
+  )
   useEffect(() => {
     if (!intakeId) return
     const controller = new AbortController()
@@ -501,10 +511,17 @@ function IntakeForm({
         ...(canManageFinance ? { totalCost: amount } : {}),
         notes: values.notes.trim() || null,
       }
+      const scope = requireLatestMutation({ quota: intakeId === undefined })
+      if ('totalCost' in request)
+        requireLatestMutation({
+          permission: 'finance.manage',
+          quota: false,
+        })
       const intake = await submit(
         intakeId
           ? request
           : { ...request, photoKeys: media.map((item) => item.storageKey) },
+        scope.signal,
       )
       void navigate(`${base}/${intake.id}`)
     } catch (error: unknown) {
@@ -585,6 +602,8 @@ function PartForm({
   const [media, setMedia] = useState<MediaUploadResult[]>([])
   const [problem, setProblem] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const intakeMutation = useLatestMutationGuard(cabinetModules.intakes)
+  const partMutation = useLatestMutationGuard(cabinetModules.parts)
   const save = async (event: React.FormEvent) => {
     event.preventDefault()
     if (busy) return
@@ -604,7 +623,11 @@ function PartForm({
     }
     setBusy(true)
     try {
-      await intakesApi.addPart(intakeId, request)
+      const intakeScope = intakeMutation.requireLatestMutation({ quota: false })
+      partMutation.requireLatestMutation({ permission: 'parts.view' })
+      await intakesApi.addPart(intakeId, request, {
+        signal: intakeScope.signal,
+      })
       void navigate(`${base}/${intakeId}`)
     } catch (error: unknown) {
       setProblem(normalizeApiProblem(error).message)
@@ -643,7 +666,18 @@ function PartForm({
           </label>
         ))}
         {canUploadMedia ? (
-          <MediaPicker entityType="parts" items={media} onChange={setMedia} />
+          <MediaPicker
+            beforeDispatch={() => {
+              intakeMutation.requireLatestMutation({ quota: false })
+              partMutation.requireLatestMutation({
+                permission: 'parts.view',
+                quota: false,
+              })
+            }}
+            entityType="parts"
+            items={media}
+            onChange={setMedia}
+          />
         ) : null}
         <button disabled={busy} type="submit">
           Додати запчастину

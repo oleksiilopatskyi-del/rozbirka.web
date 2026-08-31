@@ -17,6 +17,7 @@ import {
 import { useCabinet } from '../CabinetContext'
 import type { CabinetModuleScreenProps } from '../ModuleBoundary'
 import { evaluateModuleAccess } from '../policy'
+import { useLatestMutationGuard } from '../use-latest-mutation-guard'
 
 const idFromPath = (path: string) => /\/cash\/([^/]+)/.exec(path)?.[1] ?? null
 const localDate = (timeZone: string) =>
@@ -33,19 +34,52 @@ const problemMessage = (error: unknown) => {
   if (problem.kind === 'conflict') return problem.message
   return problem.message
 }
-const idempotencyKey = (operation: 'movement' | 'transfer') =>
-  `cash-${operation}-${crypto.randomUUID()}`
+type CashReplayOperation = 'movement' | 'transfer'
+const isAmbiguousMutationFailure = (error: unknown) => {
+  const kind = normalizeApiProblem(error).kind
+  return kind === 'network' || kind === 'timeout'
+}
+const useCashIdempotencyKeys = () => {
+  const keysRef = useRef(
+    new Map<CashReplayOperation, { signature: string; key: string }>(),
+  )
+  return {
+    forPayload(
+      tenant: string,
+      operation: CashReplayOperation,
+      payload: unknown,
+    ) {
+      const signature = JSON.stringify([tenant, operation, payload])
+      const current = keysRef.current.get(operation)
+      if (current?.signature === signature) return current.key
+      const key = `cash-${operation}-${crypto.randomUUID()}`
+      keysRef.current.set(operation, { signature, key })
+      return key
+    },
+    clear(operation: CashReplayOperation) {
+      keysRef.current.delete(operation)
+    },
+  }
+}
 const canMutate = (
   definition: CabinetModuleScreenProps['definition'],
   cabinet: ReturnType<typeof useCabinet>,
+  quota = true,
 ) => {
+  const { quotaResource, ...unmeteredDefinition } = definition
   const access =
     cabinet.status === 'ready' && cabinet.snapshot !== null
       ? { status: 'ready' as const, snapshot: cabinet.snapshot, error: null }
       : cabinet.status === 'error'
         ? { status: 'error' as const, snapshot: null, error: cabinet.error }
         : { status: 'loading' as const, snapshot: null, error: null }
-  return evaluateModuleAccess(definition, access, 'mutation').kind === 'allowed'
+  return (
+    evaluateModuleAccess(
+      quota || quotaResource === undefined ? definition : unmeteredDefinition,
+      access,
+      'mutation',
+    ).kind === 'allowed'
+  )
 }
 const canTransfer = (
   definition: CabinetModuleScreenProps['definition'],
@@ -203,7 +237,9 @@ function CashRegisterDetail({
   registerId,
 }: CabinetModuleScreenProps & { registerId: string }) {
   const cabinet = useCabinet()
-  const mutationsAllowed = canMutate(definition, cabinet)
+  const { requireLatestMutation } = useLatestMutationGuard(definition)
+  const replayKeys = useCashIdempotencyKeys()
+  const mutationsAllowed = canMutate(definition, cabinet, false)
   const transferAllowed = canTransfer(definition, cabinet)
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
@@ -274,21 +310,28 @@ function CashRegisterDetail({
     event.preventDefault()
     if (busy || !amount) return
     setBusy(true)
+    const input = {
+      type,
+      amount: Number(amount),
+      currency: currency || null,
+      note: note || null,
+    }
     try {
-      await cashApi.createTransaction(
-        registerId,
-        {
-          type,
-          amount: Number(amount),
-          currency: currency || null,
-          note: note || null,
-        },
-        { idempotencyKey: idempotencyKey('movement') },
-      )
+      requireLatestMutation({ permission: 'finance.view', quota: false })
+      const scope = requireLatestMutation({ quota: false })
+      await cashApi.createTransaction(registerId, input, {
+        idempotencyKey: replayKeys.forPayload(scope.tenantId, 'movement', {
+          registerId,
+          input,
+        }),
+      })
+      replayKeys.clear('movement')
+      if (scope.signal.aborted) return
       setAmount('')
       setNote('')
       await load()
     } catch (error) {
+      if (!isAmbiguousMutationFailure(error)) replayKeys.clear('movement')
       setError(problemMessage(error))
     } finally {
       setBusy(false)
@@ -301,7 +344,9 @@ function CashRegisterDetail({
     if (busy) return
     setBusy(true)
     try {
+      const scope = requireLatestMutation({ quota: false })
       const result = await action()
+      if (scope.signal.aborted) return
       if (result) setRegister(result)
       if (reloadAfter) await load()
       setError(null)
@@ -315,7 +360,9 @@ function CashRegisterDetail({
     if (busy) return
     setBusy(true)
     try {
+      const scope = requireLatestMutation({ quota: false })
       await cashApi.remove(registerId)
+      if (scope.signal.aborted) return
       await navigate('..', { replace: true })
     } catch (mutationError) {
       setError(problemMessage(mutationError))
@@ -337,31 +384,40 @@ function CashRegisterDetail({
     setTransferBusy(true)
     setTransferError(null)
     setTransferStatus(null)
+    const input = {
+      fromRegisterId: registerId,
+      fromCurrency,
+      toRegisterId,
+      toCurrency,
+      amountOut: Number(amountOut),
+      amountIn: Number(amountIn),
+      note: transferNote.trim() || null,
+    }
     try {
-      await cashApi.transfer(
-        {
-          fromRegisterId: registerId,
-          fromCurrency,
-          toRegisterId,
-          toCurrency,
-          amountOut: Number(amountOut),
-          amountIn: Number(amountIn),
-          note: transferNote.trim() || null,
-        },
-        { idempotencyKey: idempotencyKey('transfer') },
-      )
+      const scope = requireLatestMutation({ quota: false })
+      await cashApi.transfer(input, {
+        idempotencyKey: replayKeys.forPayload(
+          scope.tenantId,
+          'transfer',
+          input,
+        ),
+      })
+      replayKeys.clear('transfer')
+      if (scope.signal.aborted) return
       setAmountOut('')
       setAmountIn('')
       setTransferNote('')
       await load()
       setTransferStatus('Переказ виконано.')
     } catch (transferFailure) {
+      if (!isAmbiguousMutationFailure(transferFailure))
+        replayKeys.clear('transfer')
       setTransferError(problemMessage(transferFailure))
     } finally {
       setTransferBusy(false)
     }
   }
-  if (error) return <p role="alert">{error}</p>
+  if (error && !register) return <p role="alert">{error}</p>
   if (!register) return <p role="status">Завантажуємо касу…</p>
   const transferDestinations = transferRegisters.filter(
     (candidate) => candidate.id !== registerId && candidate.isActive,
@@ -375,6 +431,7 @@ function CashRegisterDetail({
         <h1 className="text-3xl text-white">{register.name}</h1>
         {mutationsAllowed && <Link to="edit">Редагувати</Link>}
       </header>
+      {error && <p role="alert">{error}</p>}
       <dl>
         {Object.entries(register.balances).map(([code, balance]) => (
           <div key={code}>
@@ -713,7 +770,8 @@ function CashRegisterForm({
   registerId,
 }: CabinetModuleScreenProps & { registerId: string | null }) {
   const cabinet = useCabinet()
-  const mutationsAllowed = canMutate(definition, cabinet)
+  const { requireLatestMutation } = useLatestMutationGuard(definition)
+  const mutationsAllowed = canMutate(definition, cabinet, registerId === null)
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [type, setType] = useState('cash')
@@ -743,6 +801,7 @@ function CashRegisterForm({
     if (busy || !name.trim()) return
     setBusy(true)
     try {
+      const scope = requireLatestMutation({ quota: registerId === null })
       const result = registerId
         ? await cashApi.update(registerId, { name: name.trim() })
         : await cashApi.create({
@@ -751,6 +810,7 @@ function CashRegisterForm({
             currencies: currenciesFromText(currencies),
             initialBalances: balancesFromText(initialBalances),
           })
+      if (scope.signal.aborted) return
       await navigate(`../${result.id}`, { replace: true })
     } catch (error) {
       setError(problemMessage(error))

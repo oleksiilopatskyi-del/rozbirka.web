@@ -12,6 +12,7 @@ import {
   type CarExpense,
   type CarListParams,
   type CreateCarRequest,
+  type UpdateCarRequest,
   isCarStatus,
 } from '@/api/cars'
 import { normalizeApiProblem } from '@/api/errors'
@@ -29,6 +30,7 @@ import {
 } from '../module-registry'
 import { evaluateModuleAccess } from '../policy'
 import type { ModuleAccessDecision } from '../policy'
+import { useLatestMutationGuard } from '../use-latest-mutation-guard'
 
 const money = (value: number) =>
   new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 }).format(value)
@@ -274,6 +276,7 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
   const [problem, setProblem] = useState<string | null>(null)
   const [copyStatus, setCopyStatus] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const { requireLatestMutation } = useLatestMutationGuard(cabinetModules.cars)
   const load = async () => {
     try {
       setCar(await carsApi.get(carId))
@@ -307,8 +310,10 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
       return
     setBusy(true)
     try {
-      if (action === 'archive') await carsApi.archive(carId)
-      else await carsApi.remove(carId)
+      const scope = requireLatestMutation({ quota: false })
+      if (action === 'archive')
+        await carsApi.archive(carId, { signal: scope.signal })
+      else await carsApi.remove(carId, { signal: scope.signal })
       void navigate(base)
     } catch (error: unknown) {
       setProblem(normalizeApiProblem(error).message)
@@ -444,6 +449,7 @@ function Expenses({
   onChanged: () => Promise<void>
   onProblem: (message: string) => void
 }) {
+  const { requireLatestMutation } = useLatestMutationGuard(cabinetModules.cars)
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [editing, setEditing] = useState<CarExpense | null>(null)
@@ -461,16 +467,30 @@ function Expenses({
       return
     setBusy(true)
     try {
+      requireLatestMutation({ permission: 'cars.view', quota: false })
+      const scope = requireLatestMutation({
+        permission: 'finance.manage',
+        quota: false,
+      })
       if (editing) {
-        await carsApi.updateExpense(car.id, editing.id, {
-          name: name.trim(),
-          amount: value,
-        })
+        await carsApi.updateExpense(
+          car.id,
+          editing.id,
+          {
+            name: name.trim(),
+            amount: value,
+          },
+          { signal: scope.signal },
+        )
       } else {
-        await carsApi.createExpense(car.id, {
-          name: name.trim(),
-          amount: value,
-        })
+        await carsApi.createExpense(
+          car.id,
+          {
+            name: name.trim(),
+            amount: value,
+          },
+          { signal: scope.signal },
+        )
       }
       setName('')
       setAmount('')
@@ -486,7 +506,12 @@ function Expenses({
     if (!canManage || busy || !window.confirm('Видалити витрату?')) return
     setBusy(true)
     try {
-      await carsApi.removeExpense(car.id, expense.id)
+      requireLatestMutation({ permission: 'cars.view', quota: false })
+      const scope = requireLatestMutation({
+        permission: 'finance.manage',
+        quota: false,
+      })
+      await carsApi.removeExpense(car.id, expense.id, { signal: scope.signal })
       await onChanged()
     } catch (error: unknown) {
       onProblem(normalizeApiProblem(error).message)
@@ -580,6 +605,7 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
   )
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  const { requireLatestMutation } = useLatestMutationGuard(cabinetModules.cars)
   useEffect(() => {
     if (!carId) return
     void carsApi.get(carId).then(
@@ -608,24 +634,23 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (busy) return
-    const request: CreateCarRequest = {
+    const purchasePrice = Number(values.purchasePrice)
+    const request = {
       code: values.code.trim(),
       brand: values.brand.trim(),
       model: values.model.trim(),
       year: Number(values.year),
-      purchasePrice: Number(values.purchasePrice),
       color: values.color.trim() || null,
       vin: values.vin.trim() || null,
       acquiredAt: values.acquiredAt || null,
       notes: values.notes.trim() || null,
-      photoKeys: media.map((item) => item.storageKey),
     }
     if (
       !request.code ||
       !request.brand ||
       !request.model ||
       !Number.isInteger(request.year) ||
-      !Number.isFinite(request.purchasePrice)
+      ((!carId || financeManage) && !Number.isFinite(purchasePrice))
     )
       return
     const preparedExpenses = expenses.map((expense) => ({
@@ -650,21 +675,35 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
     try {
       let savedCarId = carId ?? createdCarId
       if (carId) {
-        const car = await carsApi.update(carId, {
-          code: request.code,
-          brand: request.brand,
-          model: request.model,
-          year: request.year,
-          purchasePrice: request.purchasePrice,
-          color: request.color,
-          vin: request.vin,
-          acquiredAt: request.acquiredAt,
-          notes: request.notes,
+        const updateRequest: UpdateCarRequest = {
+          ...request,
+          ...(financeManage ? { purchasePrice } : {}),
+        }
+        const scope = requireLatestMutation({ quota: false })
+        if ('purchasePrice' in updateRequest)
+          requireLatestMutation({
+            permission: 'finance.manage',
+            quota: false,
+          })
+        const car = await carsApi.update(carId, updateRequest, {
+          signal: scope.signal,
         })
         savedCarId = car.id
       } else {
         if (!savedCarId) {
-          const car = await carsApi.create(request)
+          const createRequest: CreateCarRequest = {
+            ...request,
+            purchasePrice,
+            photoKeys: media.map((item) => item.storageKey),
+          }
+          const scope = requireLatestMutation()
+          requireLatestMutation({
+            permission: 'finance.manage',
+            quota: false,
+          })
+          const car = await carsApi.create(createRequest, {
+            signal: scope.signal,
+          })
           savedCarId = car.id
           setCreatedCarId(car.id)
         }
@@ -672,10 +711,19 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
         for (const expense of preparedExpenses) {
           if (completed.has(expense.id)) continue
           try {
-            await carsApi.createExpense(savedCarId, {
-              name: expense.name,
-              amount: expense.amount,
+            requireLatestMutation({ permission: 'cars.view', quota: false })
+            const scope = requireLatestMutation({
+              permission: 'finance.manage',
+              quota: false,
             })
+            await carsApi.createExpense(
+              savedCarId,
+              {
+                name: expense.name,
+                amount: expense.amount,
+              },
+              { signal: scope.signal },
+            )
             completed.add(expense.id)
             setCompletedExpenseIds(new Set(completed))
           } catch (error: unknown) {
@@ -717,17 +765,21 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
           <label key={key}>
             {label}
             <input
+              disabled={
+                busy ||
+                (key === 'purchasePrice' &&
+                  carId !== undefined &&
+                  !financeManage)
+              }
               name={key}
               onChange={(event) =>
                 setValues({ ...values, [key]: event.target.value })
               }
-              required={[
-                'code',
-                'brand',
-                'model',
-                'year',
-                'purchasePrice',
-              ].includes(key)}
+              required={
+                ['code', 'brand', 'model', 'year'].includes(key) ||
+                (key === 'purchasePrice' &&
+                  (carId === undefined || financeManage))
+              }
               value={values[key]}
             />
           </label>
@@ -749,7 +801,12 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
             </section>
           ) : null
         ) : (
-          <MediaPicker entityType="cars" items={media} onChange={setMedia} />
+          <MediaPicker
+            additionalPermission="finance.manage"
+            entityType="cars"
+            items={media}
+            onChange={setMedia}
+          />
         )}
         {!carId && financeManage ? (
           <fieldset>
@@ -879,14 +936,20 @@ function CarWarehouse({ carId }: { carId: string }) {
 }
 
 export function MediaPicker({
+  additionalPermission,
+  beforeDispatch,
   entityType,
   items,
   onChange,
 }: {
-  entityType: MediaEntityType
+  additionalPermission?: Permission
+  beforeDispatch?: () => unknown
+  entityType: Exclude<MediaEntityType, 'tenants'>
   items: MediaUploadResult[]
   onChange: (items: MediaUploadResult[]) => void
 }) {
+  const definition = cabinetModules[entityType]
+  const { requireLatestMutation } = useLatestMutationGuard(definition)
   const [busy, setBusy] = useState(false)
   const [problems, setProblems] = useState<string[]>([])
   const upload = async (files: FileList | null) => {
@@ -894,7 +957,18 @@ export function MediaPicker({
     setBusy(true)
     const selected = Array.from(files)
     const results = await Promise.allSettled(
-      selected.map((file) => mediaApi.upload(file, entityType)),
+      selected.map((file) =>
+        Promise.resolve().then(() => {
+          beforeDispatch?.()
+          const scope = requireLatestMutation({ quota: false })
+          if (additionalPermission)
+            requireLatestMutation({
+              permission: additionalPermission,
+              quota: false,
+            })
+          return mediaApi.upload(file, entityType, { signal: scope.signal })
+        }),
+      ),
     )
     const uploaded = results.flatMap((result) =>
       result.status === 'fulfilled' ? [result.value] : [],
@@ -913,7 +987,14 @@ export function MediaPicker({
     if (busy) return
     setBusy(true)
     try {
-      await mediaApi.remove(item.storageKey)
+      beforeDispatch?.()
+      const scope = requireLatestMutation({ quota: false })
+      if (additionalPermission)
+        requireLatestMutation({
+          permission: additionalPermission,
+          quota: false,
+        })
+      await mediaApi.remove(item.storageKey, { signal: scope.signal })
       onChange(items.filter((value) => value.storageKey !== item.storageKey))
     } catch (error: unknown) {
       setProblems([normalizeApiProblem(error).message])

@@ -37,12 +37,12 @@ const report = (status: ReportJob['status']): ReportJob => ({
 const screenProps = {
   definition: {
     key: 'reports',
-    label: 'Звіти',
-    description: 'Reports',
-    href: '/app/tenant-1/reports',
-    icon: 'FileText',
+    routeSegment: '/reports',
+    released: true,
+    viewPermission: 'reports.view',
+    mutationPermission: 'reports.manage',
   },
-} as unknown as CabinetModuleScreenProps
+} satisfies CabinetModuleScreenProps
 
 function cabinet({
   canManage = true,
@@ -55,13 +55,28 @@ function cabinet({
 } = {}) {
   return {
     status: 'ready',
-    targetTenant: null,
+    targetTenant: {
+      id: tenantId,
+      name: 'Demo Yard',
+      slug: tenantId,
+      plan: 'active',
+      planTier: 'pro',
+      city: null,
+      logoUrl: null,
+      isActive: true,
+      createdAt: '2026-08-01T00:00:00Z',
+      roleName: 'owner',
+    },
     snapshot: {
       userId: 'user-1',
       tenantId,
       generation,
       role: 'owner',
-      permissions: new Set(canManage ? ['reports.manage'] : ['reports.view']),
+      permissions: new Set(
+        canManage
+          ? ['reports.manage', 'finance.view']
+          : ['reports.view', 'finance.view'],
+      ),
       features: new Set<string>(),
       entitlement: null,
       subscription: null,
@@ -357,6 +372,32 @@ it('recovers an expired report by creating a replacement with the selected range
   expect(options?.signal).toBeInstanceOf(AbortSignal)
 })
 
+it('serializes Europe/Kyiv winter-to-summer calendar boundaries as inclusive UTC instants', async () => {
+  const originalTimeZone = process.env['TZ']
+  process.env['TZ'] = 'Europe/Kyiv'
+
+  try {
+    render(<ReportsScreen {...screenProps} />)
+    fireEvent.change(await screen.findByLabelText('Початок періоду'), {
+      target: { value: '2026-01-15' },
+    })
+    fireEvent.change(screen.getByLabelText('Кінець періоду'), {
+      target: { value: '2026-07-15' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Створити звіт' }))
+
+    await waitFor(() => expect(reportsApi.create).toHaveBeenCalledTimes(1))
+    const [request] = vi.mocked(reportsApi.create).mock.calls[0] ?? []
+    expect(request?.carSales).toEqual({
+      from: '2026-01-14T22:00:00.000Z',
+      to: '2026-07-15T20:59:59.999Z',
+    })
+  } finally {
+    if (originalTimeZone === undefined) delete process.env['TZ']
+    else process.env['TZ'] = originalTimeZone
+  }
+})
+
 it('hides report creation and retry actions when management is denied', async () => {
   vi.mocked(useCabinet).mockReturnValue(cabinet({ canManage: false }))
   vi.mocked(reportsApi.list).mockResolvedValue({
@@ -413,6 +454,21 @@ it('blocks a still-visible retry when the current permission set loses reports.m
 
   expect(reportsApi.create).not.toHaveBeenCalled()
   expect(await screen.findByRole('alert')).toHaveTextContent('Недостатньо прав')
+})
+
+it('blocks report creation when the latest finance.view permission is revoked', async () => {
+  const liveCabinet = cabinet()
+  vi.mocked(useCabinet).mockReturnValue(liveCabinet)
+  render(<ReportsScreen {...screenProps} />)
+  const create = await screen.findByRole('button', { name: 'Створити звіт' })
+
+  const mutablePermissions = liveCabinet.snapshot?.permissions as
+    | Set<string>
+    | undefined
+  mutablePermissions?.delete('finance.view')
+  await userEvent.setup().click(create)
+
+  expect(reportsApi.create).not.toHaveBeenCalled()
 })
 
 it('clears and reloads report data on a tenant generation change without accepting stale results', async () => {

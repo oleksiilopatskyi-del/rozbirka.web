@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { businessApi } from '@/api/business'
-import type { Tenant } from '@/api/types'
+import type { BillingState, Tenant } from '@/api/types'
 import { useCabinet, type CabinetContextValue } from '../CabinetContext'
 import { BusinessSettingsScreen } from './business-settings-screen'
 
@@ -34,8 +34,31 @@ const cabinet = (permissions = ['team.manage']) =>
       role: 'owner',
       permissions: new Set(permissions),
       features: new Set(),
-      entitlement: null,
+      entitlement: {
+        state: 'active',
+        usage: {
+          cars: { used: 1, max: 10 },
+          intakes: { used: 1, max: 10 },
+          parts: { used: 1, max: 10 },
+          users: { used: 1, max: 10 },
+          cashRegisters: { used: 1, max: 10 },
+        },
+      },
       subscription: null,
+      cabinetParityRollout: {
+        configuration: JSON.stringify({
+          version: 1,
+          mode: 'on',
+          canaryPercent: 0,
+          emergencyOff: false,
+        }),
+        claim: {
+          version: 1,
+          subjectId: 'user-1',
+          grants: ['cabinet-parity'],
+          audiences: [],
+        },
+      },
     },
     error: null,
     retry: vi.fn(),
@@ -87,6 +110,28 @@ it('rechecks permission immediately before dispatching a business update', async
   await user.clear(screen.getByLabelText('Назва розбірки'))
   await user.type(screen.getByLabelText('Назва розбірки'), 'Koval Parts')
   currentCabinet.snapshot?.permissions.delete('team.manage')
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+
+  expect(businessApi.update).not.toHaveBeenCalled()
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Ви більше не маєте права змінювати налаштування бізнесу.',
+  )
+})
+
+it('rechecks subscription access immediately before dispatching a business update', async () => {
+  const currentCabinet = cabinet()
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  const user = userEvent.setup()
+  render(<BusinessSettingsScreen />)
+
+  await user.clear(screen.getByLabelText('Назва розбірки'))
+  await user.type(screen.getByLabelText('Назва розбірки'), 'Koval Parts')
+  if (currentCabinet.snapshot?.entitlement) {
+    const entitlement = currentCabinet.snapshot.entitlement as {
+      state: BillingState
+    }
+    entitlement.state = 'blocked'
+  }
   await user.click(screen.getByRole('button', { name: 'Зберегти' }))
 
   expect(businessApi.update).not.toHaveBeenCalled()

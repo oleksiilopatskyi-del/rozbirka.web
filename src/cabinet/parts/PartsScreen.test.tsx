@@ -7,6 +7,7 @@ import {
   useNavigate,
 } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { FEATURES } from '@/api/types'
 import { PartsScreen } from './PartsScreen'
 
 const partMocks = vi.hoisted(() => ({
@@ -144,6 +145,7 @@ beforeEach(() => {
     'intakes.view',
     'orders.view',
   ])
+  cabinetMock.snapshot.features = new Set<string>()
   cabinetMock.snapshot.entitlement = {
     state: 'active',
     usage: {
@@ -454,21 +456,26 @@ it('creates a part with every supported source, inventory, price, and compatibil
   fireEvent.click(screen.getByRole('button', { name: 'Створити деталь' }))
 
   expect(await screen.findByText('Деталь створено.')).toBeInTheDocument()
-  expect(partMocks.create).toHaveBeenCalledWith({
-    sourceType: 'free',
-    name: 'Front bumper',
-    quantity: 3,
-    unit: 'pcs',
-    condition: 'used',
-    notes: 'Scratch',
-    oemCode: 'OEM-1',
-    partType: 'body',
-    desiredSalePrice: 125.5,
-    carBrand: 'Ford',
-    carModel: 'Focus',
-    carYear: 2018,
-    photoKeys: [],
-  })
+  expect(partMocks.create).toHaveBeenCalledWith(
+    {
+      sourceType: 'free',
+      name: 'Front bumper',
+      quantity: 3,
+      unit: 'pcs',
+      condition: 'used',
+      notes: 'Scratch',
+      oemCode: 'OEM-1',
+      partType: 'body',
+      desiredSalePrice: 125.5,
+      carBrand: 'Ford',
+      carModel: 'Focus',
+      carYear: 2018,
+      photoKeys: [],
+    },
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
 })
 
 it('retains successful media uploads while exposing retry and remove for each failed file', async () => {
@@ -521,6 +528,9 @@ it('retains successful media uploads while exposing retry and remove for each fa
     expect.objectContaining({
       photoKeys: ['pending/parts/bumper.jpg', 'pending/parts/mirror.jpg'],
     }),
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
   )
 })
 
@@ -550,7 +560,12 @@ it('removes a newly uploaded file through the confirmed media contract before sa
   await screen.findByText('bumper.jpg · Завантажено')
   fireEvent.click(screen.getByRole('button', { name: 'Прибрати bumper.jpg' }))
   await vi.waitFor(() =>
-    expect(mediaMocks.remove).toHaveBeenCalledWith('pending/parts/bumper.jpg'),
+    expect(mediaMocks.remove).toHaveBeenCalledWith(
+      'pending/parts/bumper.jpg',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal) as AbortSignal,
+      }),
+    ),
   )
   await vi.waitFor(() =>
     expect(screen.queryByText(/bumper.jpg ·/)).not.toBeInTheDocument(),
@@ -560,7 +575,38 @@ it('removes a newly uploaded file through the confirmed media contract before sa
   expect(await screen.findByText('Деталь створено.')).toBeInTheDocument()
   expect(partMocks.create).toHaveBeenCalledWith(
     expect.objectContaining({ photoKeys: [] }),
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
   )
+})
+
+it('allows pending part media upload and removal after quota becomes full', async () => {
+  mediaMocks.upload.mockResolvedValue({
+    storageKey: 'pending/parts/bumper.jpg',
+    url: 'https://cdn.example/bumper.jpg',
+  })
+  render(
+    <MemoryRouter initialEntries={['/app/yard/parts/new']}>
+      <Routes>
+        <Route
+          path="/app/:tenant/parts/new"
+          element={<PartsScreen definition={partsDefinition as never} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+  cabinetMock.snapshot.entitlement.usage.parts = { used: 10, max: 10 }
+  fireEvent.change(screen.getByLabelText('Фото деталі'), {
+    target: {
+      files: [new File(['one'], 'bumper.jpg', { type: 'image/jpeg' })],
+    },
+  })
+  await screen.findByText('bumper.jpg · Завантажено')
+  fireEvent.click(screen.getByRole('button', { name: 'Прибрати bumper.jpg' }))
+
+  await vi.waitFor(() => expect(mediaMocks.upload).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(mediaMocks.remove).toHaveBeenCalledOnce())
 })
 
 it('persists a tenant-authorized labeled car selection without exposing its raw id', async () => {
@@ -591,13 +637,73 @@ it('persists a tenant-authorized labeled car selection without exposing its raw 
   expect(screen.queryByLabelText('Марка сумісності')).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Створити деталь' }))
   expect(await screen.findByText('Деталь створено.')).toBeInTheDocument()
-  expect(partMocks.create).toHaveBeenCalledWith({
-    sourceType: 'car',
-    carId: 'car-1',
-    name: 'Bumper',
-    quantity: 1,
-    photoKeys: [],
+  expect(partMocks.create).toHaveBeenCalledWith(
+    {
+      sourceType: 'car',
+      carId: 'car-1',
+      name: 'Bumper',
+      quantity: 1,
+      photoKeys: [],
+    },
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
+})
+
+it('rechecks cars.view before creating a car-sourced part', async () => {
+  render(
+    <MemoryRouter initialEntries={['/app/yard/parts/new']}>
+      <Routes>
+        <Route
+          path="/app/:tenant/parts/new"
+          element={<PartsScreen definition={partsDefinition as never} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+  fireEvent.change(screen.getByLabelText('Назва'), {
+    target: { value: 'Bumper' },
   })
+  fireEvent.change(screen.getByLabelText('Тип джерела'), {
+    target: { value: 'car' },
+  })
+  fireEvent.change(await screen.findByLabelText('Автомобіль-джерело'), {
+    target: { value: 'car-1' },
+  })
+  cabinetMock.snapshot.permissions.delete('cars.view')
+  fireEvent.click(screen.getByRole('button', { name: 'Створити деталь' }))
+
+  await Promise.resolve()
+  expect(partMocks.create).not.toHaveBeenCalled()
+})
+
+it('rechecks intakes.view before creating an intake-sourced part', async () => {
+  cabinetMock.snapshot.features = new Set([FEATURES.IntakeManagement])
+  render(
+    <MemoryRouter initialEntries={['/app/yard/parts/new']}>
+      <Routes>
+        <Route
+          path="/app/:tenant/parts/new"
+          element={<PartsScreen definition={partsDefinition as never} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+  fireEvent.change(screen.getByLabelText('Назва'), {
+    target: { value: 'Bumper' },
+  })
+  fireEvent.change(screen.getByLabelText('Тип джерела'), {
+    target: { value: 'batch' },
+  })
+  fireEvent.change(await screen.findByLabelText('Приймання-джерело'), {
+    target: { value: 'intake-1' },
+  })
+  cabinetMock.snapshot.permissions.delete('intakes.view')
+  fireEvent.click(screen.getByRole('button', { name: 'Створити деталь' }))
+
+  await Promise.resolve()
+  expect(partMocks.create).not.toHaveBeenCalled()
 })
 
 it('loads existing edit values and updates every field accepted by the immutable request', async () => {
@@ -659,16 +765,22 @@ it('loads existing edit values and updates every field accepted by the immutable
   fireEvent.click(screen.getByRole('button', { name: 'Зберегти зміни' }))
 
   expect(await screen.findByText('Зміни збережено.')).toBeInTheDocument()
-  expect(partMocks.update).toHaveBeenCalledWith('part-1', {
-    name: 'Rear bumper',
-    condition: 'used',
-    notes: 'Old note',
-    quantity: 4,
-    partType: 'body',
-    unit: 'pcs',
-    photoKeys: ['tenant-secret/existing.jpg'],
-    desiredSalePrice: { isSet: true, value: null },
-  })
+  expect(partMocks.update).toHaveBeenCalledWith(
+    'part-1',
+    {
+      name: 'Rear bumper',
+      condition: 'used',
+      notes: 'Old note',
+      quantity: 4,
+      partType: 'body',
+      unit: 'pcs',
+      photoKeys: ['tenant-secret/existing.jpg'],
+      desiredSalePrice: { isSet: true, value: null },
+    },
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
 })
 
 it('guards duplicate creates with aria-busy and exposes mutation failures', async () => {
@@ -830,6 +942,48 @@ it('fails closed on create when parts.manage is absent', () => {
   expect(screen.queryByRole('button', { name: 'Створити деталь' })).toBeNull()
 })
 
+it('rechecks the latest parts permission before dispatching create', async () => {
+  render(
+    <MemoryRouter initialEntries={['/app/yard/parts/new']}>
+      <Routes>
+        <Route
+          path="/app/:tenant/parts/new"
+          element={<PartsScreen definition={partsDefinition as never} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+  fireEvent.change(screen.getByLabelText('Назва'), {
+    target: { value: 'Bumper' },
+  })
+  cabinetMock.snapshot.permissions.delete('parts.manage')
+  fireEvent.click(screen.getByRole('button', { name: 'Створити деталь' }))
+
+  await Promise.resolve()
+  expect(partMocks.create).not.toHaveBeenCalled()
+})
+
+it('rechecks the latest parts quota before dispatching create', async () => {
+  render(
+    <MemoryRouter initialEntries={['/app/yard/parts/new']}>
+      <Routes>
+        <Route
+          path="/app/:tenant/parts/new"
+          element={<PartsScreen definition={partsDefinition as never} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+  fireEvent.change(screen.getByLabelText('Назва'), {
+    target: { value: 'Bumper' },
+  })
+  cabinetMock.snapshot.entitlement.usage.parts = { used: 10, max: 10 }
+  fireEvent.click(screen.getByRole('button', { name: 'Створити деталь' }))
+
+  await Promise.resolve()
+  expect(partMocks.create).not.toHaveBeenCalled()
+})
+
 it('applies the parts quota only to create, not edit or delete', async () => {
   cabinetMock.snapshot.entitlement = {
     ...cabinetMock.snapshot.entitlement,
@@ -896,7 +1050,12 @@ it('applies the parts quota only to create, not edit or delete', async () => {
     await screen.findByRole('button', { name: 'Видалити деталь' }),
   )
   await vi.waitFor(() =>
-    expect(partMocks.delete).toHaveBeenCalledWith('part-1'),
+    expect(partMocks.delete).toHaveBeenCalledWith(
+      'part-1',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal) as AbortSignal,
+      }),
+    ),
   )
 })
 

@@ -17,6 +17,7 @@ import type { Permission } from '../access-types'
 import type { CabinetModuleScreenProps } from '../ModuleBoundary'
 import { useCabinet } from '../CabinetContext'
 import { evaluateModuleAccess, type ModuleAccessOperation } from '../policy'
+import { useLatestMutationGuard } from '../use-latest-mutation-guard'
 
 const loadError = 'Не вдалося завантажити дані. Спробуйте ще раз.'
 const idFromPath = (path: string) =>
@@ -198,6 +199,7 @@ function CustomerDetailScreen({
   customerId,
 }: CabinetModuleScreenProps & { customerId: string }) {
   const cabinet = useCabinet()
+  const { requireLatestMutation } = useLatestMutationGuard(definition)
   const mutationsAllowed = canAccess(definition, cabinet, 'mutation')
   const ordersViewAllowed = canAccess(
     definition,
@@ -240,10 +242,16 @@ function CustomerDetailScreen({
     if (!customer || busy || !mutationsAllowed) return
     setBusy(true)
     try {
+      const scope = requireLatestMutation({ quota: false })
+      requireLatestMutation({ permission: 'orders.view', quota: false })
       setCustomer(
         customer.isActive
-          ? await customersApi.deactivate(customer.id)
-          : await customersApi.activate(customer.id),
+          ? await customersApi.deactivate(customer.id, {
+              signal: scope.signal,
+            })
+          : await customersApi.activate(customer.id, {
+              signal: scope.signal,
+            }),
       )
       setError(null)
     } catch {
@@ -257,7 +265,9 @@ function CustomerDetailScreen({
       return
     setBusy(true)
     try {
-      await customersApi.remove(customer.id)
+      const scope = requireLatestMutation({ quota: false })
+      requireLatestMutation({ permission: 'orders.view', quota: false })
+      await customersApi.remove(customer.id, { signal: scope.signal })
       await navigate('..', { replace: true })
     } catch {
       setError(loadError)
@@ -393,6 +403,7 @@ function CustomerForm({
   customerId,
 }: CabinetModuleScreenProps & { customerId: string | null }) {
   const cabinet = useCabinet()
+  const { requireLatestMutation } = useLatestMutationGuard(definition)
   const mutationsAllowed = canAccess(definition, cabinet, 'mutation')
   const ordersViewAllowed =
     customerId === null || canAccess(definition, cabinet, 'view', 'orders.view')
@@ -430,14 +441,19 @@ function CustomerForm({
     setError(null)
     setDuplicate(null)
     try {
+      const scope = requireLatestMutation({ quota: false })
+      if (customerId)
+        requireLatestMutation({ permission: 'orders.view', quota: false })
       const input = {
         name: name.trim(),
         phone: phone.trim() || null,
         notes: notes.trim() || null,
       }
       const result = customerId
-        ? await customersApi.update(customerId, input)
-        : await customersApi.create(input)
+        ? await customersApi.update(customerId, input, {
+            signal: scope.signal,
+          })
+        : await customersApi.create(input, { signal: scope.signal })
       await navigate(`${directoryPath}/${customerId ?? result.customer.id}`, {
         replace: true,
       })
@@ -452,7 +468,12 @@ function CustomerForm({
     if (!duplicate || busy || !mutationsAllowed) return
     setBusy(true)
     try {
-      await customersApi.activate(duplicate.customerId)
+      const scope = requireLatestMutation({ quota: false })
+      if (customerId)
+        requireLatestMutation({ permission: 'orders.view', quota: false })
+      await customersApi.activate(duplicate.customerId, {
+        signal: scope.signal,
+      })
       await navigate(`${directoryPath}/${duplicate.customerId}`, {
         replace: true,
       })

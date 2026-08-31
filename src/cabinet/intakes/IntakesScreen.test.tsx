@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { intakesApi } from '@/api/intakes'
+import { mediaApi } from '@/api/media'
 import type { PlanUsageDto } from '@/api/types'
 import { useCabinet } from '../CabinetContext'
 import { IntakesScreen } from './IntakesScreen'
@@ -18,6 +19,12 @@ vi.mock('@/api/intakes', () => ({
     update: vi.fn(),
     remove: vi.fn(),
     addPart: vi.fn(),
+  },
+}))
+vi.mock('@/api/media', () => ({
+  mediaApi: {
+    upload: vi.fn(),
+    remove: vi.fn(),
   },
 }))
 vi.mock('../CabinetContext', () => ({ useCabinet: vi.fn() }))
@@ -102,7 +109,18 @@ const cabinet = (
   }
   return {
     status: 'ready' as const,
-    targetTenant: null,
+    targetTenant: {
+      id: 'tenant-1',
+      name: 'Demo Yard',
+      slug: 'demo',
+      plan: 'active',
+      planTier: 'pro',
+      city: null,
+      logoUrl: null,
+      isActive: true,
+      createdAt: '2026-08-01T00:00:00Z',
+      roleName: 'owner',
+    },
     snapshot: {
       userId: 'user-1',
       tenantId: 'tenant-1',
@@ -140,6 +158,11 @@ beforeEach(() => {
     totalPages: 2,
   })
   vi.mocked(intakesApi.get).mockResolvedValue(detail)
+  vi.mocked(mediaApi.upload).mockResolvedValue({
+    storageKey: 'pending/parts/photo',
+    url: 'https://cdn.example/part.jpg',
+  })
+  vi.mocked(mediaApi.remove).mockResolvedValue(undefined)
 })
 
 it('loads the URL search and status list state through the server adapter', async () => {
@@ -426,15 +449,21 @@ it('allows no-photo part creation without parts.manage and exposes upload only w
   expect(screen.queryByLabelText('Додати фото')).not.toBeInTheDocument()
   await user.type(screen.getByLabelText('Назва'), 'Бампер')
   await user.click(screen.getByRole('button', { name: 'Додати запчастину' }))
-  expect(intakesApi.addPart).toHaveBeenCalledWith('intake-1', {
-    name: 'Бампер',
-    partType: null,
-    condition: 'good',
-    quantity: 1,
-    unit: 'шт',
-    notes: null,
-    photoKeys: [],
-  })
+  expect(intakesApi.addPart).toHaveBeenCalledWith(
+    'intake-1',
+    {
+      name: 'Бампер',
+      partType: null,
+      condition: 'good',
+      quantity: 1,
+      unit: 'шт',
+      notes: null,
+      photoKeys: [],
+    },
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
   unmount()
 
   vi.mocked(useCabinet).mockReturnValue(
@@ -452,6 +481,36 @@ it('allows no-photo part creation without parts.manage and exposes upload only w
   )
 
   expect(await screen.findByLabelText('Додати фото')).toBeEnabled()
+})
+
+it('rechecks parts.view before uploading intake-part media', async () => {
+  const currentCabinet = cabinet([
+    'intakes.view',
+    'intakes.manage',
+    'parts.view',
+    'parts.manage',
+  ])
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/demo/intakes/intake-1/parts/new']}>
+      <Routes>
+        <Route
+          path="/app/:tenant/intakes/:intakeId/parts/new"
+          element={<IntakesScreen />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  const upload = await screen.findByLabelText('Додати фото')
+  currentCabinet.snapshot.permissions.delete('parts.view')
+  await user.upload(
+    upload,
+    new File(['photo'], 'photo.jpg', { type: 'image/jpeg' }),
+  )
+
+  expect(mediaApi.upload).not.toHaveBeenCalled()
 })
 
 it('locks add-part submit, prevents duplicates, normalizes conflict, and retains inputs', async () => {
@@ -538,13 +597,36 @@ it('allows intake creation without finance.manage while hiding and omitting tota
   await user.click(screen.getByRole('button', { name: 'Зберегти' }))
 
   await waitFor(() => expect(intakesApi.create).toHaveBeenCalledTimes(1))
-  expect(intakesApi.create).toHaveBeenCalledWith({
-    name: 'Нефінансове приймання',
-    supplier: null,
-    purchasedAt: null,
-    notes: null,
-    photoKeys: [],
-  })
+  expect(intakesApi.create).toHaveBeenCalledWith(
+    {
+      name: 'Нефінансове приймання',
+      supplier: null,
+      purchasedAt: null,
+      notes: null,
+      photoKeys: [],
+    },
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
+})
+
+it('rechecks the latest intake permission before dispatching create', async () => {
+  const currentCabinet = cabinet(['intakes.view', 'intakes.manage'])
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/demo/intakes/new']}>
+      <Routes>
+        <Route path="/app/:tenant/intakes/new" element={<IntakesScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  currentCabinet.snapshot.permissions.delete('intakes.manage')
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+
+  expect(intakesApi.create).not.toHaveBeenCalled()
 })
 
 it('allows intake editing without finance.manage while hiding and omitting totalCost', async () => {
@@ -569,12 +651,18 @@ it('allows intake editing without finance.manage while hiding and omitting total
   await user.click(screen.getByRole('button', { name: 'Зберегти' }))
 
   await waitFor(() => expect(intakesApi.update).toHaveBeenCalledTimes(1))
-  expect(intakesApi.update).toHaveBeenCalledWith('intake-1', {
-    name: 'Липнева партія',
-    supplier: 'Постачальник',
-    purchasedAt: '2026-08-01T12:00:00Z',
-    notes: 'Перевірено',
-  })
+  expect(intakesApi.update).toHaveBeenCalledWith(
+    'intake-1',
+    {
+      name: 'Липнева партія',
+      supplier: 'Постачальник',
+      purchasedAt: '2026-08-01T12:00:00Z',
+      notes: 'Перевірено',
+    },
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
 })
 
 it('exposes and submits totalCost when the intake manager has finance.manage', async () => {
@@ -597,7 +685,33 @@ it('exposes and submits totalCost when the intake manager has finance.manage', a
   await waitFor(() => expect(intakesApi.create).toHaveBeenCalledTimes(1))
   expect(intakesApi.create).toHaveBeenCalledWith(
     expect.objectContaining({ totalCost: 7500 }),
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
   )
+})
+
+it('rechecks finance.manage before dispatching an intake totalCost', async () => {
+  const currentCabinet = cabinet([
+    'intakes.view',
+    'intakes.manage',
+    'finance.manage',
+  ])
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/demo/intakes/new']}>
+      <Routes>
+        <Route path="/app/:tenant/intakes/new" element={<IntakesScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  await user.type(screen.getByLabelText('Загальна вартість'), '7500')
+  currentCabinet.snapshot.permissions.delete('finance.manage')
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+
+  expect(intakesApi.create).not.toHaveBeenCalled()
 })
 
 it('locks intake edit submission, normalizes permission failure, and retains the form', async () => {

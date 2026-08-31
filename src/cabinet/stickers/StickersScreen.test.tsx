@@ -23,9 +23,20 @@ vi.mock('../CabinetContext', () => ({
     snapshot: {
       userId: 'user-1',
       tenantId: 'tenant-1',
+      generation: 1,
+      role: 'manager',
       permissions: cabinetMock.permissions,
       features: new Set(),
-      entitlement: { state: 'active', usage: {} },
+      entitlement: {
+        state: 'active',
+        usage: {
+          cars: { used: 1, max: 10 },
+          intakes: { used: 1, max: 10 },
+          parts: { used: 1, max: 10 },
+          users: { used: 1, max: 10 },
+          cashRegisters: { used: 1, max: 10 },
+        },
+      },
       subscription: null,
     },
     error: null,
@@ -121,7 +132,12 @@ it('loads sticker data and renders a real QR SVG preview for each queued copy', 
   )
 
   const preview = await screen.findByLabelText('Макет стікерів')
-  expect(stickerMocks.getBatchData).toHaveBeenCalledWith(['part-1'])
+  expect(stickerMocks.getBatchData).toHaveBeenCalledWith(
+    ['part-1'],
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
   expect(screen.getAllByRole('img', { name: 'QR-код Bumper' })).toHaveLength(2)
   expect(preview.querySelectorAll('svg')).toHaveLength(2)
   expect(preview.querySelector('svg path')).not.toBeNull()
@@ -206,6 +222,19 @@ it('fails closed on generation when stickers.manage is absent', async () => {
 
   expect(screen.getByRole('button', { name: 'Додати' })).toBeDisabled()
   expect(screen.getByRole('status')).toHaveTextContent('Недостатньо прав')
+})
+
+it('rechecks the latest sticker permission before requesting batch data', async () => {
+  renderScreen()
+  await screen.findByRole('option', { name: 'Bumper' })
+  add('part-1', '1')
+  cabinetMock.permissions.delete('stickers.manage')
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Отримати дані стікерів' }),
+  )
+
+  await Promise.resolve()
+  expect(stickerMocks.getBatchData).not.toHaveBeenCalled()
 })
 
 it('persists only a stable user-tenant queue with TTL and clears it on scope cleanup', async () => {

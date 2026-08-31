@@ -5,6 +5,7 @@ import { useCabinet } from '../CabinetContext'
 import type { CabinetModuleScreenProps } from '../ModuleBoundary'
 import { evaluateModuleAccess } from '../policy'
 import { tenantResetRegistry } from '../tenant-reset-registry'
+import { useLatestMutationGuard } from '../use-latest-mutation-guard'
 import {
   buildStickerHtml,
   renderStickers,
@@ -92,6 +93,7 @@ const writeQueue = (scope: QueueScope, items: QueueItem[]) => {
 }
 export function StickersScreen({ definition }: CabinetModuleScreenProps) {
   const cabinet = useCabinet()
+  const { requireLatestMutation } = useLatestMutationGuard(definition)
   const { targetTenant, snapshot } = cabinet
   const access =
     cabinet.status === 'ready' && snapshot
@@ -116,6 +118,7 @@ export function StickersScreen({ definition }: CabinetModuleScreenProps) {
     <TenantStickerQueue
       generationDecision={generationDecision.kind}
       key={scopeIdentity}
+      requireLatestMutation={requireLatestMutation}
       scope={scope}
     />
   )
@@ -124,9 +127,13 @@ export function StickersScreen({ definition }: CabinetModuleScreenProps) {
 function TenantStickerQueue({
   scope,
   generationDecision,
+  requireLatestMutation,
 }: {
   scope: QueueScope | null
   generationDecision: ReturnType<typeof evaluateModuleAccess>['kind']
+  requireLatestMutation: ReturnType<
+    typeof useLatestMutationGuard
+  >['requireLatestMutation']
 }) {
   const [queue, setQueue] = useState<QueueItem[]>(() =>
     scope ? readQueue(scope) : [],
@@ -225,8 +232,10 @@ function TenantStickerQueue({
     setBusy(true)
     setError(null)
     try {
+      const scope = requireLatestMutation({ quota: false })
       const response = await stickersApi.getBatchData(
         queue.map((item) => item.id),
+        { signal: scope.signal },
       )
       if (generation !== generationRef.current) return
       const next = queue.map((queued) => {

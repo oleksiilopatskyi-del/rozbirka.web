@@ -116,25 +116,52 @@ export const customersApi = {
       await apiClient.get<CustomerDetail>(endpoint(id), requestConfig(options))
     ).data
   },
-  async create(input: Required<Pick<CustomerInput, 'name'>> & CustomerInput) {
+  async create(
+    input: Required<Pick<CustomerInput, 'name'>> & CustomerInput,
+    options: RequestOptions = {},
+  ) {
     return (
-      await apiClient.post<{ customer: CustomerListItem }>('/customers', input)
+      await apiClient.post<{ customer: CustomerListItem }>(
+        '/customers',
+        input,
+        requestConfig(options),
+      )
     ).data
   },
-  async update(id: string, input: CustomerInput) {
+  async update(id: string, input: CustomerInput, options: RequestOptions = {}) {
     return (
-      await apiClient.patch<{ customer: CustomerListItem }>(endpoint(id), input)
+      await apiClient.patch<{ customer: CustomerListItem }>(
+        endpoint(id),
+        input,
+        requestConfig(options),
+      )
     ).data
   },
-  async activate(id: string): Promise<CustomerDetail> {
-    return (await apiClient.patch<CustomerDetail>(`${endpoint(id)}/activate`))
-      .data
+  async activate(
+    id: string,
+    options: RequestOptions = {},
+  ): Promise<CustomerDetail> {
+    return (
+      await apiClient.patch<CustomerDetail>(
+        `${endpoint(id)}/activate`,
+        undefined,
+        requestConfig(options),
+      )
+    ).data
   },
-  async deactivate(id: string): Promise<CustomerDetail> {
-    return (await apiClient.patch<CustomerDetail>(`${endpoint(id)}/deactivate`))
-      .data
+  async deactivate(
+    id: string,
+    options: RequestOptions = {},
+  ): Promise<CustomerDetail> {
+    return (
+      await apiClient.patch<CustomerDetail>(
+        `${endpoint(id)}/deactivate`,
+        undefined,
+        requestConfig(options),
+      )
+    ).data
   },
-  async remove(id: string): Promise<void> {
-    await apiClient.delete(endpoint(id))
+  async remove(id: string, options: RequestOptions = {}): Promise<void> {
+    await apiClient.delete(endpoint(id), requestConfig(options))
   },
 }

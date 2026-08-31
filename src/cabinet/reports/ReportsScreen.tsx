@@ -10,6 +10,7 @@ import { reportsApi, type ReportJob } from '@/api/reports'
 import { useCabinet } from '../CabinetContext'
 import type { CabinetModuleScreenProps } from '../ModuleBoundary'
 import { tenantRequestScope } from '../tenant-request-scope'
+import { useLatestMutationGuard } from '../use-latest-mutation-guard'
 
 const POLL_INTERVAL_MS = 5_000
 
@@ -78,6 +79,21 @@ const validRange = (range: DateRange) =>
   isCalendarDate(range.to) &&
   range.from <= range.to
 
+const localDayBoundaryUtc = (value: string, endOfDay: boolean) => {
+  const year = Number(value.slice(0, 4))
+  const month = Number(value.slice(5, 7))
+  const day = Number(value.slice(8, 10))
+  return new Date(
+    year,
+    month - 1,
+    day,
+    endOfDay ? 23 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 999 : 0,
+  ).toISOString()
+}
+
 const statusOf = (report: ReportJob): DisplayStatus => {
   if (
     report.status === 'expired' ||
@@ -122,8 +138,11 @@ const sameReport = (left: ReportJob, right: ReportJob) =>
   left.errorMessage === right.errorMessage &&
   left.fileSizeBytes === right.fileSizeBytes
 
-export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = () => {
+export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
+  definition,
+}) => {
   const cabinet = useCabinet()
+  const { requireLatestMutation } = useLatestMutationGuard(definition)
   const scope = useMemo<Scope | null>(() => {
     const snapshot = cabinet.snapshot
     if (cabinet.status !== 'ready' || snapshot === null) return null
@@ -259,19 +278,19 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = () => {
     if (!validRange(range)) return
     if (createFlightRef.current !== null) return
     const controller = new AbortController()
-    const signal = AbortSignal.any([
-      controller.signal,
-      tenantRequestScope.signal,
-    ])
+    let signal: AbortSignal = controller.signal
     createFlightRef.current = { key: access.key, controller }
     setCreatingScopeKey(access.key)
     try {
+      const mutationScope = requireLatestMutation({ quota: false })
+      requireLatestMutation({ permission: 'finance.view', quota: false })
+      signal = AbortSignal.any([controller.signal, mutationScope.signal])
       const created = await reportsApi.create(
         {
           type: 'carSales',
           carSales: {
-            from: `${range.from}T00:00:00.000Z`,
-            to: `${range.to}T23:59:59.999Z`,
+            from: localDayBoundaryUtc(range.from, false),
+            to: localDayBoundaryUtc(range.to, true),
           },
         },
         { signal },
@@ -292,7 +311,7 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = () => {
         if (currentScopeRef.current === access.key) setCreatingScopeKey(null)
       }
     }
-  }, [range])
+  }, [range, requireLatestMutation])
 
   const download = async (report: ReportJob, print: boolean) => {
     const access = accessRef.current

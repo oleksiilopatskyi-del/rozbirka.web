@@ -23,6 +23,7 @@ import {
   type CabinetModuleDefinition,
 } from '../module-registry'
 import { evaluateModuleAccess, type ModuleAccessDecision } from '../policy'
+import { useLatestMutationGuard } from '../use-latest-mutation-guard'
 
 const buttonClass =
   'min-h-11 rounded-full border border-white/[0.12] px-4 text-sm text-white'
@@ -153,6 +154,7 @@ const allowedToView = (
 
 export function PartsScreen({ definition }: CabinetModuleScreenProps) {
   const cabinet = useCabinet()
+  const { requireLatestMutation } = useLatestMutationGuard(definition)
   const { partId } = useParams<{ partId: string }>()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -288,6 +290,7 @@ export function PartsScreen({ definition }: CabinetModuleScreenProps) {
       <PartForm
         canViewCars={links.cars}
         canViewIntakes={links.intakes}
+        requireLatestMutation={requireLatestMutation}
         title="Нова деталь"
       />
     )
@@ -297,6 +300,7 @@ export function PartsScreen({ definition }: CabinetModuleScreenProps) {
         canViewCars={links.cars}
         canViewIntakes={links.intakes}
         partId={partId}
+        requireLatestMutation={requireLatestMutation}
       />
     )
   if (partId)
@@ -308,6 +312,7 @@ export function PartsScreen({ definition }: CabinetModuleScreenProps) {
         partId={partId}
         canManage={canManage}
         links={links}
+        requireLatestMutation={requireLatestMutation}
         tenantSlug={cabinet.targetTenant?.slug ?? ''}
       />
     )
@@ -547,6 +552,7 @@ function PartDetailScreen({
   error,
   canManage,
   links,
+  requireLatestMutation,
   tenantSlug,
 }: {
   detail: PartDetail | null
@@ -555,6 +561,9 @@ function PartDetailScreen({
   error: boolean
   canManage: boolean
   links: { cars: boolean; intakes: boolean; orders: boolean }
+  requireLatestMutation: ReturnType<
+    typeof useLatestMutationGuard
+  >['requireLatestMutation']
   tenantSlug: string
 }) {
   const navigate = useNavigate()
@@ -565,7 +574,8 @@ function PartDetailScreen({
     setDeleting(true)
     setDeleteError(null)
     try {
-      await partsApi.delete(partId)
+      const scope = requireLatestMutation({ quota: false })
+      await partsApi.delete(partId, { signal: scope.signal })
       void navigate('..', { replace: true })
     } catch (failure) {
       const status =
@@ -821,9 +831,13 @@ const safeMediaUrl = (value: string | undefined) => {
 
 function PartMediaFields({
   items,
+  requireLatestMutation,
   setItems,
 }: {
   items: PartMediaItem[]
+  requireLatestMutation: ReturnType<
+    typeof useLatestMutationGuard
+  >['requireLatestMutation']
   setItems: React.Dispatch<React.SetStateAction<PartMediaItem[]>>
 }) {
   const sequenceRef = useRef(0)
@@ -845,7 +859,10 @@ function PartMediaFields({
     if (!item.file) return
     updateItem(item.id, { status: 'uploading' })
     try {
-      const uploaded = await mediaApi.upload(item.file, 'parts')
+      const scope = requireLatestMutation({ quota: false })
+      const uploaded = await mediaApi.upload(item.file, 'parts', {
+        signal: scope.signal,
+      })
       updateItem(item.id, {
         status: 'uploaded',
         storageKey: uploaded.storageKey,
@@ -874,7 +891,8 @@ function PartMediaFields({
     }
     updateItem(item.id, { status: 'removing' })
     try {
-      await mediaApi.remove(item.storageKey)
+      const scope = requireLatestMutation({ quota: false })
+      await mediaApi.remove(item.storageKey, { signal: scope.signal })
       if (mountedRef.current)
         setItems((current) => current.filter(({ id }) => id !== item.id))
     } catch {
@@ -1183,11 +1201,17 @@ function PartForm({
   title,
   canViewCars,
   canViewIntakes,
+  requireLatestMutation,
 }: {
   title: string
   canViewCars: boolean
   canViewIntakes: boolean
+  requireLatestMutation: ReturnType<
+    typeof useLatestMutationGuard
+  >['requireLatestMutation']
 }) {
+  const carMutation = useLatestMutationGuard(cabinetModules.cars)
+  const intakeMutation = useLatestMutationGuard(cabinetModules.intakes)
   const [values, setValues] = useState(emptyPartForm)
   const [mediaItems, setMediaItems] = useState<PartMediaItem[]>([])
   const sourceOptions = useSourceOptions(
@@ -1242,7 +1266,18 @@ function PartForm({
     setStatus(null)
     setError(null)
     try {
-      await partsApi.create(request)
+      const scope = requireLatestMutation()
+      if (request.sourceType === 'car')
+        carMutation.requireLatestMutation({
+          permission: 'cars.view',
+          quota: false,
+        })
+      if (request.sourceType === 'batch')
+        intakeMutation.requireLatestMutation({
+          permission: 'intakes.view',
+          quota: false,
+        })
+      await partsApi.create(request, { signal: scope.signal })
       setStatus('Деталь створено.')
     } catch {
       setError('Не вдалося створити деталь.')
@@ -1262,7 +1297,11 @@ function PartForm({
           sourceOptions={sourceOptions}
           values={values}
         />
-        <PartMediaFields items={mediaItems} setItems={setMediaItems} />
+        <PartMediaFields
+          items={mediaItems}
+          requireLatestMutation={requireLatestMutation}
+          setItems={setMediaItems}
+        />
         <button
           aria-busy={pending || mediaPending}
           className="min-h-11 rounded-full bg-brand px-4 text-black"
@@ -1287,10 +1326,14 @@ function PartEdit({
   partId,
   canViewCars,
   canViewIntakes,
+  requireLatestMutation,
 }: {
   partId: string
   canViewCars: boolean
   canViewIntakes: boolean
+  requireLatestMutation: ReturnType<
+    typeof useLatestMutationGuard
+  >['requireLatestMutation']
 }) {
   const [values, setValues] = useState<PartFormValues | null>(null)
   const [mediaItems, setMediaItems] = useState<PartMediaItem[]>([])
@@ -1359,19 +1402,24 @@ function PartEdit({
     setStatus(null)
     setError(null)
     try {
-      await partsApi.update(partId, {
-        name: values.name.trim(),
-        condition: optional(values.condition) ?? null,
-        notes: optional(values.notes) ?? null,
-        quantity: parsed.quantity,
-        partType: optional(values.partType) ?? null,
-        unit: optional(values.unit) ?? null,
-        photoKeys: committedPhotoKeys(mediaItems),
-        desiredSalePrice: {
-          isSet: true,
-          value: parsed.price ?? null,
+      const scope = requireLatestMutation({ quota: false })
+      await partsApi.update(
+        partId,
+        {
+          name: values.name.trim(),
+          condition: optional(values.condition) ?? null,
+          notes: optional(values.notes) ?? null,
+          quantity: parsed.quantity,
+          partType: optional(values.partType) ?? null,
+          unit: optional(values.unit) ?? null,
+          photoKeys: committedPhotoKeys(mediaItems),
+          desiredSalePrice: {
+            isSet: true,
+            value: parsed.price ?? null,
+          },
         },
-      })
+        { signal: scope.signal },
+      )
       setStatus('Зміни збережено.')
     } catch {
       setError('Не вдалося зберегти зміни.')
@@ -1393,7 +1441,11 @@ function PartEdit({
             sourceOptions={sourceOptions}
             values={values}
           />
-          <PartMediaFields items={mediaItems} setItems={setMediaItems} />
+          <PartMediaFields
+            items={mediaItems}
+            requireLatestMutation={requireLatestMutation}
+            setItems={setMediaItems}
+          />
           <button
             aria-busy={pending || mediaPending}
             className="min-h-11 rounded-full bg-brand px-4 text-black"

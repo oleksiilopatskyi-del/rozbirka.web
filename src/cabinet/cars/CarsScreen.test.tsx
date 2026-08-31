@@ -109,7 +109,18 @@ const cabinet = (
   }
   return {
     status: 'ready' as const,
-    targetTenant: null,
+    targetTenant: {
+      id: 'tenant-1',
+      name: 'Demo Yard',
+      slug: 'demo',
+      plan: 'active',
+      planTier: 'pro',
+      city: null,
+      logoUrl: null,
+      isActive: true,
+      createdAt: '2026-08-01T00:00:00Z',
+      roleName: 'owner',
+    },
     snapshot: {
       userId: 'user-1',
       tenantId: 'tenant-1',
@@ -314,6 +325,31 @@ it('refetches authoritative detail after an expense mutation and disables duplic
   expect(await screen.findByText(/Залишок: 7\s500/)).toBeVisible()
 })
 
+it('rechecks cars.view before dispatching an expense mutation', async () => {
+  const currentCabinet = cabinet([
+    'cars.view',
+    'finance.view',
+    'finance.manage',
+  ])
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/demo/cars/car-1']}>
+      <Routes>
+        <Route path="/app/:tenant/cars/:carId" element={<CarsScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  await screen.findByRole('heading', { name: /CAR-001/ })
+  await user.type(screen.getByLabelText('Назва витрати'), 'Транспорт')
+  await user.type(screen.getByLabelText('Сума витрати'), '500')
+  currentCabinet.snapshot.permissions.delete('cars.view')
+  await user.click(screen.getByRole('button', { name: 'Додати витрату' }))
+
+  expect(carsApi.createExpense).not.toHaveBeenCalled()
+})
+
 it('edits an expense with PUT, retains the form while pending, and refetches detail', async () => {
   const user = userEvent.setup()
   const expense = {
@@ -358,10 +394,14 @@ it('edits an expense with PUT, retains the form while pending, and refetches det
 
   expect(save).toBeDisabled()
   expect(save.closest('form')).toHaveAttribute('aria-busy', 'true')
-  expect(carsApi.updateExpense).toHaveBeenCalledWith('car-1', 'expense-1', {
-    name: 'Доставка',
-    amount: 750,
-  })
+  expect(carsApi.updateExpense).toHaveBeenCalledWith(
+    'car-1',
+    'expense-1',
+    { name: 'Доставка', amount: 750 },
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
   resolveUpdate(expense)
   await waitFor(() => expect(carsApi.get).toHaveBeenCalledTimes(2))
   expect(await screen.findByText(/Доставка: 750/)).toBeVisible()
@@ -517,6 +557,36 @@ it('retains successful files when another media upload fails and reports that fi
   expect(errors[1]).toHaveTextContent('large.jpg: Файл завеликий.')
 })
 
+it('allows pending car media upload and removal when the car quota is full', async () => {
+  const currentCabinet = cabinet(
+    ['cars.view', 'cars.manage', 'finance.manage'],
+    { cars: { used: 5, max: 5 } },
+  )
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  vi.mocked(mediaApi.upload).mockResolvedValue({
+    storageKey: 'pending/cars/photo',
+    url: 'https://cdn.example/photo.jpg',
+  })
+  const user = userEvent.setup()
+  function Harness() {
+    const [items, setItems] = useState<{ storageKey: string; url: string }[]>(
+      [],
+    )
+    return <MediaPicker entityType="cars" items={items} onChange={setItems} />
+  }
+  render(<Harness />)
+
+  await user.upload(
+    screen.getByLabelText('Додати фото'),
+    new File(['photo'], 'photo.jpg', { type: 'image/jpeg' }),
+  )
+  await screen.findByRole('img', { name: 'Попередній перегляд фото' })
+  await user.click(screen.getByRole('button', { name: 'Прибрати фото' }))
+
+  expect(mediaApi.upload).toHaveBeenCalledOnce()
+  expect(mediaApi.remove).toHaveBeenCalledOnce()
+})
+
 it('retries only remaining initial expenses after partial failure without recreating the car', async () => {
   const user = userEvent.setup()
   vi.mocked(carsApi.create).mockResolvedValue(detail)
@@ -566,10 +636,13 @@ it('retries only remaining initial expenses after partial failure without recrea
   await user.click(screen.getByRole('button', { name: 'Зберегти' }))
 
   await waitFor(() => expect(carsApi.create).toHaveBeenCalledTimes(1))
-  expect(carsApi.createExpense).toHaveBeenCalledWith('car-1', {
-    name: 'Доставка',
-    amount: 500,
-  })
+  expect(carsApi.createExpense).toHaveBeenCalledWith(
+    'car-1',
+    { name: 'Доставка', amount: 500 },
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Автомобіль створено, але не всі витрати збережено: Витрата вже існує.',
   )
@@ -580,10 +653,14 @@ it('retries only remaining initial expenses after partial failure without recrea
   await user.click(screen.getByRole('button', { name: 'Зберегти' }))
   await waitFor(() => expect(carsApi.createExpense).toHaveBeenCalledTimes(3))
   expect(carsApi.create).toHaveBeenCalledTimes(1)
-  expect(carsApi.createExpense).toHaveBeenNthCalledWith(3, 'car-1', {
-    name: 'Мито',
-    amount: 250,
-  })
+  expect(carsApi.createExpense).toHaveBeenNthCalledWith(
+    3,
+    'car-1',
+    { name: 'Мито', amount: 250 },
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
 })
 
 it('validates every initial expense before creating the car', async () => {
@@ -614,6 +691,86 @@ it('validates every initial expense before creating the car', async () => {
     'Перевірте правильність початкових витрат.',
   )
   expect(carsApi.create).not.toHaveBeenCalled()
+})
+
+it('rechecks the latest car permission before dispatching create', async () => {
+  const currentCabinet = cabinet([
+    'cars.view',
+    'cars.manage',
+    'finance.view',
+    'finance.manage',
+  ])
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/demo/cars/new']}>
+      <Routes>
+        <Route path="/app/:tenant/cars/new" element={<CarsScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  await user.type(screen.getByLabelText('Код'), 'CAR-001')
+  await user.type(screen.getByLabelText('Марка'), 'BMW')
+  await user.type(screen.getByLabelText('Модель'), 'X5')
+  await user.type(screen.getByLabelText('Рік'), '2020')
+  await user.type(screen.getByLabelText('Ціна придбання'), '12000')
+  currentCabinet.snapshot.permissions.delete('cars.manage')
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+
+  expect(carsApi.create).not.toHaveBeenCalled()
+})
+
+it('rechecks finance.manage before dispatching a car edit with purchasePrice', async () => {
+  const currentCabinet = cabinet(['cars.view', 'cars.manage', 'finance.manage'])
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/demo/cars/car-1/edit']}>
+      <Routes>
+        <Route path="/app/:tenant/cars/:carId/edit" element={<CarsScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  await screen.findByDisplayValue('CAR-001')
+  currentCabinet.snapshot.permissions.delete('finance.manage')
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+
+  expect(carsApi.update).not.toHaveBeenCalled()
+})
+
+it('allows a manager to edit non-financial car fields without submitting purchasePrice', async () => {
+  vi.mocked(useCabinet).mockReturnValue(
+    cabinet(['cars.view', 'cars.manage', 'finance.view']),
+  )
+  vi.mocked(carsApi.update).mockResolvedValue(detail)
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/demo/cars/car-1/edit']}>
+      <Routes>
+        <Route path="/app/:tenant/cars/:carId/edit" element={<CarsScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  await screen.findByDisplayValue('CAR-001')
+  expect(screen.getByLabelText('Ціна придбання')).toBeDisabled()
+  await user.clear(screen.getByLabelText('Нотатки'))
+  await user.type(screen.getByLabelText('Нотатки'), 'Оновлено менеджером')
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+
+  await waitFor(() => expect(carsApi.update).toHaveBeenCalledOnce())
+  const request = vi.mocked(carsApi.update).mock.calls[0]?.[1]
+  expect(request).toMatchObject({ notes: 'Оновлено менеджером' })
+  expect(request).not.toHaveProperty('purchasePrice')
+  expect(carsApi.update).toHaveBeenCalledWith(
+    'car-1',
+    request,
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
 })
 
 it('renders committed photos read-only on edit instead of sending pending-media deletes', async () => {

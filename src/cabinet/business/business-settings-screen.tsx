@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { businessApi } from '@/api/business'
-import { tenantRequestScope } from '../tenant-request-scope'
 import { useCabinet } from '../CabinetContext'
+import { cabinetModules } from '../module-registry'
+import { useLatestMutationGuard } from '../use-latest-mutation-guard'
 
 type SaveState = 'idle' | 'pending' | 'success' | 'error' | 'denied'
 
@@ -14,6 +15,9 @@ export function BusinessSettingsScreen() {
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const mountedRef = useRef(true)
   const latestCabinetRef = useRef(cabinet)
+  const { requireLatestMutation } = useLatestMutationGuard(
+    cabinetModules.business,
+  )
 
   useEffect(() => {
     latestCabinetRef.current = cabinet
@@ -47,42 +51,31 @@ export function BusinessSettingsScreen() {
   const busy = saveState === 'pending'
   const canSave = !busy && normalizedName.length >= 2
 
-  const canUpdateCurrentTenant = () => {
-    const latest = latestCabinetRef.current
-    return (
-      latest.status === 'ready' &&
-      latest.snapshot !== null &&
-      latest.snapshot.tenantId === tenant.id &&
-      latest.targetTenant?.id === tenant.id &&
-      latest.snapshot.permissions.has('team.manage') &&
-      !tenantRequestScope.signal.aborted
-    )
-  }
-
   const save = async (event: FormEvent) => {
     event.preventDefault()
     if (!canSave) return
-    if (!canUpdateCurrentTenant()) {
+    let scope: ReturnType<typeof requireLatestMutation>
+    try {
+      scope = requireLatestMutation({ quota: false })
+    } catch {
       setSaveState('denied')
       return
     }
 
-    const signal = tenantRequestScope.signal
-    const requestGeneration = generation
     setSaveState('pending')
     try {
       const updated = await businessApi.update(
         tenant.id,
         { name: normalizedName, city: normalizedCity || null },
-        { signal },
+        { signal: scope.signal },
       )
       const latest = latestCabinetRef.current
       const latestSnapshot = latest.snapshot
       if (
         !mountedRef.current ||
-        signal.aborted ||
-        latestSnapshot?.generation !== requestGeneration ||
-        latestSnapshot?.tenantId !== tenant.id
+        scope.signal.aborted ||
+        latestSnapshot?.generation !== scope.generation ||
+        latestSnapshot?.tenantId !== scope.tenantId
       ) {
         return
       }
@@ -93,7 +86,7 @@ export function BusinessSettingsScreen() {
         () => undefined,
       )
     } catch {
-      if (!mountedRef.current || signal.aborted) return
+      if (!mountedRef.current || scope.signal.aborted) return
       setSaveState('error')
     }
   }

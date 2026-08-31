@@ -41,8 +41,12 @@ const cabinet = (
 ) =>
   ({
     status: 'ready',
-    targetTenant: { slug: 'garage' },
+    targetTenant: { id: 'tenant-1', slug: 'garage' },
     snapshot: {
+      userId: 'user-1',
+      tenantId: 'tenant-1',
+      generation: 1,
+      role: 'manager',
       permissions: new Set(permissions),
       features: new Set(),
       entitlement: { state: 'active', usage: {} },
@@ -192,7 +196,61 @@ it('offers reuse and reactivation for the documented duplicate-phone conflict', 
     await screen.findByRole('link', { name: 'Використати клієнта Ірина' }),
   ).toHaveAttribute('href', '/app/garage/customers/customer-existing')
   await user.click(screen.getByRole('button', { name: 'Активувати Ірина' }))
-  expect(customerMocks.activate).toHaveBeenCalledWith('customer-existing')
+  expect(customerMocks.activate).toHaveBeenCalledWith(
+    'customer-existing',
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
+})
+
+it('rechecks orders.view before reactivating a duplicate from customer edit', async () => {
+  const currentCabinet = cabinet()
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  customerMocks.getById.mockResolvedValue({
+    id: 'customer-1',
+    name: 'Ірина',
+    phone: '+380501112233',
+    notes: null,
+    isActive: true,
+    createdAt: '2026-08-28T00:00:00Z',
+    orders: [],
+    ordersCount: 0,
+    totalAmount: null,
+    averageAmount: null,
+    firstOrderAt: null,
+    lastOrderAt: null,
+  })
+  customerMocks.update.mockRejectedValue({
+    response: {
+      status: 409,
+      data: {
+        error: {
+          code: 'CUSTOMER_PHONE_EXISTS',
+          customerId: 'customer-existing',
+          customerName: 'Олена',
+          isActive: false,
+          message: 'Телефон уже використовується',
+        },
+      },
+    },
+  })
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/garage/customers/customer-1/edit']}>
+      <CustomersScreen definition={definition} />
+    </MemoryRouter>,
+  )
+
+  await screen.findByDisplayValue('Ірина')
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+  const reactivate = await screen.findByRole('button', {
+    name: 'Активувати Олена',
+  })
+  ;(currentCabinet.snapshot?.permissions as Set<string>).delete('orders.view')
+  await user.click(reactivate)
+
+  expect(customerMocks.activate).not.toHaveBeenCalled()
 })
 
 it('blocks create and edit mutations when the customer module decision denies them', async () => {
@@ -234,6 +292,58 @@ it('blocks create and edit mutations when the customer module decision denies th
   await screen.findByDisplayValue('Ірина')
   expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled()
   expect(customerMocks.update).not.toHaveBeenCalled()
+})
+
+it('rechecks the latest customer permission before dispatching create', async () => {
+  const currentCabinet = cabinet()
+  vi.mocked(useCabinet).mockReturnValue(currentCabinet)
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/garage/customers/new']}>
+      <CustomersScreen definition={definition} />
+    </MemoryRouter>,
+  )
+
+  await user.type(screen.getByLabelText('Ім’я'), 'Нова Ірина')
+  const permissions = currentCabinet.snapshot?.permissions as Set<string>
+  permissions.delete('customers.manage')
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+
+  expect(customerMocks.create).not.toHaveBeenCalled()
+})
+
+it('passes the guarded tenant signal to customer create', async () => {
+  customerMocks.create.mockResolvedValue({ customer: { id: 'customer-1' } })
+  customerMocks.getById.mockResolvedValue({
+    id: 'customer-1',
+    name: 'Нова Ірина',
+    phone: null,
+    notes: null,
+    isActive: true,
+    createdAt: '2026-08-28T00:00:00Z',
+    orders: [],
+    ordersCount: 0,
+    totalAmount: null,
+    averageAmount: null,
+    firstOrderAt: null,
+    lastOrderAt: null,
+  })
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/garage/customers/new']}>
+      <CustomersScreen definition={definition} />
+    </MemoryRouter>,
+  )
+
+  await user.type(screen.getByLabelText('Ім’я'), 'Нова Ірина')
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+
+  expect(customerMocks.create).toHaveBeenCalledWith(
+    expect.objectContaining({ name: 'Нова Ірина' }),
+    expect.objectContaining({
+      signal: expect.any(AbortSignal) as AbortSignal,
+    }),
+  )
 })
 
 it('does not fetch bundled detail for an edit route without orders.view', async () => {

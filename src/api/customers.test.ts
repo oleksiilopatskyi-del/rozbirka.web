@@ -41,23 +41,43 @@ describe('customersApi', () => {
       data: { customer: { id: 'customer-1', name: 'Олена' } },
     })
     const remove = vi.spyOn(apiClient, 'delete').mockResolvedValue({})
+    const controller = new AbortController()
+    const options = { signal: controller.signal }
 
-    await customersApi.create({ name: 'Ірина', phone: null, notes: null })
-    await customersApi.update('customer-1', { name: 'Олена' })
-    await customersApi.activate('customer-1')
-    await customersApi.deactivate('customer-1')
-    await customersApi.remove('customer-1')
+    await customersApi.create(
+      { name: 'Ірина', phone: null, notes: null },
+      options,
+    )
+    await customersApi.update('customer-1', { name: 'Олена' }, options)
+    await customersApi.activate('customer-1', options)
+    await customersApi.deactivate('customer-1', options)
+    await customersApi.remove('customer-1', options)
 
-    expect(post).toHaveBeenCalledWith('/customers', {
-      name: 'Ірина',
-      phone: null,
-      notes: null,
+    expect(post).toHaveBeenCalledWith(
+      '/customers',
+      { name: 'Ірина', phone: null, notes: null },
+      { signal: controller.signal },
+    )
+    expect(patch).toHaveBeenNthCalledWith(
+      1,
+      '/customers/customer-1',
+      { name: 'Олена' },
+      { signal: controller.signal },
+    )
+    expect(patch).toHaveBeenNthCalledWith(
+      2,
+      '/customers/customer-1/activate',
+      undefined,
+      { signal: controller.signal },
+    )
+    expect(patch).toHaveBeenNthCalledWith(
+      3,
+      '/customers/customer-1/deactivate',
+      undefined,
+      { signal: controller.signal },
+    )
+    expect(remove).toHaveBeenCalledWith('/customers/customer-1', {
+      signal: controller.signal,
     })
-    expect(patch).toHaveBeenNthCalledWith(1, '/customers/customer-1', {
-      name: 'Олена',
-    })
-    expect(patch).toHaveBeenNthCalledWith(2, '/customers/customer-1/activate')
-    expect(patch).toHaveBeenNthCalledWith(3, '/customers/customer-1/deactivate')
-    expect(remove).toHaveBeenCalledWith('/customers/customer-1')
   })
 })
