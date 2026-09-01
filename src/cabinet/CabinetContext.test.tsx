@@ -89,6 +89,15 @@ const deferred = <T,>() => {
 let cabinet: CabinetContextValue | null = null
 const resetRemovals: (() => void)[] = []
 
+const waitForCabinet = () =>
+  waitFor(() => {
+    if (cabinet === null) {
+      throw new Error('Cabinet context was not exposed')
+    }
+
+    return cabinet
+  })
+
 const registerTenantReset = (
   reset: Parameters<typeof tenantResetRegistry.register>[0],
 ) => {
@@ -393,8 +402,7 @@ it('keeps the current tenant untouched when an inactive tenant is selected', asy
 
   renderCabinet('/app/a/settings/profile?tab=security#phone')
   expect(await screen.findByText('tenant:a access:a')).toBeVisible()
-  const readyCabinet = cabinet
-  if (!readyCabinet) throw new Error('Cabinet context was not exposed')
+  const readyCabinet = await waitForCabinet()
   const sharedSignal = tenantRequestScope.signal
   preferenceSet.mockClear()
   vi.mocked(accessApi.get).mockClear()
@@ -425,8 +433,7 @@ it('commits only the last target during rapid switches', async () => {
 
   renderCabinet('/app/a/dashboard')
   expect(await screen.findByText('tenant:a access:a')).toBeVisible()
-  const readyCabinet = cabinet
-  if (!readyCabinet) throw new Error('Cabinet context was not exposed')
+  const readyCabinet = await waitForCabinet()
 
   let switchB!: Promise<void>
   let switchC!: Promise<void>
