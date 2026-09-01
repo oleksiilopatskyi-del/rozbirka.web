@@ -218,7 +218,7 @@ gcloud storage cp "$ARTIFACT" \
   --custom-metadata="sha256=$digest,source-commit=$commit"
 ```
 
-Then download the object to a temporary file, compare its SHA-256 to `$digest`, and append the immutable URI and digest to `$GITHUB_STEP_SUMMARY` when that variable is defined.
+Rely on the successful GCS upload's transport-integrity check, then append the immutable URI and locally computed digest to `$GITHUB_STEP_SUMMARY` when that variable is defined. Do not add read access to the publisher.
 
 - [ ] **Step 4: Run targeted tests and the local currentness check.**
 
@@ -283,7 +283,7 @@ Use the same CLI and validation contract as Core. Run `scripts/check-openapi.sh`
 gs://rozbirka-ci-openapi-contracts/identity/<sha>/rozbirka-identity.json
 ```
 
-with `--if-generation-match=0`, verify the downloaded digest, and write the URI/digest to the job summary.
+with `--if-generation-match=0`, rely on GCS transfer-integrity validation, and write the URI/local digest to the job summary. Do not add read access to the publisher.
 
 - [ ] **Step 4: Add the trusted Identity publication workflow.**
 

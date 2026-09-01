@@ -89,9 +89,8 @@ Core and Identity each add a contract publication workflow that:
 2. authenticates to GCP through WIF;
 3. validates that the source revision is a full commit SHA;
 4. computes and records SHA-256 for the generated JSON;
-5. creates the commit-addressed object with the no-overwrite precondition;
-6. verifies the uploaded object's checksum/metadata;
-7. emits the immutable `gs://` URI and SHA-256 in the workflow summary.
+5. creates the commit-addressed object with the no-overwrite precondition and relies on GCS transfer-integrity validation;
+6. emits the immutable `gs://` URI and locally computed SHA-256 in the workflow summary.
 
 Automatic publication occurs from trusted `develop` pushes and release tags, not from pull-request code. This prevents an unreviewed PR workflow from using publisher credentials. A manually dispatched publication may target an exact trusted commit, but it must use a protected GitHub environment with approval.
 
@@ -156,4 +155,3 @@ Logs must not print access tokens. The immutable URI and non-secret digest may b
 ## Operational Prerequisite
 
 The local GCP session for `vsobol@rozbirka.com` currently requires interactive re-authentication. Codex can prepare and review Terraform and workflow changes without it, but a live GCP plan/apply or IAM inspection requires the operator to complete `gcloud auth login` (and application-default login if Terraform uses ADC) in an interactive terminal. No credentials are to be copied into chat or committed.
-
