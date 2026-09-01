@@ -30,12 +30,10 @@
 
 **Files:**
 - Create: `rozbirka-platform/envs/ci/openapi_contracts.tf`
-- Modify: `rozbirka-platform/envs/ci/variables.tf`
-- Modify: `rozbirka-platform/envs/ci/terraform.tfvars.example`
 - Create: `rozbirka-platform/envs/ci/openapi_contracts_test.tftest.hcl`
 
 **Interfaces:**
-- Consumes: existing `module.gcs_bucket`, project local `local.project_id`, and WIF pool coordinates supplied as `github_wif_pool_project_number` and `github_wif_pool_id`.
+- Consumes: existing `module.gcs_bucket`, project local `local.project_id`, and managed WIF pool resource `google_iam_workload_identity_pool.github`.
 - Produces: bucket `rozbirka-ci-openapi-contracts`; service-account emails `core-contract-publisher@rozbirka-ci.iam.gserviceaccount.com`, `identity-contract-publisher@rozbirka-ci.iam.gserviceaccount.com`, and `web-contract-reader@rozbirka-ci.iam.gserviceaccount.com`.
 
 - [ ] **Step 1: Create an isolated Platform worktree.**
@@ -78,39 +76,13 @@ Run: `terraform -chdir=envs/ci init -backend=false && terraform -chdir=envs/ci t
 
 Expected: FAIL because the module/output and OpenAPI contract resources do not exist.
 
-- [ ] **Step 4: Add validated WIF inputs.**
-
-Add to `envs/ci/variables.tf`:
-
-```hcl
-variable "github_wif_pool_project_number" {
-  type        = string
-  description = "Numeric project number containing the existing GitHub Actions WIF pool."
-  validation {
-    condition     = can(regex("^[0-9]+$", var.github_wif_pool_project_number))
-    error_message = "github_wif_pool_project_number must contain digits only."
-  }
-}
-
-variable "github_wif_pool_id" {
-  type        = string
-  description = "ID of the existing GitHub Actions WIF pool."
-  validation {
-    condition     = can(regex("^[a-z][a-z0-9-]{3,31}$", var.github_wif_pool_id))
-    error_message = "github_wif_pool_id must be a valid workload identity pool ID."
-  }
-}
-```
-
-Document both inputs in `terraform.tfvars.example` without committing live environment values.
-
-- [ ] **Step 5: Implement storage, identities, and least-privilege IAM.**
+- [ ] **Step 4: Implement storage, identities, and least-privilege IAM.**
 
 Create `envs/ci/openapi_contracts.tf` with:
 
 ```hcl
 locals {
-  github_wif_pool = "principalSet://iam.googleapis.com/projects/${var.github_wif_pool_project_number}/locations/global/workloadIdentityPools/${var.github_wif_pool_id}/attribute.repository"
+  github_repository_principal_prefix = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_owner}"
 }
 
 module "openapi_contracts" {
@@ -130,14 +102,14 @@ module "openapi_contracts" {
 Create the three `google_service_account` resources. Grant Core and Identity `roles/storage.objectCreator`, grant Web `roles/storage.objectViewer`, and grant `roles/iam.workloadIdentityUser` on each service account to these exact members:
 
 ```text
-${local.github_wif_pool}/oleksiilopatskyi-del/rozbirka.core
-${local.github_wif_pool}/oleksiilopatskyi-del/rozbirka.identity
-${local.github_wif_pool}/oleksiilopatskyi-del/rozbirka.web
+${local.github_repository_principal_prefix}/rozbirka.core
+${local.github_repository_principal_prefix}/rozbirka.identity
+${local.github_repository_principal_prefix}/rozbirka.web
 ```
 
 Do not add `storage.objectAdmin`, `storage.admin`, delete permissions, or `allUsers`/`allAuthenticatedUsers` bindings.
 
-- [ ] **Step 6: Expose the public-access-prevention output and run validation.**
+- [ ] **Step 5: Expose the public-access-prevention output and run validation.**
 
 Add to `modules/gcs_bucket/outputs.tf`:
 
@@ -157,7 +129,7 @@ terraform -chdir=envs/ci test
 
 Expected: all commands exit 0.
 
-- [ ] **Step 7: Produce a non-mutating plan when credentials are available.**
+- [ ] **Step 6: Produce a non-mutating plan when credentials are available.**
 
 Run `gcloud auth application-default login` interactively, then:
 
@@ -168,10 +140,10 @@ terraform -chdir=envs/ci show -no-color openapi-contracts.tfplan
 
 Expected: one private bucket, three service accounts, create-only/read-only bucket bindings, and three repository-scoped WIF impersonation bindings; no destroys and no public members. Do not apply.
 
-- [ ] **Step 8: Commit Platform changes.**
+- [ ] **Step 7: Commit Platform changes.**
 
 ```bash
-git add envs/ci/openapi_contracts.tf envs/ci/openapi_contracts_test.tftest.hcl envs/ci/variables.tf envs/ci/terraform.tfvars.example modules/gcs_bucket/outputs.tf
+git add envs/ci/openapi_contracts.tf envs/ci/openapi_contracts_test.tftest.hcl modules/gcs_bucket/outputs.tf
 git commit -m "feat(ci): provision private OpenAPI artifacts"
 ```
 
