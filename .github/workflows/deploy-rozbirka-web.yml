@@ -3,6 +3,7 @@ name: Deploy Rozbirka Web
 on:
   pull_request:
     branches:
+      - develop
       - main
     paths:
       - 'src/**'
@@ -10,6 +11,7 @@ on:
       - 'worker/**'
       - 'e2e/**'
       - 'scripts/**'
+      - 'contracts/**'
       - 'package.json'
       - 'package-lock.json'
       - 'lighthouserc.cjs'
@@ -50,10 +52,13 @@ jobs:
     uses: ./.github/workflows/deploy-node-static-template.yml
     permissions:
       contents: read
+      id-token: write
     secrets:
       CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
       CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
       CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+      GCP_CONTRACT_READER_SERVICE_ACCOUNT: ${{ secrets.GCP_CONTRACT_READER_SERVICE_ACCOUNT }}
     with:
       project_name: Rozbirka Web
       branch: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
@@ -61,5 +66,3 @@ jobs:
       enable_deployment: ${{ (github.event_name == 'push' && github.ref_name == 'develop') || (github.event_name == 'workflow_dispatch' && inputs.enable_deployment) }}
       auto_qa_deploy: ${{ github.event_name == 'push' && github.ref_name == 'develop' }}
       run_build: true
-      core_contract: ${{ vars.CORE_OPENAPI_IMMUTABLE_URL }}
-      identity_contract: ${{ vars.IDENTITY_OPENAPI_IMMUTABLE_URL }}

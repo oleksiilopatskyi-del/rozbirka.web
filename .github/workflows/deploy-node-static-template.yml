@@ -27,14 +27,6 @@ on:
         description: Run npm build before deployment
         required: true
         type: boolean
-      core_contract:
-        description: Immutable Core OpenAPI file or versioned URL
-        required: true
-        type: string
-      identity_contract:
-        description: Immutable Identity OpenAPI file or versioned URL
-        required: true
-        type: string
     secrets:
       CLOUDFLARE_TOKEN:
         description: Cloudflare API token with Workers deploy permissions
@@ -45,6 +37,12 @@ on:
       CF_ACCESS_CLIENT_SECRET:
         description: Cloudflare Access service-token secret for QA checks
         required: false
+      GCP_WIF_PROVIDER:
+        description: GCP Workload Identity provider for private contract access
+        required: true
+      GCP_CONTRACT_READER_SERVICE_ACCOUNT:
+        description: Read-only GCP service account for private OpenAPI contracts
+        required: true
 
 env:
   NODE_VERSION: '22'
@@ -55,6 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -69,6 +68,15 @@ jobs:
       - run: npm install --global npm@11.16.0
 
       - run: npm ci
+
+      - if: inputs.run_build
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_CONTRACT_READER_SERVICE_ACCOUNT }}
+
+      - if: inputs.run_build
+        uses: google-github-actions/setup-gcloud@v2
 
       - if: inputs.run_build
         run: npx playwright install --with-deps chromium firefox webkit
@@ -87,13 +95,16 @@ jobs:
 
       - if: inputs.run_build
         name: Immutable Core and Identity contract drift gate
-        run: >-
-          npm run contracts:check --
-          --core "$CORE_OPENAPI_INPUT"
-          --identity "$IDENTITY_OPENAPI_INPUT"
-        env:
-          CORE_OPENAPI_INPUT: ${{ inputs.core_contract }}
-          IDENTITY_OPENAPI_INPUT: ${{ inputs.identity_contract }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract_dir="$RUNNER_TEMP/openapi-contracts"
+          paths_json="$(node scripts/fetch-api-contracts.mjs \
+            --manifest contracts/openapi-sources.json \
+            --out "$contract_dir")"
+          core_path="$(node -e 'const value=JSON.parse(process.argv[1]); process.stdout.write(value.core)' "$paths_json")"
+          identity_path="$(node -e 'const value=JSON.parse(process.argv[1]); process.stdout.write(value.identity)' "$paths_json")"
+          npm run contracts:check -- --core "$core_path" --identity "$identity_path"
 
       - if: inputs.run_build
         name: Auth and tenant integration gate

@@ -157,7 +157,7 @@ git commit -m "feat(ci): provision private OpenAPI artifacts"
 - Create: `rozbirka.core/.github/workflows/publish-openapi.yml`
 
 **Interfaces:**
-- Consumes: `contracts/openapi/v1/rozbirka-core.json`, full commit SHA, bucket name `rozbirka-ci-openapi-contracts`, and existing WIF secrets.
+- Consumes: `contracts/openapi/v1/rozbirka-core.json`, full commit SHA, bucket name `rozbirka-ci-openapi-contracts`, `GCP_WIF_PROVIDER`, and `GCP_CONTRACT_PUBLISHER_SERVICE_ACCOUNT`.
 - Produces: `gs://rozbirka-ci-openapi-contracts/core/<sha>/rozbirka-core.json` with SHA-256 metadata and a workflow summary.
 
 - [ ] **Step 1: Write failing script tests.**
@@ -205,7 +205,7 @@ Expected: PASS and `Core OpenAPI contract is up to date.`
 
 - [ ] **Step 5: Add the trusted publication workflow.**
 
-Create `.github/workflows/publish-openapi.yml` triggered by `push` to `develop`, tags matching `v*`, and `workflow_dispatch`. Grant only `contents: read` and `id-token: write`. Checkout the exact event SHA, authenticate with `google-github-actions/auth@v2`, install gcloud with `google-github-actions/setup-gcloud@v2`, and run:
+Create `.github/workflows/publish-openapi.yml` triggered by `push` to `develop`, tags matching `v*`, and `workflow_dispatch`. Grant only `contents: read` and `id-token: write`. Checkout the exact event SHA, authenticate with `google-github-actions/auth@v2` using `GCP_WIF_PROVIDER` and `GCP_CONTRACT_PUBLISHER_SERVICE_ACCOUNT`, install gcloud with `google-github-actions/setup-gcloud@v2`, and run:
 
 ```bash
 scripts/publish-openapi.sh \
@@ -213,7 +213,7 @@ scripts/publish-openapi.sh \
   --commit "$(git rev-parse HEAD)"
 ```
 
-The manual job uses a protected `contract-publish` GitHub environment; PR events are absent.
+The job rejects manual dispatches unless the selected ref is `develop` or a `v*` release tag; PR events are absent.
 
 - [ ] **Step 6: Validate and commit Core changes.**
 
@@ -234,7 +234,7 @@ git commit -m "ci(core): publish immutable OpenAPI contract"
 - Create: `rozbirka.identity/.github/workflows/publish-openapi.yml`
 
 **Interfaces:**
-- Consumes: `contracts/openapi/v1/rozbirka-identity.json`, full commit SHA, bucket name, and existing WIF secrets.
+- Consumes: `contracts/openapi/v1/rozbirka-identity.json`, full commit SHA, bucket name, `GCP_WIF_PROVIDER`, and `GCP_CONTRACT_PUBLISHER_SERVICE_ACCOUNT`.
 - Produces: `gs://rozbirka-ci-openapi-contracts/identity/<sha>/rozbirka-identity.json` with SHA-256 metadata and a workflow summary.
 
 - [ ] **Step 1: Write failing Identity publisher tests.**
@@ -259,7 +259,7 @@ with `--if-generation-match=0`, rely on GCS transfer-integrity validation, and w
 
 - [ ] **Step 4: Add the trusted Identity publication workflow.**
 
-Use the same trusted triggers, minimal permissions, exact-SHA checkout, WIF authentication, fixed bucket name, and protected `contract-publish` environment as Core. Do not add a pull-request trigger.
+Use the same trusted triggers, minimal permissions, exact-SHA checkout, WIF authentication, fixed bucket name, and manual-ref restriction as Core. Do not add a pull-request trigger.
 
 - [ ] **Step 5: Verify and commit Identity changes.**
 
@@ -326,7 +326,7 @@ Use `execFile` rather than a shell, create the output directory, download Core a
 
 - [ ] **Step 4: Add the committed source manifest.**
 
-Set Core to commit `7c6fa19597b9f6ff8ef6a3fc4a136bbb75b3c28b` and digest `4cdc8a64bd08ed1f22e3d4466c7cff3c4a3fb32d27fdb03dd858e617fe819521`. Set Identity to commit `db0a142d6fab1ef2441d4a16d9fd8a182e456da6` and digest `5ed38f1514a2f34785fb807e1b14751b74875205b066171f1bdbdf33d544e7cb` under bucket `rozbirka-ci-openapi-contracts`.
+Set Core to reviewed publisher commit `befcf296a4a1c5a1993f72b728e4c305ea55a1b5` and digest `4cdc8a64bd08ed1f22e3d4466c7cff3c4a3fb32d27fdb03dd858e617fe819521`. Set Identity to reviewed publisher commit `c6c6da4ec5367316f9b3e67085ca66b42e52248a` and digest `5ed38f1514a2f34785fb807e1b14751b74875205b066171f1bdbdf33d544e7cb` under bucket `rozbirka-ci-openapi-contracts`.
 
 - [ ] **Step 5: Run tests and regenerate from locally verified source files.**
 
@@ -343,7 +343,7 @@ Expected: tests pass and generated provenance digests equal the manifest values.
 
 - [ ] **Step 6: Authenticate the Web quality job and replace URL inputs.**
 
-In `deploy-rozbirka-web.yml`, remove `core_contract` and `identity_contract`, grant the reusable job `id-token: write`, and pass `GCP_WIF_PROVIDER` plus `GCP_CI_SERVICE_ACCOUNT` through the reusable workflow's secret interface.
+In `deploy-rozbirka-web.yml`, remove `core_contract` and `identity_contract`, grant the reusable job `id-token: write`, and pass `GCP_WIF_PROVIDER` plus `GCP_CONTRACT_READER_SERVICE_ACCOUNT` through the reusable workflow's secret interface. Keep the existing deployment service-account secret unchanged.
 
 In `deploy-node-static-template.yml`, remove both contract inputs, declare the two GCP secrets, grant `quality` `id-token: write`, authenticate/setup gcloud, and replace the drift step with a Bash step that:
 
@@ -389,14 +389,14 @@ Inspect the Terraform plan and workflows for public IAM, delete permissions, bro
 
 - [ ] **Step 2: Verify live prerequisites without mutating GCP.**
 
-After interactive authentication, confirm the existing WIF pool ID/project number and compare them with Terraform inputs. Confirm that each GitHub repository has `GCP_WIF_PROVIDER`; record that `GCP_CI_SERVICE_ACCOUNT` must be changed to the corresponding Terraform output after Platform apply.
+After interactive authentication, confirm the existing managed WIF pool/provider. Confirm that each GitHub repository has `GCP_WIF_PROVIDER`; record that Core and Identity need `GCP_CONTRACT_PUBLISHER_SERVICE_ACCOUNT`, while Web needs `GCP_CONTRACT_READER_SERVICE_ACCOUNT`, using the corresponding Terraform outputs after Platform apply. Do not replace `GCP_CI_SERVICE_ACCOUNT`.
 
 - [ ] **Step 3: Record the operator-only sequence.**
 
 The handoff must state exactly:
 
 1. approve and apply the reviewed Platform plan;
-2. update repository `GCP_CI_SERVICE_ACCOUNT` secrets to their dedicated identities;
+2. add the repository-specific contract publisher/reader service-account secrets while preserving `GCP_CI_SERVICE_ACCOUNT`;
 3. merge Core and Identity backend PRs to `develop`;
 4. confirm both publication workflows created the manifest-pinned objects;
 5. rerun Web PR checks;

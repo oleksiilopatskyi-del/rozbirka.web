@@ -77,7 +77,7 @@ Reuse the existing GitHub Actions WIF pool/provider, but use three dedicated ser
 - Identity contract publisher: object creation permission only;
 - Web contract reader: object read permission only.
 
-Each repository keeps the established secret names `GCP_WIF_PROVIDER` and `GCP_CI_SERVICE_ACCOUNT`; the service-account secret is updated to the repository-specific identity. The existing WIF principal binding must restrict impersonation to the intended GitHub repository and trusted refs.
+Each repository keeps the established `GCP_WIF_PROVIDER`. Contract workflows use dedicated service-account secrets: `GCP_CONTRACT_PUBLISHER_SERVICE_ACCOUNT` in Core and Identity and `GCP_CONTRACT_READER_SERVICE_ACCOUNT` in Web. The existing deployment secret `GCP_CI_SERVICE_ACCOUNT` is unchanged so Docker and Cloud Run permissions continue to work. The WIF principal binding must restrict impersonation to the intended GitHub repository and trusted refs.
 
 The publisher role must not include object deletion or overwrite. If platform policy requires prefix separation beyond distinct service accounts, conditional IAM bindings restrict Core to `/core/` and Identity to `/identity/`. Web receives `storage.objects.get` for both prefixes; list permission is not required by the normal build path.
 
@@ -92,7 +92,7 @@ Core and Identity each add a contract publication workflow that:
 5. creates the commit-addressed object with the no-overwrite precondition and relies on GCS transfer-integrity validation;
 6. emits the immutable `gs://` URI and locally computed SHA-256 in the workflow summary.
 
-Automatic publication occurs from trusted `develop` pushes and release tags, not from pull-request code. This prevents an unreviewed PR workflow from using publisher credentials. A manually dispatched publication may target an exact trusted commit, but it must use a protected GitHub environment with approval.
+Automatic publication occurs from trusted `develop` pushes and release tags, not from pull-request code. This prevents an unreviewed PR workflow from using publisher credentials. A manually dispatched publication is accepted only when its selected ref is `develop` or a `v*` release tag.
 
 Consequently, the normal dependency order is: merge a reviewed backend contract to `develop`, publish it, then point the Web change at that artifact. Web cannot claim release readiness against an unpublished backend PR commit.
 

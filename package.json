@@ -18,7 +18,7 @@
     "test": "vitest run",
     "check:static": "npm run deps:check && npm run typecheck && npm run lint && npm run format:check && npm run parity:check",
     "test:unit": "vitest run --exclude='scripts/api-contracts.test.ts' --exclude='scripts/parity-matrix.test.ts' --exclude='src/api/*.test.ts' --exclude='scripts/auth-e2e-upstream.test.ts' --exclude='src/auth/AuthContext.test.tsx' --exclude='src/cabinet/tenant-transition.test.ts'",
-    "test:contracts": "vitest run scripts/api-contracts.test.ts scripts/parity-matrix.test.ts src/api/*.test.ts --exclude='src/api/client.test.ts'",
+    "test:contracts": "vitest run scripts/api-contracts.test.ts scripts/fetch-api-contracts.test.ts scripts/parity-matrix.test.ts src/api/*.test.ts --exclude='src/api/client.test.ts'",
     "test:integration": "vitest run scripts/auth-e2e-upstream.test.ts src/api/client.test.ts src/auth/AuthContext.test.tsx src/cabinet/tenant-transition.test.ts",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
