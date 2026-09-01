@@ -77,7 +77,7 @@ Reuse the existing GitHub Actions WIF pool/provider, but use three dedicated ser
 - Identity contract publisher: object creation permission only;
 - Web contract reader: object read permission only.
 
-Each repository keeps the established `GCP_WIF_PROVIDER`. Contract workflows use dedicated service-account secrets: `GCP_CONTRACT_PUBLISHER_SERVICE_ACCOUNT` in Core and Identity and `GCP_CONTRACT_READER_SERVICE_ACCOUNT` in Web. The existing deployment secret `GCP_CI_SERVICE_ACCOUNT` is unchanged so Docker and Cloud Run permissions continue to work. The WIF principal binding must restrict impersonation to the intended GitHub repository and trusted refs.
+Each repository keeps the established `GCP_WIF_PROVIDER`. Contract workflows use dedicated service-account secrets: `GCP_CONTRACT_PUBLISHER_SERVICE_ACCOUNT` in Core and Identity and `GCP_CONTRACT_READER_SERVICE_ACCOUNT` in Web. The existing deployment secret `GCP_CI_SERVICE_ACCOUNT` is unchanged so Docker and Cloud Run permissions continue to work. Publisher WIF impersonation is bound to the exact GitHub OIDC subject for that repository's `develop` ref; changing workflow triggers cannot widen it.
 
 The publisher role must not include object deletion or overwrite. If platform policy requires prefix separation beyond distinct service accounts, conditional IAM bindings restrict Core to `/core/` and Identity to `/identity/`. Web receives `storage.objects.get` for both prefixes; list permission is not required by the normal build path.
 
@@ -87,12 +87,12 @@ Core and Identity each add a contract publication workflow that:
 
 1. runs only after the repository's OpenAPI generation/currentness checks pass;
 2. authenticates to GCP through WIF;
-3. validates that the source revision is a full commit SHA;
+3. derives the full contract-source commit SHA with `git log -1 --format=%H -- <canonical-contract-file>` from a full-history checkout;
 4. computes and records SHA-256 for the generated JSON;
 5. creates the commit-addressed object with the no-overwrite precondition and relies on GCS transfer-integrity validation;
 6. emits the immutable `gs://` URI and locally computed SHA-256 in the workflow summary.
 
-Automatic publication occurs from trusted `develop` pushes and release tags, not from pull-request code. This prevents an unreviewed PR workflow from using publisher credentials. A manually dispatched publication is accepted only when its selected ref is `develop` or a `v*` release tag.
+Automatic publication occurs only from trusted `develop` pushes, not from pull-request or tag code. Manual dispatch is also accepted only when the selected ref is `develop`. This restriction is enforced both by the workflow and the publisher service account's exact WIF subject binding. The object path uses the commit that last changed the canonical contract rather than the merge commit, so Web can pin the reviewed contract revision before the backend merge.
 
 Consequently, the normal dependency order is: merge a reviewed backend contract to `develop`, publish it, then point the Web change at that artifact. Web cannot claim release readiness against an unpublished backend PR commit.
 

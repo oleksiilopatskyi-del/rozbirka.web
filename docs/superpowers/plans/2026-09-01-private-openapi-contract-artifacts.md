@@ -18,7 +18,7 @@
 - Object paths contain a lowercase 40-character Git SHA: `core/<sha>/rozbirka-core.json` and `identity/<sha>/rozbirka-identity.json`.
 - Publishers have create-only access and use `--if-generation-match=0`; Web has read-only access.
 - WIF impersonation is restricted by `attribute.repository` to the exact GitHub repository.
-- Automatic publication runs only for trusted `develop` pushes and release tags.
+- Automatic and manual publication run only for the trusted `develop` ref, enforced by exact WIF subject bindings.
 - Web's source URIs and SHA-256 digests are committed and reviewed, never supplied by mutable repository variables.
 - Local generation and drift checks continue accepting explicit local files without GCP.
 - Do not deploy or merge any repository as part of implementation.
@@ -205,15 +205,15 @@ Expected: PASS and `Core OpenAPI contract is up to date.`
 
 - [ ] **Step 5: Add the trusted publication workflow.**
 
-Create `.github/workflows/publish-openapi.yml` triggered by `push` to `develop`, tags matching `v*`, and `workflow_dispatch`. Grant only `contents: read` and `id-token: write`. Checkout the exact event SHA, authenticate with `google-github-actions/auth@v2` using `GCP_WIF_PROVIDER` and `GCP_CONTRACT_PUBLISHER_SERVICE_ACCOUNT`, install gcloud with `google-github-actions/setup-gcloud@v2`, and run:
+Create `.github/workflows/publish-openapi.yml` triggered by `push` to `develop` and `workflow_dispatch`. Grant only `contents: read` and `id-token: write`. Require `github.ref == 'refs/heads/develop'`, checkout the exact event SHA with `fetch-depth: 0`, authenticate with `google-github-actions/auth@v2` using `GCP_WIF_PROVIDER` and `GCP_CONTRACT_PUBLISHER_SERVICE_ACCOUNT`, install gcloud, derive the contract-source commit, and run:
 
 ```bash
 scripts/publish-openapi.sh \
   --bucket rozbirka-ci-openapi-contracts \
-  --commit "$(git rev-parse HEAD)"
+  --commit "$(git log -1 --format=%H -- contracts/openapi/v1/rozbirka-core.json)"
 ```
 
-The job rejects manual dispatches unless the selected ref is `develop` or a `v*` release tag; PR events are absent.
+The job rejects manual dispatches unless the selected ref is `develop`; PR and tag events are absent. Platform IAM independently permits only the OIDC subject `repo:oleksiilopatskyi-del/rozbirka.core:ref:refs/heads/develop`.
 
 - [ ] **Step 6: Validate and commit Core changes.**
 
@@ -259,7 +259,7 @@ with `--if-generation-match=0`, rely on GCS transfer-integrity validation, and w
 
 - [ ] **Step 4: Add the trusted Identity publication workflow.**
 
-Use the same trusted triggers, minimal permissions, exact-SHA checkout, WIF authentication, fixed bucket name, and manual-ref restriction as Core. Do not add a pull-request trigger.
+Use the same `develop`-only triggers, full-history exact-SHA checkout, WIF authentication, fixed bucket name, artifact-source commit derivation, and exact-subject IAM restriction as Core. Do not add pull-request or tag triggers.
 
 - [ ] **Step 5: Verify and commit Identity changes.**
 
@@ -326,7 +326,7 @@ Use `execFile` rather than a shell, create the output directory, download Core a
 
 - [ ] **Step 4: Add the committed source manifest.**
 
-Set Core to reviewed publisher commit `befcf296a4a1c5a1993f72b728e4c305ea55a1b5` and digest `4cdc8a64bd08ed1f22e3d4466c7cff3c4a3fb32d27fdb03dd858e617fe819521`. Set Identity to reviewed publisher commit `c6c6da4ec5367316f9b3e67085ca66b42e52248a` and digest `5ed38f1514a2f34785fb807e1b14751b74875205b066171f1bdbdf33d544e7cb` under bucket `rozbirka-ci-openapi-contracts`.
+Set Core to contract-source commit `7c6fa19597b9f6ff8ef6a3fc4a136bbb75b3c28b` and digest `4cdc8a64bd08ed1f22e3d4466c7cff3c4a3fb32d27fdb03dd858e617fe819521`. Set Identity to contract-source commit `921268001a131080f502a8bfafb5e86a0fc028df` and digest `5ed38f1514a2f34785fb807e1b14751b74875205b066171f1bdbdf33d544e7cb` under bucket `rozbirka-ci-openapi-contracts`. Each backend workflow derives this SHA with `git log -1 --format=%H -- <canonical-contract-file>` from a full-history checkout on trusted `develop`.
 
 - [ ] **Step 5: Run tests and regenerate from locally verified source files.**
 
