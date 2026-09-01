@@ -15,6 +15,7 @@ coverage
 .wrangler
 playwright-report
 test-results
+gha-creds-*.json
 *.local
 
 # Env

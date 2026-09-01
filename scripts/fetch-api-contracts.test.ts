@@ -167,6 +167,11 @@ describe('private OpenAPI contract fetcher', () => {
       join(repositoryRoot, '.github/workflows/deploy-node-static-template.yml'),
       'utf8',
     )
+    const gitignore = await readFile(join(repositoryRoot, '.gitignore'), 'utf8')
+    const prettierignore = await readFile(
+      join(repositoryRoot, '.prettierignore'),
+      'utf8',
+    )
 
     expect(caller).toContain('pull_request:\n    branches:\n      - develop')
     expect(caller).toContain('id-token: write')
@@ -178,6 +183,8 @@ describe('private OpenAPI contract fetcher', () => {
     expect(reusable).toContain('secrets.GCP_CONTRACT_READER_SERVICE_ACCOUNT')
     expect(reusable).toContain('scripts/fetch-api-contracts.mjs')
     expect(reusable).not.toContain('inputs.core_contract')
+    expect(gitignore).toContain('gha-creds-*.json')
+    expect(prettierignore).toContain('gha-creds-*.json')
     expect(reusable).not.toContain('inputs.identity_contract')
   })
 
