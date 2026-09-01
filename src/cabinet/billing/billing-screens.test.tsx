@@ -318,6 +318,20 @@ it('uses source-appropriate payment copy for native subscriptions', async () => 
   expect(screen.queryByText(/Monobank/)).toBeNull()
 })
 
+it('orders the payment page heading before the billing history section', async () => {
+  const view = renderScreen(<PaymentsScreen />)
+
+  await screen.findByText('Платежів ще не було.')
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  expect(
+    screen.getByRole('heading', { level: 1, name: 'Оплата' }),
+  ).toBeVisible()
+  expect(
+    screen.getByRole('heading', { level: 2, name: 'Білінг' }),
+  ).toBeVisible()
+  expect(view.container.querySelector('.text-neutral-500')).toBeNull()
+})
+
 it('loads plans with a signal that aborts on tenant transition', async () => {
   renderScreen(<PlansScreen />)
 

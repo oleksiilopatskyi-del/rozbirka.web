@@ -139,7 +139,7 @@ export function PaymentsScreen() {
 
   if (currentPaymentsState.kind === 'loading') {
     return (
-      <p role="status" className="text-[14px] text-neutral-500">
+      <p role="status" className="text-[14px] text-neutral-400">
         Завантаження…
       </p>
     )
@@ -157,7 +157,11 @@ export function PaymentsScreen() {
       <div className="flex flex-col gap-12">
         {paymentMethod}
         <section>
-          <BillingHeader title="Білінг" subtitle="Історія платежів і чеки" />
+          <BillingHeader
+            title="Білінг"
+            subtitle="Історія платежів і чеки"
+            level={2}
+          />
           <div role="alert" className="flex flex-col items-start gap-4">
             <p className="text-[14px] text-red-200">
               {currentPaymentsState.message}
@@ -180,8 +184,12 @@ export function PaymentsScreen() {
       <div className="flex flex-col gap-12">
         {paymentMethod}
         <section>
-          <BillingHeader title="Білінг" subtitle="Історія платежів і чеки" />
-          <p className="text-[14px] text-neutral-500">Платежів ще не було.</p>
+          <BillingHeader
+            title="Білінг"
+            subtitle="Історія платежів і чеки"
+            level={2}
+          />
+          <p className="text-[14px] text-neutral-400">Платежів ще не було.</p>
         </section>
       </div>
     )
@@ -200,7 +208,11 @@ export function PaymentsScreen() {
     <div className="flex flex-col gap-12">
       {paymentMethod}
       <section>
-        <BillingHeader title="Білінг" subtitle="Історія платежів і чеки" />
+        <BillingHeader
+          title="Білінг"
+          subtitle="Історія платежів і чеки"
+          level={2}
+        />
         {mutationForGeneration.kind === 'mutation-error' && (
           <p
             role="alert"
@@ -220,7 +232,7 @@ export function PaymentsScreen() {
                   <p className="text-[15px] font-medium tabular-nums">
                     {formatBillingAmount(item.amount, item.currency)}
                   </p>
-                  <p className="min-w-0 text-[12px] break-words text-neutral-500 tabular-nums">
+                  <p className="min-w-0 text-[12px] break-words text-neutral-400 tabular-nums">
                     {formatBillingDate(item.createdAt)} ·{' '}
                     {paymentTypeLabel(item.type)}
                   </p>
@@ -355,11 +367,11 @@ function PaymentMethod({
       />
       <div className="bg-surface-1 rounded-(--radius-card) flex flex-col gap-6 p-8 ring-1 ring-white/[0.04] lg:p-10">
         {management.kind === 'provider' ? (
-          <p className="text-[14px] text-neutral-500">
+          <p className="text-[14px] text-neutral-400">
             Спосіб оплати керується {management.label}.
           </p>
         ) : management.kind === 'unavailable' ? (
-          <p className="text-[14px] text-neutral-500">
+          <p className="text-[14px] text-neutral-400">
             Інформація про спосіб оплати наразі недоступна.
           </p>
         ) : hasCard ? (
@@ -372,13 +384,13 @@ function PaymentMethod({
                 {(subscription?.cardBrand ?? 'Card').toUpperCase()} ••••{' '}
                 {subscription?.cardLast4}
               </p>
-              <p className="text-[13px] text-neutral-500">
+              <p className="text-[13px] text-neutral-400">
                 Авторизована для регулярних списань
               </p>
             </div>
           </div>
         ) : (
-          <p className="text-[14px] text-neutral-500">
+          <p className="text-[14px] text-neutral-400">
             Картка ще не привʼязана. Активуйте підписку — і карту запитає
             Monobank під час оплати.
           </p>

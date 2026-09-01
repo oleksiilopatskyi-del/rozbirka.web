@@ -71,6 +71,12 @@ beforeEach(() => {
   vi.mocked(businessApi.update).mockResolvedValue(tenant)
 })
 
+it('uses accessible secondary text on the dark business surface', () => {
+  const view = render(<BusinessSettingsScreen />)
+
+  expect(view.container.querySelector('.text-neutral-500')).toBeNull()
+})
+
 it('round-trips trimmed business settings through the active tenant', async () => {
   const normalizedTenant = {
     ...tenant,

@@ -107,7 +107,7 @@ export function BusinessSettingsScreen() {
         className="bg-surface-1 grid gap-5 rounded-3xl border border-white/[0.06] p-5 sm:p-6"
       >
         <div className="grid gap-2">
-          <label htmlFor="business-name" className="text-xs text-neutral-500">
+          <label htmlFor="business-name" className="text-xs text-neutral-400">
             Назва розбірки
           </label>
           <input
@@ -122,7 +122,7 @@ export function BusinessSettingsScreen() {
           />
         </div>
         <div className="grid gap-2">
-          <label htmlFor="business-city" className="text-xs text-neutral-500">
+          <label htmlFor="business-city" className="text-xs text-neutral-400">
             Місто
           </label>
           <input

@@ -90,13 +90,14 @@ beforeEach(() => {
 })
 
 it('renders the approved authenticated profile fields', () => {
-  render(<ProfileScreen />)
+  const view = render(<ProfileScreen />)
 
   expect(screen.getByRole('heading', { name: 'Профіль' })).toBeVisible()
   expect(screen.getByLabelText('Ім’я')).toHaveValue('Олена')
   expect(screen.getByText('+380733182301')).toBeVisible()
   expect(screen.getByText('Менеджер')).toBeVisible()
   expect(screen.getByText('QA Switch Test')).toBeVisible()
+  expect(view.container.querySelector('.text-neutral-500')).toBeNull()
 })
 
 it('disables saving an unchanged or invalid display name', async () => {

@@ -130,7 +130,7 @@ export function PlansScreen() {
 
   if (currentPlansState.kind === 'loading') {
     return (
-      <p role="status" className="text-[14px] text-neutral-500">
+      <p role="status" className="text-[14px] text-neutral-400">
         Завантаження…
       </p>
     )

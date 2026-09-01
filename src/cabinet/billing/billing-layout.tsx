@@ -12,23 +12,26 @@ import type { TenantAccessState } from '../access-types'
 export function BillingHeader({
   title,
   subtitle,
+  level = 1,
 }: {
   title: string
   subtitle?: string
+  level?: 1 | 2
 }) {
+  const Heading = level === 1 ? 'h1' : 'h2'
   return (
     <header className="mb-10 flex flex-col gap-2">
-      <h1 className="text-[36px] leading-[1] font-light tracking-[-0.02em] lg:text-[48px]">
+      <Heading className="text-[36px] leading-[1] font-light tracking-[-0.02em] lg:text-[48px]">
         {title}
-      </h1>
-      {subtitle && <p className="text-[14px] text-neutral-500">{subtitle}</p>}
+      </Heading>
+      {subtitle && <p className="text-[14px] text-neutral-400">{subtitle}</p>}
     </header>
   )
 }
 
 export function EmptyBillingPanel() {
   return (
-    <p className="text-[14px] text-neutral-500">
+    <p className="text-[14px] text-neutral-400">
       Дані недоступні. Спробуйте оновити сторінку.
     </p>
   )

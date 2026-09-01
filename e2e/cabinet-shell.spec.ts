@@ -918,7 +918,10 @@ async function expectReleasedScreenSettled(page: Page, path: string) {
   }
   if (path === '/app/koval/settings/billing/payments') {
     await expect(
-      page.getByRole('heading', { name: 'Білінг', level: 1 }),
+      page.getByRole('heading', { name: 'Оплата', level: 1 }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Білінг', level: 2 }),
     ).toBeVisible()
     await expect(page.getByText('Платежів ще не було.')).toBeVisible()
     return
@@ -1607,21 +1610,20 @@ for (const width of [320, 768, 1024, 1440]) {
   })
 }
 
-test('released access screens meet automated WCAG 2.2 AA checks', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await installCabinetApiBoundary(page)
-  await loginFrom(page)
-
-  for (const path of releasedAccessPaths) {
+for (const path of releasedAccessPaths) {
+  test(`released access screen ${path} meets automated WCAG 2.2 AA checks`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await installCabinetApiBoundary(page)
+    await loginFrom(page)
     await expectReleasedScreenSettled(page, path)
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
       .analyze()
     expect(results.violations).toEqual([])
-  }
-})
+  })
+}
 
 test('released Team dialogs and Reports actions keep 44px targets', async ({
   page,
@@ -1636,9 +1638,9 @@ test('released Team dialogs and Reports actions keep 44px targets', async ({
     name: 'Права: Іван Менеджер',
   })
   await expect(permissions).toBeVisible()
-  const permissionLabels = permissions.locator('label', {
-    has: permissions.getByRole('checkbox'),
-  })
+  const permissionLabels = permissions.locator(
+    'label:has(input[type="checkbox"])',
+  )
   const permissionBoxes = await permissionLabels.evaluateAll((labels) =>
     labels.map((label) => {
       const rect = label.getBoundingClientRect()

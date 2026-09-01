@@ -149,7 +149,7 @@ export function ProfileScreen() {
           className="grid gap-4"
         >
           <div className="grid gap-2">
-            <label htmlFor="profile-name" className="text-xs text-neutral-500">
+            <label htmlFor="profile-name" className="text-xs text-neutral-400">
               Ім’я
             </label>
             <input
@@ -258,7 +258,7 @@ export function ProfileScreen() {
 function ProfileValue({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid min-w-0 gap-1">
-      <dt className="text-xs text-neutral-500">{label}</dt>
+      <dt className="text-xs text-neutral-400">{label}</dt>
       <dd className="truncate text-sm text-white" title={value}>
         {value}
       </dd>
