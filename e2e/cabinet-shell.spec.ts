@@ -60,6 +60,8 @@ const tenants = [
 ]
 
 const activeSubscription = {
+  source: 'mono',
+  manageVia: 'web',
   state: 'active',
   planCode: 'pro',
   planName: 'Koval Pro',
@@ -135,6 +137,7 @@ const pendingPaymentPage = {
 }
 
 interface CabinetFixtureOptions {
+  cabinetParityRolledOut?: boolean
   sobolBilling?: boolean
   sobolEntitlementState?: 'active' | 'blocked'
   pendingPayment?: boolean
@@ -205,6 +208,21 @@ async function installCabinetApiBoundary(
   page: Page,
   options: CabinetFixtureOptions = {},
 ): Promise<CabinetFixtureState> {
+  const cabinetParityRolledOut = options.cabinetParityRolledOut ?? true
+  const cabinetParityRollout = {
+    configuration: JSON.stringify({
+      version: 1,
+      mode: cabinetParityRolledOut ? 'on' : 'off',
+      canaryPercent: cabinetParityRolledOut ? 100 : 0,
+      emergencyOff: !cabinetParityRolledOut,
+    }),
+    claim: {
+      version: 1,
+      subjectId: namedUser.id,
+      grants: ['cabinet-parity'],
+      audiences: [],
+    },
+  }
   const requests: CabinetRequest[] = []
   let delayedTenantId: string | null = null
   let resolveStarted: () => void = () => undefined
@@ -299,6 +317,7 @@ async function installCabinetApiBoundary(
             state: string
             usage: typeof activeSubscription.usage
           }
+          cabinetParityRollout: typeof cabinetParityRollout
         }
       > = {
         'tenant-1': {
@@ -318,6 +337,7 @@ async function installCabinetApiBoundary(
             state: activeSubscription.state,
             usage: activeSubscription.usage,
           },
+          cabinetParityRollout,
         },
         'tenant-2': {
           role: 'manager',
@@ -344,6 +364,7 @@ async function installCabinetApiBoundary(
             state: options.sobolEntitlementState ?? blockedSubscription.state,
             usage: blockedSubscription.usage,
           },
+          cabinetParityRollout,
         },
       }
       const access = tenantId ? accessByTenant[tenantId] : undefined
@@ -1477,9 +1498,9 @@ test('canonical tenant roots reach the private SPA and redirect to the dashboard
 test('shows a truthful unavailable state for an unreleased module', async ({
   page,
 }) => {
-  await installCabinetApiBoundary(page)
+  await installCabinetApiBoundary(page, { cabinetParityRolledOut: false })
   await loginFrom(page)
-  await page.goto('/app/koval/cars')
+  await page.goto('/app/koval/team')
   await expect(
     page.getByRole('heading', { name: 'Модуль готується до запуску' }),
   ).toBeVisible()
