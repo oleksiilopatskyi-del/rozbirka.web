@@ -413,7 +413,7 @@ function UsageBlock({
                 >
                   {item.data.used}
                   <span
-                    className={over ? 'text-amber-300/60' : 'text-neutral-600'}
+                    className={over ? 'text-amber-300/60' : 'text-neutral-400'}
                   >
                     {' '}
                     / {item.data.max ?? '∞'}

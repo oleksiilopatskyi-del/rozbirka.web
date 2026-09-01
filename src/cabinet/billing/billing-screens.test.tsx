@@ -190,6 +190,13 @@ it('uses the cabinet subscription snapshot without loading it again', () => {
   expect(billingApi.getSubscription).not.toHaveBeenCalled()
 })
 
+it('keeps subscription usage text at WCAG AA contrast', () => {
+  const view = renderScreen(<SubscriptionScreen />)
+
+  expect(screen.getByRole('heading', { name: 'Використання' })).toBeVisible()
+  expect(view.container.querySelector('.text-neutral-600')).toBeNull()
+})
+
 it('routes native subscriptions to their provider without Mono controls', () => {
   vi.mocked(useCabinet).mockReturnValue(
     cabinet(undefined, {
