@@ -53,6 +53,8 @@ const cabinet = (
     error: null,
   }) as unknown as ReturnType<typeof useCabinet>
 afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllEnvs()
   vi.clearAllMocks()
   vi.restoreAllMocks()
 })
@@ -102,6 +104,7 @@ it('renders Core daily balances without calculating them in the browser', async 
 it('uses the selected timezone rather than UTC when defaulting the finance date', () => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-08-28T23:30:00Z'))
+  vi.stubEnv('TZ', 'Europe/Kyiv')
   cashMocks.list.mockResolvedValue([])
   cashMocks.dailySummary.mockResolvedValue({
     date: '2026-08-29',
@@ -121,10 +124,9 @@ it('uses the selected timezone rather than UTC when defaulting the finance date'
 
   expect(cashMocks.dailySummary).toHaveBeenCalledWith(
     '2026-08-29',
-    expect.any(String),
+    'Europe/Kiev',
     expect.any(Object),
   )
-  vi.useRealTimers()
 })
 
 it('uses the Core manual movement enum values instead of generic income and expense', async () => {
