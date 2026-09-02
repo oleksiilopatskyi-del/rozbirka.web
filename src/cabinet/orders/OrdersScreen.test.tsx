@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -1061,8 +1061,15 @@ it('shows authoritative detail and lets orders.manage edit pending fields and ca
     .getAllByRole('definition')
     .map((d) => d.textContent?.replace(/\s+/g, ' ').trim())
   expect(summaryValues).toEqual(expect.arrayContaining(['250 UAH', '100 UAH']))
-  expect(screen.getByText('Основна каса · 100 UAH')).toBeVisible()
-  expect(screen.getByText(/created · Олена/)).toBeVisible()
+  const payments = screen.getByRole('table', { name: 'Платежі замовлення' })
+  expect(within(payments).getByText('Основна каса')).toBeVisible()
+  expect(within(payments).getByText('100 UAH')).toBeVisible()
+  const audit = screen.getByRole('table', { name: 'Історія замовлення' })
+  expect(within(audit).getByText('created')).toBeVisible()
+  expect(within(audit).getByText('Олена')).toBeVisible()
+  const timestamp = within(audit).getByText('2026-08-28 00:00')
+  expect(timestamp.tagName).toBe('TIME')
+  expect(timestamp).toHaveAttribute('datetime', '2026-08-28T00:00:00Z')
   expect(screen.getByRole('link', { name: 'Додати позицію' })).toHaveAttribute(
     'href',
     '/app/garage/orders/order-1/items/new',
@@ -1287,7 +1294,12 @@ it('renders audit timestamps and data for otherwise identical events', async () 
   )
 
   await screen.findByRole('heading', { name: 'Замовлення #1' })
-  expect(screen.getAllByText(/2026.*10:15/)).toHaveLength(2)
+  const stamps = screen.getAllByText(/2026.*10:15/)
+  expect(stamps).toHaveLength(2)
+  for (const stamp of stamps) {
+    expect(stamp.tagName).toBe('TIME')
+    expect(stamp).toHaveAttribute('datetime', '2026-08-28T10:15:00Z')
+  }
   expect(screen.getByText('quantity: 2')).toBeVisible()
   expect(screen.getByText('unitPrice: 125')).toBeVisible()
 })

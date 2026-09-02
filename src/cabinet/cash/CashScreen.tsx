@@ -7,12 +7,13 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
-import { Plus } from 'lucide-react'
+import { ArrowDown, Plus, Trash2 } from 'lucide-react'
 import {
   Button,
   DataTable,
   EmptyState,
   ErrorState,
+  Field,
   Notice,
   PageBody,
   PageHeader,
@@ -21,9 +22,11 @@ import {
   SelectInput,
   SkeletonRows,
   StatusPill,
+  TextArea,
   TextInput,
   Toolbar,
 } from '@/components/app'
+import { cn } from '@/lib/utils'
 import { normalizeApiProblem } from '@/api/errors'
 import {
   cashApi,
@@ -143,6 +146,18 @@ const useDialogFocus = (open: boolean) => {
   }
   return { containFocus, dialogRef, triggerRef }
 }
+/** Reads back a currency code in words so the code is not printed twice. */
+const currencyNames: Record<string, string> = {
+  UAH: 'Гривня',
+  USD: 'Долар США',
+  EUR: 'Євро',
+  PLN: 'Злотий',
+  GBP: 'Фунт стерлінгів',
+}
+const currencyName = (code: string) => currencyNames[code] ?? code
+/** Money reads as one column: digits right-aligned, code beside the figure. */
+const eyebrowClass =
+  'text-app-dim font-mono text-[10.5px] tracking-[0.12em] uppercase'
 const currenciesFromText = (value: string) => [
   ...new Set(
     value
@@ -494,68 +509,367 @@ function CashRegisterDetail({
         title={register.name}
       />
       {error && <Notice tone="danger">{error}</Notice>}
-      <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {Object.entries(register.balances).map(([code, balance]) => (
-          <div
-            className="border-app-line rounded-panel bg-app-raised grid gap-1.5 border p-4"
-            key={code}
-          >
-            <dt className="text-app-dim text-[12.5px]">{code}</dt>
-            <dd className="text-[25px] leading-tight font-light tabular-nums text-white">
-              {balance}
-            </dd>
-            {mutationsAllowed && (
+      <Panel padded={false}>
+        <div className="border-app-line flex flex-wrap items-baseline justify-between gap-2 border-b px-4 py-3.5">
+          <h2 className="text-base font-semibold text-white">
+            Валюти та баланси
+          </h2>
+          <p className="text-app-dim text-[12.5px]">
+            Баланси рахує сервер після кожної операції
+          </p>
+        </div>
+        {Object.keys(register.balances).length === 0 && (
+          <p className="text-app-dim px-4 py-4 text-[13.5px]">
+            Валют ще немає. Додайте першу нижче, щоб каса почала вести баланс.
+          </p>
+        )}
+        <dl className="grid gap-3 p-4 empty:hidden">
+          {Object.entries(register.balances).map(([code, balance]) => (
+            <div
+              className="border-app-line bg-app-canvas rounded-control flex flex-wrap items-center gap-3 border px-3.5 py-3"
+              key={code}
+            >
+              <dt className="text-app-muted min-w-0 flex-1 text-[13.5px]">
+                {currencyName(code)}
+              </dt>
+              <dd className="ml-auto flex items-baseline gap-1.5">
+                <span className="text-[22px] leading-tight font-light tabular-nums text-white">
+                  {balance}
+                </span>{' '}
+                <span className="text-app-muted text-[12.5px]">{code}</span>
+              </dd>
+              {mutationsAllowed && (
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    void mutateRegister(
+                      () => cashApi.removeCurrency(registerId, code),
+                      true,
+                    )
+                  }
+                >
+                  <Trash2 aria-hidden />
+                  Видалити {code}
+                </Button>
+              )}
+            </div>
+          ))}
+        </dl>
+        {mutationsAllowed && (
+          <div className="border-app-line grid gap-3 border-t px-4 py-4">
+            <p className="text-app-dim text-[12.5px]">
+              Додайте валюту, щоб вести в ній окремий баланс. Валюту з
+              ненульовим балансом видалити не можна — спершу зведіть її до нуля.
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <Field className="min-w-40 flex-1" label="Нова валюта">
+                <TextInput
+                  value={newCurrency}
+                  onChange={(event) => setNewCurrency(event.target.value)}
+                  placeholder="USD"
+                />
+              </Field>
               <Button
-                disabled={busy}
+                disabled={busy || !newCurrency.trim()}
                 onClick={() =>
-                  void mutateRegister(
-                    () => cashApi.removeCurrency(registerId, code),
-                    true,
-                  )
+                  void mutateRegister(async () => {
+                    await cashApi.addCurrency(registerId, newCurrency.trim())
+                    setNewCurrency('')
+                  }, true)
                 }
               >
-                Видалити {code}
+                <Plus aria-hidden />
+                Додати валюту
               </Button>
-            )}
+            </div>
           </div>
-        ))}
-      </dl>
+        )}
+      </Panel>
       {mutationsAllowed && (
-        <div className="grid gap-3">
-          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-            Нова валюта
-            <TextInput
-              value={newCurrency}
-              onChange={(event) => setNewCurrency(event.target.value)}
-            />
-          </label>
-          <Button
-            disabled={busy || !newCurrency.trim()}
-            onClick={() =>
-              void mutateRegister(async () => {
-                await cashApi.addCurrency(registerId, newCurrency.trim())
-                setNewCurrency('')
-              }, true)
-            }
+        <Panel padded={false}>
+          <form
+            onSubmit={(event) => void saveMovement(event)}
+            className="grid gap-4 p-4"
           >
-            Додати валюту
-          </Button>
-          <Button
-            disabled={busy}
-            onClick={() =>
-              void mutateRegister(() =>
-                register.isActive
-                  ? cashApi.deactivate(registerId)
-                  : cashApi.activate(registerId),
-              )
-            }
-          >
-            {register.isActive ? 'Деактивувати касу' : 'Активувати касу'}
-          </Button>
-          <Button ref={triggerRef} onClick={() => setConfirmDelete(true)}>
-            Видалити касу
-          </Button>
-        </div>
+            <div className="grid gap-1">
+              <h2 className="text-base font-semibold text-white">
+                Ручна операція
+              </h2>
+              <p className="text-app-dim text-[12.5px]">
+                Запис у журнал цієї каси без переказу та без документа.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Field className="min-w-40 flex-1" label="Тип операції">
+                <SelectInput
+                  value={type}
+                  onChange={(event) =>
+                    setType(event.target.value as 'manual_in' | 'manual_out')
+                  }
+                >
+                  <option value="manual_in">Надходження</option>
+                  <option value="manual_out">Витрата</option>
+                </SelectInput>
+              </Field>
+              <Field className="min-w-36 flex-1" label="Сума">
+                <TextInput
+                  numeric
+                  value={amount}
+                  onChange={(event) => setAmount(event.target.value)}
+                  inputMode="decimal"
+                  placeholder="0"
+                />
+              </Field>
+              <Field
+                className="min-w-36 flex-1"
+                hint="Порожньо — валюта каси за замовчуванням"
+                label="Валюта"
+              >
+                <TextInput
+                  value={currency}
+                  onChange={(event) => setCurrency(event.target.value)}
+                  placeholder="UAH"
+                />
+              </Field>
+            </div>
+            <Field hint="Необовʼязково" label="Нотатка">
+              <TextInput
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+              />
+            </Field>
+            {amount.trim() !== '' && (
+              <p
+                aria-live="polite"
+                className="border-app-line bg-app-canvas rounded-control flex flex-wrap items-center justify-between gap-3 border px-3.5 py-3"
+              >
+                <span className="text-app-muted text-[12.5px]">
+                  {type === 'manual_in'
+                    ? `Надходження до каси «${register.name}»`
+                    : `Витрата з каси «${register.name}»`}
+                </span>
+                <span
+                  className={cn(
+                    'ml-auto text-[17px] font-semibold tabular-nums',
+                    type === 'manual_in'
+                      ? 'text-state-ok'
+                      : 'text-state-danger',
+                  )}
+                >
+                  {`${type === 'manual_in' ? '+' : '−'}${amount.trim()}${
+                    currency.trim() ? ` ${currency.trim()}` : ''
+                  }`}
+                </span>
+              </p>
+            )}
+            <div className="border-app-line -mx-4 -mb-4 flex flex-wrap justify-end gap-3 border-t px-4 py-4">
+              <Button
+                type="submit"
+                variant="primary"
+                aria-busy={busy}
+                disabled={busy || !amount}
+              >
+                {busy ? 'Зберігаємо…' : 'Записати операцію'}
+              </Button>
+            </div>
+          </form>
+        </Panel>
+      )}
+      {transferAllowed && register.isActive && (
+        <section className="grid gap-3">
+          <h2 className="text-base font-semibold text-white">
+            Переказ між касами
+          </h2>
+          {transferDestinations.length === 0 ? (
+            <Notice role="status" tone="info">
+              Переказ потребує ще однієї активної каси. Створіть другу касу або
+              активуйте наявну.
+            </Notice>
+          ) : (
+            <Panel padded={false}>
+              <form
+                className="grid gap-4 p-4"
+                onSubmit={(event) => void saveTransfer(event)}
+              >
+                <div className="border-app-line bg-app-canvas rounded-control grid gap-3 border p-3">
+                  <div className="grid gap-1">
+                    <p className={eyebrowClass}>Звідки</p>
+                    <p className="text-app-ink text-sm font-medium">
+                      {register.name}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Field className="min-w-36 flex-1" label="Валюта списання">
+                      <SelectInput
+                        value={fromCurrency}
+                        onChange={(event) =>
+                          setFromCurrency(event.target.value)
+                        }
+                        required
+                      >
+                        <option value="">Оберіть валюту</option>
+                        {Object.keys(register.balances).map((code) => (
+                          <option key={code} value={code}>
+                            {code}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    </Field>
+                    <Field className="min-w-36 flex-1" label="Сума списання">
+                      <TextInput
+                        numeric
+                        value={amountOut}
+                        onChange={(event) => setAmountOut(event.target.value)}
+                        inputMode="decimal"
+                        placeholder="0"
+                        required
+                      />
+                    </Field>
+                  </div>
+                  {fromCurrency && (
+                    <p
+                      aria-live="polite"
+                      className="text-app-dim text-[11.5px] tabular-nums"
+                    >
+                      Доступно в цій касі:{' '}
+                      {register.balances[fromCurrency] ?? '—'} {fromCurrency}
+                    </p>
+                  )}
+                </div>
+                <div aria-hidden className="flex items-center gap-3">
+                  <span className="bg-app-line h-px flex-1" />
+                  <ArrowDown className="text-app-dim size-4 shrink-0" />
+                  <span className="bg-app-line h-px flex-1" />
+                </div>
+                <div className="border-app-line bg-app-canvas rounded-control grid gap-3 border p-3">
+                  <div className="grid gap-1.5">
+                    <p className={eyebrowClass}>Куди</p>
+                    <Field label="Каса-отримувач">
+                      <SelectInput
+                        value={toRegisterId}
+                        onChange={(event) => {
+                          setToRegisterId(event.target.value)
+                          setToCurrency('')
+                        }}
+                        required
+                      >
+                        <option value="">Оберіть касу</option>
+                        {transferDestinations.map((destination) => (
+                          <option key={destination.id} value={destination.id}>
+                            {destination.name}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    </Field>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Field
+                      className="min-w-36 flex-1"
+                      label="Валюта зарахування"
+                    >
+                      <SelectInput
+                        value={toCurrency}
+                        onChange={(event) => setToCurrency(event.target.value)}
+                        disabled={!transferDestination}
+                        required
+                      >
+                        <option value="">Оберіть валюту</option>
+                        {Object.keys(transferDestination?.balances ?? {}).map(
+                          (code) => (
+                            <option key={code} value={code}>
+                              {code}
+                            </option>
+                          ),
+                        )}
+                      </SelectInput>
+                    </Field>
+                    <Field className="min-w-36 flex-1" label="Сума зарахування">
+                      <TextInput
+                        numeric
+                        value={amountIn}
+                        onChange={(event) => setAmountIn(event.target.value)}
+                        inputMode="decimal"
+                        placeholder="0"
+                        required
+                      />
+                    </Field>
+                  </div>
+                  {transferDestination && toCurrency && (
+                    <p
+                      aria-live="polite"
+                      className="text-app-dim text-[11.5px] tabular-nums"
+                    >
+                      Баланс каси-отримувача:{' '}
+                      {transferDestination.balances[toCurrency] ?? '—'}{' '}
+                      {toCurrency}
+                    </p>
+                  )}
+                </div>
+                <Field hint="Необовʼязково" label="Нотатка переказу">
+                  <TextInput
+                    value={transferNote}
+                    onChange={(event) => setTransferNote(event.target.value)}
+                  />
+                </Field>
+                {transferError && (
+                  <Notice tone="danger">{transferError}</Notice>
+                )}
+                {transferStatus && <Notice tone="ok">{transferStatus}</Notice>}
+                <div className="border-app-line -mx-4 -mb-4 flex flex-wrap justify-end gap-3 border-t px-4 py-4">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    aria-busy={transferBusy}
+                    disabled={
+                      transferBusy ||
+                      !toRegisterId ||
+                      !fromCurrency ||
+                      !toCurrency ||
+                      !amountOut ||
+                      !amountIn
+                    }
+                  >
+                    {transferBusy ? 'Переказуємо…' : 'Переказати кошти'}
+                  </Button>
+                </div>
+              </form>
+            </Panel>
+          )}
+        </section>
+      )}
+      {mutationsAllowed && (
+        <Panel className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 grid gap-1">
+            <h2 className="text-base font-semibold text-white">Стан каси</h2>
+            <p className="text-app-dim text-[12.5px]">
+              {register.isActive
+                ? 'Каса активна: у неї можна проводити операції та перекази.'
+                : 'Каса неактивна: нові операції та перекази в неї недоступні.'}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              disabled={busy}
+              onClick={() =>
+                void mutateRegister(() =>
+                  register.isActive
+                    ? cashApi.deactivate(registerId)
+                    : cashApi.activate(registerId),
+                )
+              }
+            >
+              {register.isActive ? 'Деактивувати касу' : 'Активувати касу'}
+            </Button>
+            <Button
+              ref={triggerRef}
+              onClick={() => setConfirmDelete(true)}
+              variant="danger"
+            >
+              <Trash2 aria-hidden />
+              Видалити касу
+            </Button>
+          </div>
+        </Panel>
       )}
       {confirmDelete && (
         <div
@@ -590,172 +904,10 @@ function CashRegisterDetail({
           </div>
         </div>
       )}
-      {transferAllowed && register.isActive && (
-        <section className="grid gap-3">
-          <h2 className="text-base font-semibold text-white">
-            Переказ між касами
-          </h2>
-          {transferDestinations.length === 0 ? (
-            <p role="status">Немає іншої активної каси для переказу.</p>
-          ) : (
-            <form
-              className="border-app-line rounded-panel bg-app-raised grid gap-3 border p-4"
-              onSubmit={(event) => void saveTransfer(event)}
-            >
-              <p>Каса-відправник: {register.name}</p>
-              <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-                Каса-отримувач
-                <SelectInput
-                  value={toRegisterId}
-                  onChange={(event) => {
-                    setToRegisterId(event.target.value)
-                    setToCurrency('')
-                  }}
-                  required
-                >
-                  <option value="">Оберіть касу</option>
-                  {transferDestinations.map((destination) => (
-                    <option key={destination.id} value={destination.id}>
-                      {destination.name}
-                    </option>
-                  ))}
-                </SelectInput>
-              </label>
-              <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-                Валюта списання
-                <SelectInput
-                  value={fromCurrency}
-                  onChange={(event) => setFromCurrency(event.target.value)}
-                  required
-                >
-                  <option value="">Оберіть валюту</option>
-                  {Object.keys(register.balances).map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </SelectInput>
-              </label>
-              <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-                Сума списання
-                <TextInput
-                  value={amountOut}
-                  onChange={(event) => setAmountOut(event.target.value)}
-                  inputMode="decimal"
-                  required
-                />
-              </label>
-              <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-                Валюта зарахування
-                <SelectInput
-                  value={toCurrency}
-                  onChange={(event) => setToCurrency(event.target.value)}
-                  disabled={!transferDestination}
-                  required
-                >
-                  <option value="">Оберіть валюту</option>
-                  {Object.keys(transferDestination?.balances ?? {}).map(
-                    (code) => (
-                      <option key={code} value={code}>
-                        {code}
-                      </option>
-                    ),
-                  )}
-                </SelectInput>
-              </label>
-              <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-                Сума зарахування
-                <TextInput
-                  value={amountIn}
-                  onChange={(event) => setAmountIn(event.target.value)}
-                  inputMode="decimal"
-                  required
-                />
-              </label>
-              <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-                Нотатка переказу
-                <TextInput
-                  value={transferNote}
-                  onChange={(event) => setTransferNote(event.target.value)}
-                />
-              </label>
-              {transferDestination && toCurrency && (
-                <p aria-live="polite">
-                  Баланс каси-отримувача:{' '}
-                  {transferDestination.balances[toCurrency] ?? '—'} {toCurrency}
-                </p>
-              )}
-              {transferError && <Notice tone="danger">{transferError}</Notice>}
-              {transferStatus && <Notice tone="ok">{transferStatus}</Notice>}
-              <Button
-                type="submit"
-                variant="primary"
-                aria-busy={transferBusy}
-                disabled={
-                  transferBusy ||
-                  !toRegisterId ||
-                  !fromCurrency ||
-                  !toCurrency ||
-                  !amountOut ||
-                  !amountIn
-                }
-              >
-                {transferBusy ? 'Переказуємо…' : 'Переказати кошти'}
-              </Button>
-            </form>
-          )}
-        </section>
-      )}
-      {mutationsAllowed && (
-        <form
-          onSubmit={(event) => void saveMovement(event)}
-          className="border-app-line rounded-panel bg-app-raised grid gap-3 border p-4"
-        >
-          <h2 className="text-base font-semibold text-white">Ручна операція</h2>
-          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-            Тип
-            <SelectInput
-              value={type}
-              onChange={(event) =>
-                setType(event.target.value as 'manual_in' | 'manual_out')
-              }
-            >
-              <option value="manual_in">Надходження</option>
-              <option value="manual_out">Витрата</option>
-            </SelectInput>
-          </label>
-          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-            Сума
-            <TextInput
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              inputMode="decimal"
-            />
-          </label>
-          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-            Валюта
-            <TextInput
-              value={currency}
-              onChange={(event) => setCurrency(event.target.value)}
-            />
-          </label>
-          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-            Нотатка
-            <TextInput
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-            />
-          </label>
-          <Button type="submit" variant="primary" disabled={busy || !amount}>
-            {busy ? 'Зберігаємо…' : 'Записати операцію'}
-          </Button>
-        </form>
-      )}
       <section className="grid gap-3">
         <h2 className="text-base font-semibold text-white">Журнал</h2>
         <Toolbar>
-          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-            Валюта журналу
+          <Field className="min-w-36 flex-1" label="Валюта журналу">
             <TextInput
               value={params.get('currency') ?? ''}
               onChange={(event) => {
@@ -765,10 +917,10 @@ function CashRegisterDetail({
                 next.set('page', '1')
                 setParams(next)
               }}
+              placeholder="Усі"
             />
-          </label>
-          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-            Від
+          </Field>
+          <Field className="min-w-36 flex-1" label="Від">
             <TextInput
               type="date"
               value={params.get('from') ?? ''}
@@ -780,9 +932,8 @@ function CashRegisterDetail({
                 setParams(next)
               }}
             />
-          </label>
-          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
-            До
+          </Field>
+          <Field className="min-w-36 flex-1" label="До">
             <TextInput
               type="date"
               value={params.get('to') ?? ''}
@@ -794,7 +945,7 @@ function CashRegisterDetail({
                 setParams(next)
               }}
             />
-          </label>
+          </Field>
         </Toolbar>
         <DataTable
           caption="Журнал операцій каси"
@@ -809,7 +960,11 @@ function CashRegisterDetail({
               key: 'amount',
               label: 'Сума',
               align: 'end',
-              cell: (entry) => `${String(entry.amount)} ${entry.currency}`,
+              cell: (entry) => (
+                <span className="tabular-nums">
+                  {`${String(entry.amount)} ${entry.currency}`}
+                </span>
+              ),
             },
             {
               key: 'user',
@@ -896,58 +1051,84 @@ function CashRegisterForm({
     }
   }
   return (
-    <section>
-      <h1>{registerId ? 'Редагувати касу' : 'Нова каса'}</h1>
-      <form onSubmit={(event) => void save(event)}>
-        <label>
-          Назва
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-        {registerId ? (
-          <p>Тип каси: {type}</p>
-        ) : (
-          <label>
-            Тип
-            <select
-              value={type}
-              onChange={(event) => setType(event.target.value)}
+    <PageBody width="narrow">
+      <PageHeader
+        eyebrow="Гроші · Каси"
+        title={registerId ? 'Редагувати касу' : 'Нова каса'}
+      />
+      <Panel padded={false}>
+        <form className="grid gap-4 p-4" onSubmit={(event) => void save(event)}>
+          <Field hint="Так каса підписана у звітах і переказах" label="Назва">
+            <TextInput
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Основна каса"
+            />
+          </Field>
+          {registerId ? (
+            <div className="border-app-line bg-app-canvas rounded-control grid gap-1 border px-3.5 py-3">
+              <p className="text-app-muted text-[13.5px]">Тип каси: {type}</p>
+              <p className="text-app-dim text-[11.5px]">
+                Тип задають при створенні й далі не змінюють. Потрібен інший тип
+                — створіть окрему касу.
+              </p>
+            </div>
+          ) : (
+            <Field hint="Після створення тип не змінюється" label="Тип">
+              <SelectInput
+                value={type}
+                onChange={(event) => setType(event.target.value)}
+              >
+                <option value="cash">Готівка</option>
+                <option value="bank">Банк</option>
+              </SelectInput>
+            </Field>
+          )}
+          {!registerId && (
+            <>
+              <Field hint="Коди валют через кому" label="Валюти">
+                <TextInput
+                  value={currencies}
+                  onChange={(event) => setCurrencies(event.target.value)}
+                  placeholder="UAH, USD"
+                />
+              </Field>
+              <Field
+                hint="Пара «код: сума» через кому або з нового рядка. Необовʼязково — можна почати з нуля."
+                label="Початкові баланси"
+              >
+                <TextArea
+                  className="font-mono"
+                  value={initialBalances}
+                  onChange={(event) => setInitialBalances(event.target.value)}
+                  placeholder="UAH: 1000, USD: 25"
+                />
+              </Field>
+            </>
+          )}
+          {!mutationsAllowed && (
+            <Notice tone="warn">
+              Зберегти не вдасться: бракує права finance.manage або вичерпано
+              ліміт кас у тарифі. Попросіть власника кабінету відкрити доступ чи
+              змінити тариф.
+            </Notice>
+          )}
+          {error && <Notice tone="danger">{error}</Notice>}
+          <div className="border-app-line -mx-4 -mb-4 flex flex-wrap justify-end gap-3 border-t px-4 py-4">
+            <Button asChild>
+              <Link to={registerId ? `../${registerId}` : '..'}>Скасувати</Link>
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              aria-busy={busy}
+              disabled={!mutationsAllowed || busy || !name.trim()}
             >
-              <option value="cash">Готівка</option>
-              <option value="bank">Банк</option>
-            </select>
-          </label>
-        )}
-        {!registerId && (
-          <>
-            <label>
-              Валюти
-              <input
-                value={currencies}
-                onChange={(event) => setCurrencies(event.target.value)}
-                placeholder="UAH, USD"
-              />
-            </label>
-            <label>
-              Початкові баланси
-              <textarea
-                value={initialBalances}
-                onChange={(event) => setInitialBalances(event.target.value)}
-                placeholder="UAH: 1000, USD: 25"
-              />
-            </label>
-          </>
-        )}
-        {error && <p role="alert">{error}</p>}
-        <button
-          type="submit"
-          disabled={!mutationsAllowed || busy || !name.trim()}
-        >
-          {busy ? 'Зберігаємо…' : 'Зберегти'}
-        </button>
-      </form>
-    </section>
+              {busy ? 'Зберігаємо…' : 'Зберегти'}
+            </Button>
+          </div>
+        </form>
+      </Panel>
+    </PageBody>
   )
 }

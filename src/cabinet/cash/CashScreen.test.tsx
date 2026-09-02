@@ -940,6 +940,106 @@ it('manages register currencies and lifecycle through documented endpoints', asy
   expect(cashMocks.remove).toHaveBeenCalledWith('cash-1')
 })
 
+it('names the manual movement direction and its signed amount before submitting', async () => {
+  cashMocks.getById.mockResolvedValue({
+    id: 'cash-1',
+    name: 'Основна каса',
+    type: 'cash',
+    isActive: true,
+    balances: { UAH: 100 },
+  })
+  cashMocks.transactions.mockResolvedValue({
+    items: [],
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 0,
+  })
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/garage/cash/cash-1']}>
+      <CashScreen definition={definition} />
+    </MemoryRouter>,
+  )
+
+  await screen.findByRole('heading', { name: 'Ручна операція' })
+  await user.type(screen.getByLabelText('Сума'), '25')
+  await user.type(screen.getByLabelText('Валюта'), 'UAH')
+  expect(screen.getByText('Надходження до каси «Основна каса»')).toBeVisible()
+  expect(screen.getByText('+25 UAH')).toBeVisible()
+
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Тип операції' }),
+    'manual_out',
+  )
+  expect(screen.getByText('Витрата з каси «Основна каса»')).toBeVisible()
+  expect(screen.getByText('−25 UAH')).toBeVisible()
+})
+
+it('shows the source and destination balances beside the transfer amounts', async () => {
+  const source = {
+    id: 'cash-source',
+    name: 'Основна каса',
+    type: 'cash',
+    isActive: true,
+    balances: { UAH: 100 },
+  }
+  const destination = {
+    id: 'cash-destination',
+    name: 'Валютна каса',
+    type: 'cash',
+    isActive: true,
+    balances: { USD: 10 },
+  }
+  cashMocks.getById.mockResolvedValue(source)
+  cashMocks.list.mockResolvedValue([source, destination])
+  cashMocks.transactions.mockResolvedValue({
+    items: [],
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 0,
+  })
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/garage/cash/cash-source']}>
+      <CashScreen definition={definition} />
+    </MemoryRouter>,
+  )
+
+  await screen.findByRole('heading', { name: 'Переказ між касами' })
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Валюта списання' }),
+    'UAH',
+  )
+  expect(screen.getByText('Доступно в цій касі: 100 UAH')).toBeVisible()
+
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Каса-отримувач' }),
+    'cash-destination',
+  )
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Валюта зарахування' }),
+    'USD',
+  )
+  expect(screen.getByText('Баланс каси-отримувача: 10 USD')).toBeVisible()
+})
+
+it('describes register form controls and offers a way out of the form', () => {
+  render(
+    <MemoryRouter initialEntries={['/app/garage/cash/new']}>
+      <CashScreen definition={definition} />
+    </MemoryRouter>,
+  )
+
+  expect(
+    screen.getByRole('textbox', { name: 'Назва' }),
+  ).toHaveAccessibleDescription('Так каса підписана у звітах і переказах')
+  expect(screen.getByRole('combobox', { name: 'Тип' })).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Скасувати' })).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeVisible()
+})
+
 it('hides cash mutations without finance.manage and renders quota failures', async () => {
   vi.mocked(useCabinet).mockReturnValue(cabinet(['finance.view']))
   cashMocks.list.mockResolvedValue([])

@@ -5,17 +5,18 @@ import { cva } from 'class-variance-authority'
  * because the app needs 44px targets and the brand fill as its primary action.
  */
 export const appButtonVariants = cva(
-  'inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control border border-transparent px-4 text-[13.5px] font-medium whitespace-nowrap transition-colors outline-none select-none disabled:pointer-events-none disabled:opacity-55 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  'inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control border border-transparent px-4 text-[13.5px] font-medium whitespace-nowrap transition-colors outline-none select-none active:translate-y-px aria-busy:cursor-wait aria-busy:opacity-70 disabled:pointer-events-none disabled:opacity-55 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
         primary:
-          'bg-brand text-brand-foreground font-semibold hover:bg-brand-hover',
+          'bg-brand text-brand-foreground font-semibold hover:bg-brand-hover active:bg-brand',
         ghost:
-          'border-app-line-2 text-app-muted hover:bg-white/[0.04] hover:text-app-ink',
-        quiet: 'text-app-muted hover:bg-white/[0.04] hover:text-app-ink',
+          'border-app-line-2 text-app-muted hover:bg-white/[0.04] hover:text-app-ink active:bg-white/[0.07]',
+        quiet:
+          'text-app-muted hover:bg-white/[0.04] hover:text-app-ink active:bg-white/[0.07]',
         danger:
-          'border-state-danger/35 text-state-danger hover:bg-state-danger-soft',
+          'border-state-danger/35 text-state-danger hover:bg-state-danger-soft active:bg-state-danger/20',
       },
       size: {
         md: '',

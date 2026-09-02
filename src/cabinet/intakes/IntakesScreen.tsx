@@ -9,6 +9,7 @@ import {
 import { ChevronLeft, Plus } from 'lucide-react'
 import {
   Button,
+  Fact,
   ConfirmDialog,
   DataTable,
   EmptyState,
@@ -24,6 +25,8 @@ import {
   SkeletonRows,
   StatCard,
   StatStrip,
+  TextArea,
+  TextInput,
   Toolbar,
 } from '@/components/app'
 import {
@@ -453,26 +456,19 @@ function IntakeDetail({ base, intakeId }: { base: string; intakeId: string }) {
       {problem ? <Notice tone="danger">{problem}</Notice> : null}
       <Panel>
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <IntakeFact
-            label="Постачальник"
-            value={intake.supplier ?? 'не вказано'}
-          />
-          <IntakeFact
-            label="Дата придбання"
-            value={intake.purchasedAt ?? 'не вказано'}
-          />
+          <Fact label="Постачальник">{intake.supplier ?? 'не вказано'}</Fact>
+          <Fact label="Дата придбання">
+            {intake.purchasedAt ?? 'не вказано'}
+          </Fact>
           {financeView ? (
-            <IntakeFact
-              label="Вартість"
-              value={
-                intake.totalCost === null
-                  ? 'не вказано'
-                  : money(intake.totalCost)
-              }
-            />
+            <Fact label="Вартість">
+              {intake.totalCost === null
+                ? 'не вказано'
+                : money(intake.totalCost)}
+            </Fact>
           ) : null}
-          <IntakeFact label="Створив" value={intake.createdBy.displayName} />
-          <IntakeFact label="Нотатки" value={intake.notes ?? 'Нотаток немає'} />
+          <Fact label="Створив">{intake.createdBy.displayName}</Fact>
+          <Fact label="Нотатки">{intake.notes ?? 'Нотаток немає'}</Fact>
         </dl>
       </Panel>
       {intake.photos.length > 0 ? (
@@ -564,15 +560,6 @@ function IntakeDetail({ base, intakeId }: { base: string; intakeId: string }) {
   )
 }
 
-function IntakeFact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid gap-1">
-      <dt className="text-app-dim text-[12.5px]">{label}</dt>
-      <dd className="text-sm text-white">{value}</dd>
-    </div>
-  )
-}
-
 function IntakeForm({
   title,
   intakeId,
@@ -599,10 +586,17 @@ function IntakeForm({
   })
   const [media, setMedia] = useState<MediaUploadResult[]>([])
   const [problem, setProblem] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<{ totalCost?: string }>({})
   const [busy, setBusy] = useState(false)
   const { requireLatestMutation } = useLatestMutationGuard(
     cabinetModules.intakes,
   )
+  const update =
+    (key: keyof typeof values) =>
+    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const { value } = event.target
+      setValues((current) => ({ ...current, [key]: value }))
+    }
   useEffect(() => {
     if (!intakeId) return
     const controller = new AbortController()
@@ -634,9 +628,13 @@ function IntakeForm({
       amount !== null &&
       (!Number.isFinite(amount) || amount < 0)
     ) {
-      setProblem('Перевірте правильність загальної вартості.')
+      setFieldErrors({
+        totalCost:
+          'Вартість має бути числом не менше нуля. Введіть суму цифрами, наприклад 7500.',
+      })
       return
     }
+    setFieldErrors({})
     setBusy(true)
     try {
       const request = {
@@ -664,54 +662,118 @@ function IntakeForm({
       setBusy(false)
     }
   }
+  const backTo = intakeId ? `${base}/${intakeId}` : base
   return (
-    <section className="mx-auto grid w-full max-w-2xl gap-4">
-      <h1>{title}</h1>
+    <PageBody role="main" width="narrow">
+      <Button asChild className="justify-self-start" variant="quiet">
+        <Link to={backTo}>
+          <ChevronLeft aria-hidden />
+          {intakeId ? 'До приймання' : 'До приймань'}
+        </Link>
+      </Button>
+      <PageHeader eyebrow="Склад · Приймання" title={title} />
       {batch ? (
-        <p aria-label="Підсумок партії">
-          Підсумок: {values.name || 'без назви'} ·{' '}
-          {values.supplier || 'без постачальника'}
-          {canManageFinance
-            ? ` · ${values.totalCost || 'вартість не вказано'}`
-            : null}
-        </p>
+        <Panel className="grid gap-1.5">
+          <h2 className="text-sm font-semibold text-white">Підсумок партії</h2>
+          <p aria-label="Підсумок партії" className="text-app-muted text-sm">
+            Підсумок: {values.name || 'без назви'} ·{' '}
+            {values.supplier || 'без постачальника'}
+            {canManageFinance
+              ? ` · ${values.totalCost || 'вартість не вказано'}`
+              : null}
+          </p>
+        </Panel>
       ) : null}
-      {problem ? <p role="alert">{problem}</p> : null}
+      {problem ? <Notice tone="danger">{problem}</Notice> : null}
       <form
         aria-busy={busy}
-        className="grid gap-3"
+        className="grid gap-4"
         onSubmit={(event) => void save(event)}
       >
-        {(
-          [
-            ['name', 'Назва'],
-            ['supplier', 'Постачальник'],
-            ['purchasedAt', 'Дата придбання'],
-            ['totalCost', 'Загальна вартість'],
-            ['notes', 'Нотатки'],
-          ] as const
-        )
-          .filter(([key]) => canManageFinance || key !== 'totalCost')
-          .map(([key, label]) => (
-            <label key={key}>
-              {label}
-              <input
-                name={key}
-                onChange={(event) =>
-                  setValues({ ...values, [key]: event.target.value })
-                }
-                value={values[key]}
+        <Panel className="grid gap-3">
+          <h2 className="text-base font-semibold text-white">Партія</h2>
+          <Field hint="Як у накладній постачальника" label="Назва">
+            <TextInput
+              autoComplete="off"
+              name="name"
+              onChange={update('name')}
+              value={values.name}
+            />
+          </Field>
+          <div className="flex flex-wrap gap-3">
+            <Field className="min-w-52 flex-1" label="Постачальник">
+              <TextInput
+                autoComplete="off"
+                name="supplier"
+                onChange={update('supplier')}
+                value={values.supplier}
               />
-            </label>
-          ))}
-        {!intakeId ? (
-          <MediaPicker entityType="intakes" items={media} onChange={setMedia} />
+            </Field>
+            <Field
+              className="min-w-52 flex-1"
+              hint="Формат РРРР-ММ-ДД"
+              label="Дата придбання"
+            >
+              <TextInput
+                inputMode="numeric"
+                name="purchasedAt"
+                onChange={update('purchasedAt')}
+                placeholder="2026-08-01"
+                value={values.purchasedAt}
+              />
+            </Field>
+          </div>
+        </Panel>
+        {canManageFinance ? (
+          <Panel className="grid gap-3">
+            <h2 className="text-base font-semibold text-white">Гроші</h2>
+            <Field
+              className="max-w-xs"
+              error={fieldErrors.totalCost}
+              hint="Скільки заплачено за всю партію. Порожнє поле — вартість не фіксуємо."
+              label="Загальна вартість"
+            >
+              <TextInput
+                inputMode="decimal"
+                name="totalCost"
+                onChange={update('totalCost')}
+                placeholder="0"
+                value={values.totalCost}
+              />
+            </Field>
+          </Panel>
         ) : null}
-        <button disabled={busy} type="submit">
-          Зберегти
-        </button>
+        <Panel className="grid gap-3">
+          <Field
+            hint="Домовленості, стан партії, усе, що знадобиться складу згодом"
+            label="Нотатки"
+          >
+            <TextArea
+              name="notes"
+              onChange={update('notes')}
+              value={values.notes}
+            />
+          </Field>
+        </Panel>
+        {!intakeId ? (
+          <Panel>
+            <MediaPicker
+              entityType="intakes"
+              items={media}
+              onChange={setMedia}
+            />
+          </Panel>
+        ) : null}
+        <div className="border-app-line rounded-panel bg-app-raised flex flex-wrap items-center gap-2 border p-3">
+          <Button disabled={busy} type="submit" variant="primary">
+            Зберегти
+          </Button>
+          <Button asChild variant="quiet">
+            <Link to={backTo}>Скасувати</Link>
+          </Button>
+        </div>
       </form>
-    </section>
+    </PageBody>
   )
 }
 
@@ -736,17 +798,53 @@ function PartForm({
   })
   const [media, setMedia] = useState<MediaUploadResult[]>([])
   const [problem, setProblem] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string
+    quantity?: string
+  }>({})
+  const [intakeName, setIntakeName] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const intakeMutation = useLatestMutationGuard(cabinetModules.intakes)
   const partMutation = useLatestMutationGuard(cabinetModules.parts)
+  const update =
+    (key: keyof typeof values) =>
+    (
+      event: React.ChangeEvent<
+        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+      >,
+    ) => {
+      const { value } = event.target
+      setValues((current) => ({ ...current, [key]: value }))
+    }
+  useEffect(() => {
+    const controller = new AbortController()
+    void intakesApi.get(intakeId, { signal: controller.signal }).then(
+      (intake) => setIntakeName(intake.name ?? 'без назви'),
+      () => undefined,
+    )
+    return () => controller.abort()
+  }, [intakeId])
   const save = async (event: React.FormEvent) => {
     event.preventDefault()
     if (busy) return
     const quantity = Number(values.quantity)
     if (!values.name.trim() || !Number.isInteger(quantity) || quantity < 1) {
-      setProblem('Перевірте назву та кількість запчастини.')
+      setFieldErrors({
+        ...(values.name.trim()
+          ? {}
+          : {
+              name: 'Вкажіть назву деталі, як її шукатимуть на складі — наприклад, «Бампер передній».',
+            }),
+        ...(Number.isInteger(quantity) && quantity >= 1
+          ? {}
+          : {
+              quantity:
+                'Введіть ціле число від 1 — скільки таких деталей приймаєте.',
+            }),
+      })
       return
     }
+    setFieldErrors({})
     const request: AddIntakePartRequest = {
       name: values.name.trim(),
       partType: values.partType.trim() || null,
@@ -769,55 +867,138 @@ function PartForm({
       setBusy(false)
     }
   }
+  const backTo = `${base}/${intakeId}`
   return (
-    <section className="mx-auto grid w-full max-w-2xl gap-4">
-      <h1>Нова запчастина</h1>
-      {problem ? <p role="alert">{problem}</p> : null}
+    <PageBody role="main" width="narrow">
+      <Button asChild className="justify-self-start" variant="quiet">
+        <Link to={backTo}>
+          <ChevronLeft aria-hidden />
+          До приймання
+        </Link>
+      </Button>
+      <PageHeader eyebrow="Склад · Приймання" title="Нова запчастина" />
+      <p className="text-app-muted text-sm">
+        {intakeName === null
+          ? 'Деталь буде оприбуткована в це приймання.'
+          : `Деталь буде оприбуткована в приймання «${intakeName}».`}
+      </p>
+      {problem ? <Notice tone="danger">{problem}</Notice> : null}
       <form
         aria-busy={busy}
-        className="grid gap-3"
+        className="grid gap-4"
         onSubmit={(event) => void save(event)}
       >
-        {(
-          [
-            ['name', 'Назва'],
-            ['partType', 'Тип'],
-            ['condition', 'Стан'],
-            ['quantity', 'Кількість'],
-            ['unit', 'Одиниця'],
-            ['notes', 'Нотатки'],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key}>
-            {label}
-            <input
-              name={key}
-              onChange={(event) =>
-                setValues({ ...values, [key]: event.target.value })
-              }
-              required={key === 'name' || key === 'quantity'}
-              value={values[key]}
+        <Panel className="grid gap-3">
+          <h2 className="text-base font-semibold text-white">Деталь</h2>
+          <Field
+            error={fieldErrors.name}
+            hint="Назва, за якою деталь шукатимуть на складі"
+            label="Назва"
+            required
+          >
+            <TextInput
+              autoComplete="off"
+              name="name"
+              onChange={update('name')}
+              required
+              value={values.name}
             />
-          </label>
-        ))}
+          </Field>
+          <div className="flex flex-wrap gap-3">
+            <Field
+              className="min-w-52 flex-1"
+              hint="Наприклад: кузов, оптика, двигун"
+              label="Тип"
+            >
+              <TextInput
+                autoComplete="off"
+                name="partType"
+                onChange={update('partType')}
+                value={values.partType}
+              />
+            </Field>
+            <Field
+              className="min-w-52 flex-1"
+              hint="Як позначаєте стан у своєму каталозі"
+              label="Стан"
+            >
+              <TextInput
+                autoComplete="off"
+                name="condition"
+                onChange={update('condition')}
+                value={values.condition}
+              />
+            </Field>
+          </div>
+        </Panel>
+        <Panel className="grid gap-3">
+          <h2 className="text-base font-semibold text-white">Скільки</h2>
+          <div className="flex flex-wrap gap-3">
+            <Field
+              className="min-w-36 flex-1"
+              error={fieldErrors.quantity}
+              label="Кількість"
+              required
+            >
+              <TextInput
+                inputMode="numeric"
+                name="quantity"
+                onChange={update('quantity')}
+                required
+                value={values.quantity}
+              />
+            </Field>
+            <Field
+              className="min-w-36 flex-1"
+              hint="шт, компл, кг"
+              label="Одиниця"
+            >
+              <TextInput
+                autoComplete="off"
+                name="unit"
+                onChange={update('unit')}
+                value={values.unit}
+              />
+            </Field>
+          </div>
+        </Panel>
+        <Panel className="grid gap-3">
+          <Field
+            hint="Дефекти, комплектність, звідки знято — усе, що вплине на продаж"
+            label="Нотатки"
+          >
+            <TextArea
+              name="notes"
+              onChange={update('notes')}
+              value={values.notes}
+            />
+          </Field>
+        </Panel>
         {canUploadMedia ? (
-          <MediaPicker
-            beforeDispatch={() => {
-              intakeMutation.requireLatestMutation({ quota: false })
-              partMutation.requireLatestMutation({
-                permission: 'parts.view',
-                quota: false,
-              })
-            }}
-            entityType="parts"
-            items={media}
-            onChange={setMedia}
-          />
+          <Panel>
+            <MediaPicker
+              beforeDispatch={() => {
+                intakeMutation.requireLatestMutation({ quota: false })
+                partMutation.requireLatestMutation({
+                  permission: 'parts.view',
+                  quota: false,
+                })
+              }}
+              entityType="parts"
+              items={media}
+              onChange={setMedia}
+            />
+          </Panel>
         ) : null}
-        <button disabled={busy} type="submit">
-          Додати запчастину
-        </button>
+        <div className="border-app-line rounded-panel bg-app-raised flex flex-wrap items-center gap-2 border p-3">
+          <Button disabled={busy} type="submit" variant="primary">
+            Додати запчастину
+          </Button>
+          <Button asChild variant="quiet">
+            <Link to={backTo}>Скасувати</Link>
+          </Button>
+        </div>
       </form>
-    </section>
+    </PageBody>
   )
 }

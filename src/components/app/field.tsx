@@ -10,6 +10,8 @@ export interface FieldProps {
   /** Replaces the hint and marks the control invalid. */
   error?: ReactNode
   required?: boolean
+  /** Visually hidden addition to the label, for names like "Кількість Бампер". */
+  srLabel?: string
   className?: string
 }
 
@@ -23,6 +25,7 @@ export function Field({
   hint,
   error,
   required = false,
+  srLabel,
   className,
 }: FieldProps) {
   const id = useId()
@@ -37,15 +40,30 @@ export function Field({
 
   return (
     <div className={cn('grid gap-1.5', className)}>
-      <label className="text-app-muted text-[12.5px]" htmlFor={id}>
-        {label}
+      <div className="flex items-baseline gap-1">
+        <label className="text-app-muted text-[12.5px]" htmlFor={id}>
+          {label}
+        </label>
+        {/* Outside the label: its text content must stay the accessible name. */}
         {required ? (
-          <span aria-hidden className="text-brand ml-1">
+          <span aria-hidden className="text-brand text-[12.5px]">
             *
           </span>
         ) : null}
-      </label>
-      <FieldContext.Provider value={{ id, describedBy, invalid }}>
+      </div>
+      <FieldContext.Provider
+        value={{
+          id,
+          describedBy,
+          invalid,
+          ...(srLabel === undefined
+            ? {}
+            : {
+                ariaLabel:
+                  typeof label === 'string' ? `${label} ${srLabel}` : srLabel,
+              }),
+        }}
+      >
         {children}
       </FieldContext.Provider>
       {invalid ? (

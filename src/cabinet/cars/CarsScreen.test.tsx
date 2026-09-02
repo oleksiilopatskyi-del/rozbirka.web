@@ -170,7 +170,7 @@ it('blocks a direct create route for a view-only member', async () => {
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Недостатньо прав')
   expect(
-    screen.queryByRole('button', { name: 'Зберегти' }),
+    screen.queryByRole('button', { name: 'Створити автомобіль' }),
   ).not.toBeInTheDocument()
 })
 
@@ -236,6 +236,7 @@ it('applies car quota only to create while allowing existing-car operations', as
     await screen.findByRole('link', { name: 'Редагувати автомобіль' }),
   ).toBeVisible()
   expect(screen.getByRole('button', { name: 'Додати витрату' })).toBeVisible()
+  expect(screen.getByText('Витрат ще немає')).toBeVisible()
 })
 
 it('does not reveal server financial values without finance.view', async () => {
@@ -379,7 +380,13 @@ it('edits an expense with PUT, retains the form while pending, and refetches det
     </MemoryRouter>,
   )
 
-  await screen.findByText(/Транспорт: 500/)
+  const expensesTable = await screen.findByRole('table', {
+    name: 'Витрати автомобіля',
+  })
+  const transportRow = within(expensesTable).getByRole('row', {
+    name: /Транспорт/,
+  })
+  expect(within(transportRow).getByRole('cell', { name: '500' })).toBeVisible()
   await user.click(
     screen.getByRole('button', { name: 'Редагувати витрату Транспорт' }),
   )
@@ -404,7 +411,9 @@ it('edits an expense with PUT, retains the form while pending, and refetches det
   )
   resolveUpdate(expense)
   await waitFor(() => expect(carsApi.get).toHaveBeenCalledTimes(2))
-  expect(await screen.findByText(/Доставка: 750/)).toBeVisible()
+  const deliveryRow = await screen.findByRole('row', { name: /Доставка/ })
+  expect(within(deliveryRow).getByRole('cell', { name: '750' })).toBeVisible()
+  expect(screen.getByText('Разом 1 витрата')).toBeVisible()
 })
 
 it('renders car identity, gallery, VIN copy, and gates warehouse access with parts.view', async () => {
@@ -511,7 +520,12 @@ it('normalizes warehouse loading failures and retries without an unhandled rejec
   )
   await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
 
-  expect(await screen.findByText('Бампер · available')).toBeVisible()
+  const partsTable = await screen.findByRole('table', {
+    name: 'Деталі автомобіля на складі',
+  })
+  const partRow = within(partsTable).getByRole('row', { name: /Бампер/ })
+  expect(within(partRow).getByRole('cell', { name: 'Доступна' })).toBeVisible()
+  expect(within(partRow).getByRole('cell', { name: '1' })).toBeVisible()
   expect(carsApi.listParts).toHaveBeenCalledTimes(2)
   const firstRequest = vi.mocked(carsApi.listParts).mock.calls[0]
   expect(firstRequest?.[0]).toBe('car-1')
@@ -551,6 +565,7 @@ it('retains successful files when another media upload fails and reports that fi
   expect(
     await screen.findByRole('img', { name: 'Попередній перегляд фото' }),
   ).toHaveAttribute('src', 'https://cdn.example/ok.jpg')
+  expect(screen.getByText('ok.jpg')).toBeVisible()
   const errors = within(screen.getByRole('alert')).getAllByRole('listitem')
   expect(errors).toHaveLength(2)
   expect(errors[0]).toHaveTextContent('bad.heic: Непідтримуваний формат.')
@@ -615,11 +630,14 @@ it('retries only remaining initial expenses after partial failure without recrea
     </MemoryRouter>,
   )
 
-  await user.type(screen.getByLabelText('Код'), 'CAR-001')
-  await user.type(screen.getByLabelText('Марка'), 'BMW')
-  await user.type(screen.getByLabelText('Модель'), 'X5')
-  await user.type(screen.getByLabelText('Рік'), '2020')
-  await user.type(screen.getByLabelText('Ціна придбання'), '12000')
+  await user.type(screen.getByRole('textbox', { name: 'Код' }), 'CAR-001')
+  await user.type(screen.getByRole('textbox', { name: 'Марка' }), 'BMW')
+  await user.type(screen.getByRole('textbox', { name: 'Модель' }), 'X5')
+  await user.type(screen.getByRole('textbox', { name: 'Рік' }), '2020')
+  await user.type(
+    screen.getByRole('textbox', { name: 'Ціна придбання' }),
+    '12000',
+  )
   await user.click(
     screen.getByRole('button', { name: 'Додати початкову витрату' }),
   )
@@ -633,7 +651,7 @@ it('retries only remaining initial expenses after partial failure without recrea
   )
   await user.type(screen.getByLabelText('Назва початкової витрати 2'), 'Мито')
   await user.type(screen.getByLabelText('Сума початкової витрати 2'), '250')
-  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+  await user.click(screen.getByRole('button', { name: 'Створити автомобіль' }))
 
   await waitFor(() => expect(carsApi.create).toHaveBeenCalledTimes(1))
   expect(carsApi.createExpense).toHaveBeenCalledWith(
@@ -644,13 +662,13 @@ it('retries only remaining initial expenses after partial failure without recrea
     }),
   )
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Автомобіль створено, але не всі витрати збережено: Витрата вже існує.',
+    'Автомобіль створено, але не всі витрати збережено: Витрата вже існує. Виправте дані витрати й надішліть форму ще раз — автомобіль не створиться повторно.',
   )
   expect(
     screen.getByRole('link', { name: 'Відкрити автомобіль' }),
   ).toHaveAttribute('href', '/app/demo/cars/car-1')
 
-  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+  await user.click(screen.getByRole('button', { name: 'Створити автомобіль' }))
   await waitFor(() => expect(carsApi.createExpense).toHaveBeenCalledTimes(3))
   expect(carsApi.create).toHaveBeenCalledTimes(1)
   expect(carsApi.createExpense).toHaveBeenNthCalledWith(
@@ -673,11 +691,14 @@ it('validates every initial expense before creating the car', async () => {
     </MemoryRouter>,
   )
 
-  await user.type(screen.getByLabelText('Код'), 'CAR-001')
-  await user.type(screen.getByLabelText('Марка'), 'BMW')
-  await user.type(screen.getByLabelText('Модель'), 'X5')
-  await user.type(screen.getByLabelText('Рік'), '2020')
-  await user.type(screen.getByLabelText('Ціна придбання'), '12000')
+  await user.type(screen.getByRole('textbox', { name: 'Код' }), 'CAR-001')
+  await user.type(screen.getByRole('textbox', { name: 'Марка' }), 'BMW')
+  await user.type(screen.getByRole('textbox', { name: 'Модель' }), 'X5')
+  await user.type(screen.getByRole('textbox', { name: 'Рік' }), '2020')
+  await user.type(
+    screen.getByRole('textbox', { name: 'Ціна придбання' }),
+    '12000',
+  )
   await user.click(
     screen.getByRole('button', { name: 'Додати початкову витрату' }),
   )
@@ -685,10 +706,10 @@ it('validates every initial expense before creating the car', async () => {
     screen.getByLabelText('Назва початкової витрати 1'),
     'Доставка',
   )
-  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+  await user.click(screen.getByRole('button', { name: 'Створити автомобіль' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Перевірте правильність початкових витрат.',
+    'Перевірте правильність початкових витрат. Кожна потребує назви до 200 символів і суми більшої за нуль.',
   )
   expect(carsApi.create).not.toHaveBeenCalled()
 })
@@ -710,13 +731,16 @@ it('rechecks the latest car permission before dispatching create', async () => {
     </MemoryRouter>,
   )
 
-  await user.type(screen.getByLabelText('Код'), 'CAR-001')
-  await user.type(screen.getByLabelText('Марка'), 'BMW')
-  await user.type(screen.getByLabelText('Модель'), 'X5')
-  await user.type(screen.getByLabelText('Рік'), '2020')
-  await user.type(screen.getByLabelText('Ціна придбання'), '12000')
+  await user.type(screen.getByRole('textbox', { name: 'Код' }), 'CAR-001')
+  await user.type(screen.getByRole('textbox', { name: 'Марка' }), 'BMW')
+  await user.type(screen.getByRole('textbox', { name: 'Модель' }), 'X5')
+  await user.type(screen.getByRole('textbox', { name: 'Рік' }), '2020')
+  await user.type(
+    screen.getByRole('textbox', { name: 'Ціна придбання' }),
+    '12000',
+  )
   currentCabinet.snapshot.permissions.delete('cars.manage')
-  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+  await user.click(screen.getByRole('button', { name: 'Створити автомобіль' }))
 
   expect(carsApi.create).not.toHaveBeenCalled()
 })
@@ -735,7 +759,7 @@ it('rechecks finance.manage before dispatching a car edit with purchasePrice', a
 
   await screen.findByDisplayValue('CAR-001')
   currentCabinet.snapshot.permissions.delete('finance.manage')
-  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+  await user.click(screen.getByRole('button', { name: 'Зберегти зміни' }))
 
   expect(carsApi.update).not.toHaveBeenCalled()
 })
@@ -755,10 +779,11 @@ it('allows a manager to edit non-financial car fields without submitting purchas
   )
 
   await screen.findByDisplayValue('CAR-001')
-  expect(screen.getByLabelText('Ціна придбання')).toBeDisabled()
-  await user.clear(screen.getByLabelText('Нотатки'))
-  await user.type(screen.getByLabelText('Нотатки'), 'Оновлено менеджером')
-  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+  expect(screen.getByRole('textbox', { name: 'Ціна придбання' })).toBeDisabled()
+  const notes = screen.getByRole('textbox', { name: 'Нотатки' })
+  await user.clear(notes)
+  await user.type(notes, 'Оновлено менеджером')
+  await user.click(screen.getByRole('button', { name: 'Зберегти зміни' }))
 
   await waitFor(() => expect(carsApi.update).toHaveBeenCalledOnce())
   const request = vi.mocked(carsApi.update).mock.calls[0]?.[1]

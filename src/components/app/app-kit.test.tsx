@@ -203,3 +203,16 @@ it('confirms a destructive action through its consequence', async () => {
   await user.click(screen.getByRole('button', { name: 'Видалити деталь' }))
   expect(onConfirm).toHaveBeenCalledOnce()
 })
+
+it('shows a pressed and a busy state, not only hover and disabled', () => {
+  render(
+    <>
+      <Button variant="primary">Зберегти</Button>
+      <Button aria-busy>Зберігаємо…</Button>
+    </>,
+  )
+
+  const save = screen.getByRole('button', { name: 'Зберегти' })
+  expect(save.className).toContain('active:')
+  expect(save.className).toContain('aria-busy:cursor-wait')
+})

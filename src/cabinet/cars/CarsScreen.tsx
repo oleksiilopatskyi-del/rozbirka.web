@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from 'react'
 import {
   Link,
   useLocation,
@@ -6,9 +12,20 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router'
-import { ChevronLeft, Copy, Plus } from 'lucide-react'
+import {
+  ChevronLeft,
+  Copy,
+  ImagePlus,
+  Pencil,
+  Plus,
+  Trash2,
+  Wallet,
+  Wrench,
+} from 'lucide-react'
 import {
   Button,
+  Fact,
+  SectionPanel,
   ConfirmDialog,
   DataTable,
   EmptyState,
@@ -25,7 +42,10 @@ import {
   StatCard,
   StatStrip,
   StatusPill,
+  TextArea,
+  TextInput,
   Toolbar,
+  type StatusTone,
 } from '@/components/app'
 import {
   carsApi,
@@ -33,6 +53,7 @@ import {
   type CarExpense,
   type CarListItem,
   type CarListParams,
+  type CarPartListItem,
   type CreateCarRequest,
   type UpdateCarRequest,
   isCarStatus,
@@ -56,6 +77,27 @@ import { useLatestMutationGuard } from '../use-latest-mutation-guard'
 
 const money = (value: number) =>
   new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 }).format(value)
+/** Dates arrive as ISO strings; anything unparsable is shown as it came. */
+const day = (value: string) => {
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : new Intl.DateTimeFormat('uk-UA', { dateStyle: 'medium' }).format(parsed)
+}
+/** Ukrainian counts take three forms: 1 деталь, 2 деталі, 5 деталей. */
+const plural = (count: number, forms: [string, string, string]) => {
+  const rest = Math.abs(count) % 100
+  if (rest >= 11 && rest <= 14) return forms[2]
+  if (rest % 10 === 1) return forms[0]
+  if (rest % 10 >= 2 && rest % 10 <= 4) return forms[1]
+  return forms[2]
+}
+const partStatus = (status: string): { label: string; tone: StatusTone } => {
+  if (status === 'available') return { label: 'Доступна', tone: 'ok' }
+  if (status === 'reserved') return { label: 'У резерві', tone: 'warn' }
+  if (status === 'sold') return { label: 'Продана', tone: 'neutral' }
+  return { label: status, tone: 'neutral' }
+}
 const positiveInteger = (value: string | null, fallback: number) => {
   const parsed = Number(value)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
@@ -148,7 +190,7 @@ export function CarsScreen(_props: Partial<CabinetModuleScreenProps> = {}) {
   if (carId && location.pathname.endsWith('/edit'))
     return <CarForm carId={carId} title="Редагувати автомобіль" />
   if (carId && location.pathname.endsWith('/warehouse'))
-    return <CarWarehouse key={carId} carId={carId} />
+    return <CarWarehouse base={base} key={carId} carId={carId} />
   return carId ? (
     <CarDetail base={base} carId={carId} />
   ) : (
@@ -456,13 +498,13 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
               ) : null}
             </dd>
           </div>
-          <CarFact label="Рік" value={String(car.year)} />
-          <CarFact label="Колір" value={car.color ?? 'не вказано'} />
-          <CarFact label="Дата придбання" value={car.acquiredAt} />
+          <Fact label="Рік">{String(car.year)}</Fact>
+          <Fact label="Колір">{car.color ?? 'не вказано'}</Fact>
+          <Fact label="Дата придбання">{car.acquiredAt}</Fact>
           {financeView ? (
-            <CarFact label="Ціна придбання" value={money(car.purchasePrice)} />
+            <Fact label="Ціна придбання">{money(car.purchasePrice)}</Fact>
           ) : null}
-          <CarFact label="Нотатки" value={car.notes ?? 'немає'} />
+          <Fact label="Нотатки">{car.notes ?? 'немає'}</Fact>
         </dl>
       </Panel>
       {car.photos.length > 0 ? (
@@ -536,15 +578,6 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
   )
 }
 
-function CarFact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid gap-1">
-      <dt className="text-app-dim text-[12.5px]">{label}</dt>
-      <dd className="text-sm text-white">{value}</dd>
-    </div>
-  )
-}
-
 function Expenses({
   car,
   canManage,
@@ -560,18 +593,22 @@ function Expenses({
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [editing, setEditing] = useState<CarExpense | null>(null)
+  const [pendingRemoval, setPendingRemoval] = useState<CarExpense | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const create = async (event: FormEvent) => {
     event.preventDefault()
     const value = Number(amount)
-    if (
-      !canManage ||
-      busy ||
-      !name.trim() ||
-      !Number.isFinite(value) ||
-      value <= 0
-    )
+    if (!canManage || busy) return
+    if (!name.trim()) {
+      setFormError('Впишіть назву витрати — наприклад, «Транспортування».')
       return
+    }
+    if (!Number.isFinite(value) || value <= 0) {
+      setFormError('Сума має бути числом більшим за нуль — наприклад, 500.')
+      return
+    }
+    setFormError(null)
     setBusy(true)
     try {
       requireLatestMutation({ permission: 'cars.view', quota: false })
@@ -610,7 +647,8 @@ function Expenses({
     }
   }
   const remove = async (expense: CarExpense) => {
-    if (!canManage || busy || !window.confirm('Видалити витрату?')) return
+    if (!canManage || busy) return
+    setPendingRemoval(null)
     setBusy(true)
     try {
       requireLatestMutation({ permission: 'cars.view', quota: false })
@@ -626,62 +664,166 @@ function Expenses({
       setBusy(false)
     }
   }
+  const expenses = car.expenses ?? []
+  const total = expenses.reduce((sum, expense) => sum + expense.amount, 0)
   return (
-    <section aria-label="Витрати">
-      <h2>Витрати</h2>
-      <ul>
-        {(car.expenses ?? []).map((expense) => (
-          <li key={expense.id}>
-            {expense.name}: {money(expense.amount)}{' '}
-            {canManage ? (
-              <>
-                <button
-                  aria-label={`Редагувати витрату ${expense.name}`}
+    <section aria-label="Витрати" className="grid gap-3">
+      <h2 className="text-base font-semibold text-white">Витрати</h2>
+      <DataTable
+        caption="Витрати автомобіля"
+        columns={[
+          {
+            key: 'name',
+            label: 'Витрата',
+            variant: 'primary',
+            cell: (expense: CarExpense) => expense.name,
+          },
+          {
+            key: 'createdAt',
+            label: 'Додано',
+            cell: (expense: CarExpense) => day(expense.createdAt),
+          },
+          {
+            key: 'amount',
+            label: 'Сума',
+            align: 'end',
+            cell: (expense: CarExpense) => money(expense.amount),
+          },
+          ...(canManage
+            ? [
+                {
+                  key: 'actions',
+                  label: 'Дії',
+                  align: 'end' as const,
+                  headerHidden: true,
+                  cell: (expense: CarExpense) => (
+                    <span className="flex min-w-0 flex-wrap justify-end gap-2">
+                      <Button
+                        aria-label={`Редагувати витрату ${expense.name}`}
+                        disabled={busy}
+                        onClick={() => {
+                          setFormError(null)
+                          setEditing(expense)
+                          setName(expense.name)
+                          setAmount(String(expense.amount))
+                        }}
+                      >
+                        <Pencil aria-hidden />
+                        Редагувати
+                      </Button>
+                      <Button
+                        aria-label={`Видалити витрату ${expense.name}`}
+                        disabled={busy}
+                        onClick={() => setPendingRemoval(expense)}
+                        variant="danger"
+                      >
+                        <Trash2 aria-hidden />
+                        Видалити
+                      </Button>
+                    </span>
+                  ),
+                },
+              ]
+            : []),
+        ]}
+        empty={
+          <EmptyState
+            description="Транспортування, мийка, розмитнення — усе, що ви вклали в авто понад ціну придбання."
+            icon={<Wallet aria-hidden />}
+            title="Витрат ще немає"
+          />
+        }
+        footer={
+          expenses.length === 0 ? undefined : (
+            <div className="border-app-line flex flex-wrap items-baseline justify-between gap-2 border-t px-3.5 py-2.5">
+              <span className="text-app-dim text-[12.5px]">
+                Разом {expenses.length}{' '}
+                {plural(expenses.length, ['витрата', 'витрати', 'витрат'])}
+              </span>
+              <span className="text-[15px] font-semibold tabular-nums text-white">
+                {money(total)}
+              </span>
+            </div>
+          )
+        }
+        rowKey={(expense: CarExpense) => expense.id}
+        rows={expenses}
+      />
+      {canManage ? (
+        <Panel className="grid gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">
+              {editing
+                ? `Редагування витрати «${editing.name}»`
+                : 'Нова витрата'}
+            </h3>
+            <p className="text-app-dim mt-1 text-[12.5px]">
+              Витрата збільшує інвестовану суму й змінює прибутковість авто.
+            </p>
+          </div>
+          <form
+            aria-busy={busy}
+            className="grid gap-3"
+            onSubmit={(event) => void create(event)}
+          >
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+              <Field label="Назва витрати">
+                <TextInput
+                  onChange={(event) => setName(event.target.value)}
+                  value={name}
+                />
+              </Field>
+              <Field hint="У гривнях" label="Сума витрати">
+                <TextInput
+                  inputMode="decimal"
+                  onChange={(event) => setAmount(event.target.value)}
+                  value={amount}
+                />
+              </Field>
+            </div>
+            {formError ? <Notice tone="danger">{formError}</Notice> : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                aria-busy={busy}
+                disabled={busy}
+                type="submit"
+                variant="primary"
+              >
+                {editing ? 'Зберегти витрату' : 'Додати витрату'}
+              </Button>
+              {editing ? (
+                <Button
                   disabled={busy}
                   onClick={() => {
-                    setEditing(expense)
-                    setName(expense.name)
-                    setAmount(String(expense.amount))
+                    setEditing(null)
+                    setName('')
+                    setAmount('')
+                    setFormError(null)
                   }}
-                  type="button"
+                  variant="quiet"
                 >
-                  Редагувати витрату
-                </button>
-                <button
-                  aria-label={`Видалити витрату ${expense.name}`}
-                  disabled={busy}
-                  onClick={() => void remove(expense)}
-                  type="button"
-                >
-                  Видалити витрату
-                </button>
-              </>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-      {canManage ? (
-        <form aria-busy={busy} onSubmit={(event) => void create(event)}>
-          <label>
-            Назва витрати
-            <input
-              onChange={(event) => setName(event.target.value)}
-              value={name}
-            />
-          </label>
-          <label>
-            Сума витрати
-            <input
-              inputMode="decimal"
-              onChange={(event) => setAmount(event.target.value)}
-              value={amount}
-            />
-          </label>
-          <button disabled={busy} type="submit">
-            {editing ? 'Зберегти витрату' : 'Додати витрату'}
-          </button>
-        </form>
+                  Скасувати редагування
+                </Button>
+              ) : null}
+            </div>
+          </form>
+        </Panel>
       ) : null}
+      <ConfirmDialog
+        confirmLabel="Видалити витрату"
+        consequence={
+          pendingRemoval
+            ? `Витрата «${pendingRemoval.name}» на ${money(pendingRemoval.amount)} зникне назавжди, а інвестована сума зменшиться.`
+            : ''
+        }
+        onConfirm={() => {
+          if (pendingRemoval) void remove(pendingRemoval)
+        }}
+        onOpenChange={(open) => setPendingRemoval(open ? pendingRemoval : null)}
+        open={pendingRemoval !== null}
+        pending={busy}
+        title="Видалити витрату?"
+      />
     </section>
   )
 }
@@ -711,12 +853,14 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
     new Set(),
   )
   const [busy, setBusy] = useState(false)
+  const [loading, setLoading] = useState(carId !== undefined)
   const [problem, setProblem] = useState<string | null>(null)
   const { requireLatestMutation } = useLatestMutationGuard(cabinetModules.cars)
   useEffect(() => {
     if (!carId) return
     void carsApi.get(carId).then(
       (car) => {
+        setLoading(false)
         setValues({
           code: car.code,
           brand: car.brand,
@@ -735,7 +879,10 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
           })),
         )
       },
-      (error: unknown) => setProblem(normalizeApiProblem(error).message),
+      (error: unknown) => {
+        setLoading(false)
+        setProblem(normalizeApiProblem(error).message)
+      },
     )
   }, [carId])
   const submit = async (event: FormEvent) => {
@@ -758,8 +905,12 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
       !request.model ||
       !Number.isInteger(request.year) ||
       ((!carId || financeManage) && !Number.isFinite(purchasePrice))
-    )
+    ) {
+      setProblem(
+        'Заповніть обовʼязкові поля: код, марку, модель, рік числом і ціну придбання числом.',
+      )
       return
+    }
     const preparedExpenses = expenses.map((expense) => ({
       id: expense.id,
       name: expense.name.trim(),
@@ -775,9 +926,12 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
           expense.amount <= 0,
       )
     ) {
-      setProblem('Перевірте правильність початкових витрат.')
+      setProblem(
+        'Перевірте правильність початкових витрат. Кожна потребує назви до 200 символів і суми більшої за нуль.',
+      )
       return
     }
+    setProblem(null)
     setBusy(true)
     try {
       let savedCarId = carId ?? createdCarId
@@ -835,7 +989,7 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
             setCompletedExpenseIds(new Set(completed))
           } catch (error: unknown) {
             setProblem(
-              `Автомобіль створено, але не всі витрати збережено: ${normalizeApiProblem(error).message}`,
+              `Автомобіль створено, але не всі витрати збережено: ${normalizeApiProblem(error).message} Виправте дані витрати й надішліть форму ще раз — автомобіль не створиться повторно.`,
             )
             setBusy(false)
             return
@@ -848,65 +1002,145 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
       setBusy(false)
     }
   }
+  const priceLocked = carId !== undefined && !financeManage
+  const bind = (key: keyof typeof values) => ({
+    disabled: busy,
+    name: key,
+    onChange: (
+      event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    ): void => {
+      setValues((current) => ({ ...current, [key]: event.target.value }))
+    },
+    value: values[key],
+  })
+  if (loading)
+    return (
+      <PageBody width="narrow">
+        <PageHeader eyebrow="Склад · Автомобілі" title={title} />
+        <SkeletonRows
+          columns={2}
+          label="Завантажуємо дані автомобіля…"
+          rows={5}
+        />
+      </PageBody>
+    )
   return (
-    <section>
-      <h1>{title}</h1>
-      {problem ? <p role="alert">{problem}</p> : null}
+    <PageBody width="narrow">
+      <Button asChild className="justify-self-start" variant="quiet">
+        <Link to={carId ? `${base}/${carId}` : base}>
+          <ChevronLeft aria-hidden />
+          {carId ? 'До автомобіля' : 'До автомобілів'}
+        </Link>
+      </Button>
+      <PageHeader eyebrow="Склад · Автомобілі" title={title} />
+      {problem ? <Notice tone="danger">{problem}</Notice> : null}
       {createdCarId ? (
-        <Link to={`${base}/${createdCarId}`}>Відкрити автомобіль</Link>
+        <div className="grid gap-2">
+          <Notice tone="ok">
+            Автомобіль створено. Решту витрат можна додати на його сторінці.
+          </Notice>
+          <div className="flex flex-wrap">
+            <Button asChild>
+              <Link to={`${base}/${createdCarId}`}>Відкрити автомобіль</Link>
+            </Button>
+          </div>
+        </div>
       ) : null}
-      <form aria-busy={busy} onSubmit={(event) => void submit(event)}>
-        {(
-          [
-            ['code', 'Код'],
-            ['brand', 'Марка'],
-            ['model', 'Модель'],
-            ['year', 'Рік'],
-            ['color', 'Колір'],
-            ['vin', 'VIN'],
-            ['acquiredAt', 'Дата придбання'],
-            ['purchasePrice', 'Ціна придбання'],
-            ['notes', 'Нотатки'],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key}>
-            {label}
-            <input
-              disabled={
-                busy ||
-                (key === 'purchasePrice' &&
-                  carId !== undefined &&
-                  !financeManage)
+      <form
+        aria-busy={busy}
+        className="grid gap-4"
+        onSubmit={(event) => void submit(event)}
+      >
+        <SectionPanel
+          description="За кодом ви знаходите авто на складі, за VIN — звіряєте його з документами."
+          title="Ідентифікація"
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field hint="Внутрішній номер авто на складі" label="Код" required>
+              <TextInput {...bind('code')} required />
+            </Field>
+            <Field label="Марка" required>
+              <TextInput {...bind('brand')} required />
+            </Field>
+            <Field label="Модель" required>
+              <TextInput {...bind('model')} required />
+            </Field>
+            <Field hint="Чотири цифри, наприклад 2020" label="Рік" required>
+              <TextInput {...bind('year')} inputMode="numeric" required />
+            </Field>
+            <Field label="Колір">
+              <TextInput {...bind('color')} />
+            </Field>
+            <Field
+              className="sm:col-span-2"
+              hint="17 символів з техпаспорта"
+              label="VIN"
+            >
+              <TextInput {...bind('vin')} className="font-mono" />
+            </Field>
+          </div>
+        </SectionPanel>
+        <SectionPanel
+          description="Ціна придбання разом із витратами формує інвестовану суму авто."
+          title="Придбання"
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Дата придбання">
+              <TextInput {...bind('acquiredAt')} type="date" />
+            </Field>
+            <Field
+              hint={
+                priceLocked
+                  ? 'Ціну змінює користувач із правом на фінанси'
+                  : 'У гривнях, без пробілів'
               }
-              name={key}
-              onChange={(event) =>
-                setValues({ ...values, [key]: event.target.value })
-              }
-              required={
-                ['code', 'brand', 'model', 'year'].includes(key) ||
-                (key === 'purchasePrice' &&
-                  (carId === undefined || financeManage))
-              }
-              value={values[key]}
-            />
-          </label>
-        ))}
+              label="Ціна придбання"
+              required={!priceLocked}
+            >
+              <TextInput
+                {...bind('purchasePrice')}
+                disabled={busy || priceLocked}
+                inputMode="decimal"
+                required={!priceLocked}
+              />
+            </Field>
+          </div>
+        </SectionPanel>
+        <SectionPanel
+          description="Стан авто, домовленості з продавцем, що перевірити перед розбиранням."
+          title="Нотатки"
+        >
+          <Field label="Нотатки">
+            <TextArea {...bind('notes')} rows={4} />
+          </Field>
+        </SectionPanel>
         {carId ? (
-          media.length > 0 ? (
-            <section aria-label="Поточні фото автомобіля">
-              <h2>Поточні фото</h2>
-              <ul>
-                {media.map((item, index) => (
-                  <li key={item.storageKey}>
-                    <img
-                      alt={`Поточне фото автомобіля ${index + 1}`}
-                      src={item.url}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null
+          <SectionPanel
+            description="Фото додають і прибирають під час створення авто."
+            title="Фото"
+          >
+            {media.length > 0 ? (
+              <section
+                aria-label="Поточні фото автомобіля"
+                className="grid gap-2"
+              >
+                <h3 className="text-app-muted text-[12.5px]">Поточні фото</h3>
+                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {media.map((item, index) => (
+                    <li key={item.storageKey}>
+                      <img
+                        alt={`Поточне фото автомобіля ${index + 1}`}
+                        className="border-app-line rounded-control aspect-4/3 w-full border object-cover"
+                        src={item.url}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : (
+              <p className="text-app-dim text-[12.5px]">Фото немає.</p>
+            )}
+          </SectionPanel>
         ) : (
           <MediaPicker
             additionalPermission="finance.manage"
@@ -916,79 +1150,119 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
           />
         )}
         {!carId && financeManage ? (
-          <fieldset>
-            <legend>Початкові витрати</legend>
-            {expenses.map((expense, index) => (
-              <div key={expense.id}>
-                <label>
-                  Назва початкової витрати {index + 1}
-                  <input
-                    disabled={busy || completedExpenseIds.has(expense.id)}
-                    onChange={(event) =>
-                      setExpenses((current) =>
-                        current.map((item) =>
-                          item.id === expense.id
-                            ? { ...item, name: event.target.value }
-                            : item,
-                        ),
-                      )
-                    }
-                    value={expense.name}
-                  />
-                </label>
-                <label>
-                  Сума початкової витрати {index + 1}
-                  <input
-                    disabled={busy || completedExpenseIds.has(expense.id)}
-                    inputMode="decimal"
-                    onChange={(event) =>
-                      setExpenses((current) =>
-                        current.map((item) =>
-                          item.id === expense.id
-                            ? { ...item, amount: event.target.value }
-                            : item,
-                        ),
-                      )
-                    }
-                    value={expense.amount}
-                  />
-                </label>
-                <button
-                  disabled={busy || completedExpenseIds.has(expense.id)}
-                  onClick={() =>
-                    setExpenses((current) =>
-                      current.filter((item) => item.id !== expense.id),
-                    )
-                  }
-                  type="button"
-                >
-                  Прибрати початкову витрату {index + 1}
-                </button>
-              </div>
-            ))}
-            <button
-              disabled={busy}
-              onClick={() =>
-                setExpenses((current) => [
-                  ...current,
-                  { id: Date.now(), name: '', amount: '' },
-                ])
-              }
-              type="button"
-            >
-              Додати початкову витрату
-            </button>
-          </fieldset>
+          <SectionPanel
+            description="Те, що вже витрачено на авто: транспортування, розмитнення, мийка. Витрати можна додати й пізніше."
+            title="Початкові витрати"
+          >
+            {expenses.length === 0 ? (
+              <p className="text-app-dim text-[12.5px]">
+                Витрат ще немає — авто збережеться й без них.
+              </p>
+            ) : (
+              <ul className="grid gap-3">
+                {expenses.map((expense, index) => {
+                  const saved = completedExpenseIds.has(expense.id)
+                  return (
+                    <li
+                      className="border-app-line rounded-control grid gap-3 border p-3"
+                      key={expense.id}
+                    >
+                      <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                        <Field
+                          label={`Назва початкової витрати ${String(index + 1)}`}
+                        >
+                          <TextInput
+                            disabled={busy || saved}
+                            onChange={(event) =>
+                              setExpenses((current) =>
+                                current.map((item) =>
+                                  item.id === expense.id
+                                    ? { ...item, name: event.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                            value={expense.name}
+                          />
+                        </Field>
+                        <Field
+                          label={`Сума початкової витрати ${String(index + 1)}`}
+                        >
+                          <TextInput
+                            disabled={busy || saved}
+                            inputMode="decimal"
+                            onChange={(event) =>
+                              setExpenses((current) =>
+                                current.map((item) =>
+                                  item.id === expense.id
+                                    ? { ...item, amount: event.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                            value={expense.amount}
+                          />
+                        </Field>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {saved ? (
+                          <StatusPill tone="ok">Збережено</StatusPill>
+                        ) : null}
+                        <Button
+                          aria-label={`Прибрати початкову витрату ${String(index + 1)}`}
+                          className="ml-auto"
+                          disabled={busy || saved}
+                          onClick={() =>
+                            setExpenses((current) =>
+                              current.filter((item) => item.id !== expense.id),
+                            )
+                          }
+                          variant="quiet"
+                        >
+                          <Trash2 aria-hidden />
+                          Прибрати
+                        </Button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            <div className="flex flex-wrap">
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  setExpenses((current) => [
+                    ...current,
+                    { id: Date.now(), name: '', amount: '' },
+                  ])
+                }
+              >
+                <Plus aria-hidden />
+                Додати початкову витрату
+              </Button>
+            </div>
+          </SectionPanel>
         ) : null}
-        <button disabled={busy} type="submit">
-          Зберегти
-        </button>
+        <div className="border-app-line rounded-panel bg-app-raised flex flex-wrap items-center justify-end gap-2 border p-3">
+          <Button asChild variant="quiet">
+            <Link to={carId ? `${base}/${carId}` : base}>Скасувати</Link>
+          </Button>
+          <Button
+            aria-busy={busy}
+            disabled={busy}
+            type="submit"
+            variant="primary"
+          >
+            {carId ? 'Зберегти зміни' : 'Створити автомобіль'}
+          </Button>
+        </div>
       </form>
-    </section>
+    </PageBody>
   )
 }
 
-function CarWarehouse({ carId }: { carId: string }) {
+function CarWarehouse({ base, carId }: { base: string; carId: string }) {
   const [requestVersion, setRequestVersion] = useState(0)
   const [state, setState] = useState<{
     parts: Awaited<ReturnType<typeof carsApi.listParts>> | null
@@ -1013,32 +1287,84 @@ function CarWarehouse({ carId }: { carId: string }) {
     )
     return () => controller.abort()
   }, [carId, requestVersion])
+  const parts = state.parts
   return (
-    <section>
-      <h1>Склад автомобіля</h1>
-      {state.loading ? <p role="status">Завантажуємо склад…</p> : null}
-      {state.problem ? (
-        <div role="alert">
-          <p>{state.problem}</p>
-          <button
-            onClick={() => {
-              setState({ parts: null, problem: null, loading: true })
-              setRequestVersion((current) => current + 1)
-            }}
-            type="button"
-          >
-            Спробувати ще раз
-          </button>
-        </div>
+    <PageBody>
+      <Button asChild className="justify-self-start" variant="quiet">
+        <Link to={`${base}/${carId}`}>
+          <ChevronLeft aria-hidden />
+          До автомобіля
+        </Link>
+      </Button>
+      <PageHeader eyebrow="Склад · Автомобілі" title="Склад автомобіля" />
+      {state.loading ? (
+        <SkeletonRows columns={3} label="Завантажуємо склад…" rows={4} />
       ) : null}
-      <ul>
-        {state.parts?.items.map((part) => (
-          <li key={part.id}>
-            {part.name} · {part.status}
-          </li>
-        ))}
-      </ul>
-    </section>
+      {state.problem ? (
+        <ErrorState
+          description={`${state.problem} Перевірте звʼязок і повторіть запит.`}
+          onRetry={() => {
+            setState({ parts: null, problem: null, loading: true })
+            setRequestVersion((current) => current + 1)
+          }}
+          title="Не вдалося завантажити склад"
+        />
+      ) : null}
+      {parts ? (
+        <>
+          <StatStrip
+            items={[
+              {
+                label: plural(parts.total, [
+                  'деталь на складі',
+                  'деталі на складі',
+                  'деталей на складі',
+                ]),
+                value: parts.total,
+              },
+            ]}
+          />
+          <DataTable
+            caption="Деталі автомобіля на складі"
+            columns={[
+              {
+                key: 'name',
+                label: 'Деталь',
+                variant: 'primary',
+                cell: (part: CarPartListItem) => part.name,
+              },
+              {
+                key: 'status',
+                label: 'Статус',
+                cell: (part: CarPartListItem) => {
+                  const presentation = partStatus(part.status)
+                  return (
+                    <StatusPill tone={presentation.tone}>
+                      {presentation.label}
+                    </StatusPill>
+                  )
+                },
+              },
+              {
+                key: 'quantity',
+                label: 'Доступно',
+                align: 'end',
+                cell: (part: CarPartListItem) => part.quantityAvailable,
+              },
+            ]}
+            empty={
+              <EmptyState
+                description="Деталі зʼявляться тут, щойно ви розберете авто й додасте запчастини на склад."
+                icon={<Wrench aria-hidden />}
+                title="Деталей цього авто ще немає"
+              />
+            }
+            rowKey={(part: CarPartListItem) => part.id}
+            rows={parts.items}
+          />
+        </>
+      ) : null}
+    </PageBody>
   )
 }
 
@@ -1059,6 +1385,8 @@ export function MediaPicker({
   const { requireLatestMutation } = useLatestMutationGuard(definition)
   const [busy, setBusy] = useState(false)
   const [problems, setProblems] = useState<string[]>([])
+  /** Uploads answer with a storage key only, so the file name is kept here. */
+  const [names, setNames] = useState<Record<string, string>>({})
   const upload = async (files: FileList | null) => {
     if (!files || busy) return
     setBusy(true)
@@ -1080,6 +1408,17 @@ export function MediaPicker({
     const uploaded = results.flatMap((result) =>
       result.status === 'fulfilled' ? [result.value] : [],
     )
+    const uploadedNames = results.flatMap((result, index) => {
+      const file = selected[index]
+      return result.status === 'fulfilled' && file
+        ? [[result.value.storageKey, file.name] as const]
+        : []
+    })
+    if (uploadedNames.length > 0)
+      setNames((current) => ({
+        ...current,
+        ...Object.fromEntries(uploadedNames),
+      }))
     if (uploaded.length > 0) onChange([...items, ...uploaded])
     const errors = results.flatMap((result, index) => {
       const file = selected[index]
@@ -1110,38 +1449,69 @@ export function MediaPicker({
     }
   }
   return (
-    <fieldset>
-      <legend>Фото</legend>
+    <fieldset className="border-app-line rounded-panel bg-app-raised grid min-w-0 gap-3 border p-4">
+      <legend className="px-1 text-base font-semibold text-white">Фото</legend>
+      <p className="text-app-dim text-[12.5px]">
+        Можна вибрати кілька файлів одразу або зняти на камеру.
+      </p>
       <input
         accept="image/*"
         aria-label="Додати фото"
         capture="environment"
+        className="bg-app-input text-app-muted border-app-line-2 rounded-control file:bg-app-raised file:text-app-ink file:rounded-control min-h-11 w-full cursor-pointer border px-3 py-2 text-sm file:mr-3 file:min-h-8 file:cursor-pointer file:border-0 file:px-3 file:text-[13px] disabled:cursor-not-allowed disabled:opacity-55"
         disabled={busy}
         multiple
         onChange={(event) => void upload(event.target.files)}
         type="file"
       />
       {problems.length > 0 ? (
-        <ul role="alert">
-          {problems.map((problem) => (
-            <li key={problem}>{problem}</li>
+        <div
+          className="border-state-danger/30 bg-state-danger-soft rounded-control border px-3.5 py-2.5"
+          role="alert"
+        >
+          <p className="text-state-danger text-[13.5px] font-medium">
+            Ці файли не завантажилися. Виберіть інші або спробуйте ще раз.
+          </p>
+          <ul className="text-app-ink mt-1.5 grid gap-1 text-[13px]">
+            {problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {items.length > 0 ? (
+        <ul className="grid gap-2">
+          {items.map((item) => (
+            <li
+              className="border-app-line rounded-control flex flex-wrap items-center gap-3 border p-2"
+              key={item.storageKey}
+            >
+              <img
+                alt="Попередній перегляд фото"
+                className="rounded-control size-12 shrink-0 object-cover"
+                src={item.url}
+              />
+              <span className="text-app-ink min-w-0 flex-1 truncate text-[13.5px]">
+                {names[item.storageKey] ??
+                  item.storageKey.split('/').pop() ??
+                  'Фото'}
+              </span>
+              <Button disabled={busy} onClick={() => void remove(item)}>
+                <Trash2 aria-hidden />
+                Прибрати фото
+              </Button>
+            </li>
           ))}
         </ul>
-      ) : null}
-      <ul>
-        {items.map((item) => (
-          <li key={item.storageKey}>
-            <img alt="Попередній перегляд фото" src={item.url} />
-            <button
-              disabled={busy}
-              onClick={() => void remove(item)}
-              type="button"
-            >
-              Прибрати фото
-            </button>
-          </li>
-        ))}
-      </ul>
+      ) : (
+        <p className="text-app-dim text-[12.5px]">
+          <ImagePlus
+            aria-hidden
+            className="mr-1.5 inline size-4 align-text-bottom"
+          />
+          Файлів ще не вибрано.
+        </p>
+      )}
     </fieldset>
   )
 }

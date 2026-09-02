@@ -455,7 +455,7 @@ it('allows no-photo part creation without parts.manage and exposes upload only w
     await screen.findByRole('heading', { name: 'Нова запчастина' }),
   ).toBeVisible()
   expect(screen.queryByLabelText('Додати фото')).not.toBeInTheDocument()
-  await user.type(screen.getByLabelText('Назва'), 'Бампер')
+  await user.type(screen.getByRole('textbox', { name: 'Назва' }), 'Бампер')
   await user.click(screen.getByRole('button', { name: 'Додати запчастину' }))
   expect(intakesApi.addPart).toHaveBeenCalledWith(
     'intake-1',
@@ -543,7 +543,7 @@ it('locks add-part submit, prevents duplicates, normalizes conflict, and retains
     </MemoryRouter>,
   )
 
-  await user.type(screen.getByLabelText('Назва'), 'Бампер')
+  await user.type(screen.getByRole('textbox', { name: 'Назва' }), 'Бампер')
   const save = screen.getByRole('button', { name: 'Додати запчастину' })
   await user.click(save)
   expect(save).toBeDisabled()
@@ -555,7 +555,7 @@ it('locks add-part submit, prevents duplicates, normalizes conflict, and retains
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'QR-код уже використано.',
   )
-  expect(screen.getByLabelText('Назва')).toHaveValue('Бампер')
+  expect(screen.getByRole('textbox', { name: 'Назва' })).toHaveValue('Бампер')
 })
 
 it('locks intake create submission and prevents duplicate POSTs', async () => {

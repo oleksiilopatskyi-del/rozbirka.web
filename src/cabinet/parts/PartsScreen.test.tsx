@@ -1264,3 +1264,109 @@ it('ignores an aborted stale detail failure after navigation', async () => {
   expect(screen.queryByText('Не вдалося завантажити деталь.')).toBeNull()
   expect(screen.getByRole('heading', { name: 'Mirror' })).toBeInTheDocument()
 })
+
+it('blocks an invalid create and points at the offending fields', async () => {
+  render(
+    <MemoryRouter initialEntries={['/app/yard/parts/new']}>
+      <Routes>
+        <Route
+          path="/app/:tenant/parts/new"
+          element={<PartsScreen definition={partsDefinition as never} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+  fireEvent.change(screen.getByLabelText('Кількість'), {
+    target: { value: '0' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Створити деталь' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'виправте позначені нижче поля',
+  )
+  expect(partMocks.create).not.toHaveBeenCalled()
+  for (const [label, message] of [
+    ['Назва', 'Введіть назву деталі'],
+    ['Кількість', 'Вкажіть ціле число від 1'],
+  ] as const) {
+    const control = screen.getByLabelText(label)
+    expect(control).toHaveAttribute('aria-invalid', 'true')
+    expect(
+      document.getElementById(control.getAttribute('aria-describedby') ?? ''),
+    ).toHaveTextContent(message)
+  }
+
+  fireEvent.change(screen.getByLabelText('Назва'), {
+    target: { value: 'Bumper' },
+  })
+  fireEvent.change(screen.getByLabelText('Кількість'), {
+    target: { value: '2' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Створити деталь' }))
+
+  expect(await screen.findByText('Деталь створено.')).toBeInTheDocument()
+  expect(screen.getByLabelText('Назва')).not.toHaveAttribute('aria-invalid')
+})
+
+it('requires a source selection before creating a car-sourced part', async () => {
+  render(
+    <MemoryRouter initialEntries={['/app/yard/parts/new']}>
+      <Routes>
+        <Route
+          path="/app/:tenant/parts/new"
+          element={<PartsScreen definition={partsDefinition as never} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+  fireEvent.change(screen.getByLabelText('Назва'), {
+    target: { value: 'Bumper' },
+  })
+  fireEvent.change(screen.getByLabelText('Тип джерела'), {
+    target: { value: 'car' },
+  })
+  const source = await screen.findByLabelText('Автомобіль-джерело')
+  fireEvent.click(screen.getByRole('button', { name: 'Створити деталь' }))
+
+  await vi.waitFor(() => expect(source).toHaveAttribute('aria-invalid', 'true'))
+  expect(
+    document.getElementById(source.getAttribute('aria-describedby') ?? ''),
+  ).toHaveTextContent('Оберіть автомобіль зі списку.')
+  expect(partMocks.create).not.toHaveBeenCalled()
+})
+
+it('lists each chosen photo with its size and a way to drop it', async () => {
+  mediaMocks.upload.mockResolvedValue({
+    storageKey: 'pending/parts/bumper.jpg',
+    url: 'https://cdn.example/bumper.jpg',
+  })
+  render(
+    <MemoryRouter initialEntries={['/app/yard/parts/new']}>
+      <Routes>
+        <Route
+          path="/app/:tenant/parts/new"
+          element={<PartsScreen definition={partsDefinition as never} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+  fireEvent.change(screen.getByLabelText('Фото деталі'), {
+    target: {
+      files: [new File(['one'], 'bumper.jpg', { type: 'image/jpeg' })],
+    },
+  })
+
+  const photos = await screen.findByRole('list', { name: 'Вибрані фото' })
+  expect(
+    await screen.findByText('bumper.jpg · Завантажено'),
+  ).toBeInTheDocument()
+  expect(screen.getByText('3 Б')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'bumper.jpg' })).toHaveAttribute(
+    'href',
+    'https://cdn.example/bumper.jpg',
+  )
+  expect(
+    screen.getByRole('button', { name: 'Прибрати bumper.jpg' }),
+  ).toBeInTheDocument()
+  expect(photos).toBeInTheDocument()
+})

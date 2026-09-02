@@ -6,9 +6,11 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router'
-import { Plus } from 'lucide-react'
+import { ExternalLink, Plus } from 'lucide-react'
 import {
   ActiveFilters,
+  FileField,
+  SectionPanel,
   Button,
   ConfirmDialog,
   DataTable,
@@ -23,6 +25,7 @@ import {
   SelectInput,
   StatStrip,
   StatusPill,
+  TextArea,
   TextInput,
   Toolbar,
   type StatusTone,
@@ -965,6 +968,16 @@ const safeMediaUrl = (value: string | undefined) => {
   }
 }
 
+const fileSizeLabel = (size: number) => {
+  if (size < 1024) return `${String(size)} Б`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} КБ`
+  return `${(size / (1024 * 1024)).toFixed(1)} МБ`
+}
+
+const mediaMetaLabel = (item: PartMediaItem) =>
+  item.file ? fileSizeLabel(item.file.size) : 'Збережене фото'
+
+/** Section of a form: one heading, one purpose, one surface. */
 function PartMediaFields({
   items,
   requireLatestMutation,
@@ -1042,65 +1055,131 @@ function PartMediaFields({
     if (item.status === 'removing') return 'Видалення…'
     return 'Помилка видалення'
   }
+  const failed = items.some(
+    (item) => item.status === 'upload-error' || item.status === 'remove-error',
+  )
   return (
-    <fieldset className="grid gap-2">
-      <legend className="text-sm text-neutral-300">Фото деталі</legend>
-      <input
-        accept="image/*"
-        aria-label="Фото деталі"
-        multiple
-        onChange={(event) => {
-          addFiles(event.currentTarget.files)
-          event.currentTarget.value = ''
-        }}
-        type="file"
-      />
+    <SectionPanel
+      description="Фото завантажуються одразу після вибору. Деталь можна зберегти, коли всі файли завантажені."
+      title="Фото"
+    >
+      <Field
+        hint="Формати зображень, кілька файлів за раз."
+        label="Фото деталі"
+      >
+        <FileField
+          accept="image/*"
+          aria-label="Фото деталі"
+          multiple
+          onChange={(event) => {
+            addFiles(event.currentTarget.files)
+            event.currentTarget.value = ''
+          }}
+        />
+      </Field>
+      {failed ? (
+        <Notice role="status" tone="warn">
+          Частина фото не завантажилася. Повторіть завантаження або приберіть ці
+          файли, щоб зберегти деталь.
+        </Notice>
+      ) : null}
       {items.length ? (
-        <ul className="grid gap-2">
+        <ul aria-label="Вибрані фото" className="grid gap-2">
           {items.map((item) => {
             const url = safeMediaUrl(item.url)
             return (
-              <li key={item.id}>
-                <span>
-                  {item.name} · {statusLabel(item)}
-                </span>{' '}
-                {url ? <a href={url}>{item.name}</a> : null}{' '}
-                {item.status === 'upload-error' ? (
-                  <button
-                    aria-label={`Повторити ${item.name}`}
-                    onClick={() => void upload(item)}
-                    type="button"
-                  >
-                    Повторити
-                  </button>
-                ) : null}{' '}
-                {item.status === 'remove-error' ? (
-                  <button
-                    aria-label={`Повторити видалення ${item.name}`}
-                    onClick={() => void remove(item)}
-                    type="button"
-                  >
-                    Повторити видалення
-                  </button>
-                ) : null}{' '}
-                {item.status !== 'uploading' && item.status !== 'removing' ? (
-                  <button
-                    aria-label={`Прибрати ${item.name}`}
-                    onClick={() => void remove(item)}
-                    type="button"
-                  >
-                    Прибрати
-                  </button>
-                ) : null}
+              <li
+                className="border-app-line rounded-control flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border px-3 py-2"
+                key={item.id}
+              >
+                <div className="min-w-0 flex-1 basis-40">
+                  <p className="text-app-ink text-[13.5px] break-words">
+                    {item.name} · {statusLabel(item)}
+                  </p>
+                  <p className="text-app-dim text-[11.5px]">
+                    {mediaMetaLabel(item)}
+                  </p>
+                </div>
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  {url ? (
+                    <Button asChild variant="quiet">
+                      <a className="min-w-0 max-w-full shrink" href={url}>
+                        <ExternalLink aria-hidden />
+                        <span className="truncate">{item.name}</span>
+                      </a>
+                    </Button>
+                  ) : null}
+                  {item.status === 'upload-error' ? (
+                    <Button
+                      aria-label={`Повторити ${item.name}`}
+                      onClick={() => void upload(item)}
+                    >
+                      Повторити
+                    </Button>
+                  ) : null}
+                  {item.status === 'remove-error' ? (
+                    <Button
+                      aria-label={`Повторити видалення ${item.name}`}
+                      onClick={() => void remove(item)}
+                    >
+                      Повторити видалення
+                    </Button>
+                  ) : null}
+                  {item.status !== 'uploading' && item.status !== 'removing' ? (
+                    <Button
+                      aria-label={`Прибрати ${item.name}`}
+                      onClick={() => void remove(item)}
+                      variant="danger"
+                    >
+                      Прибрати
+                    </Button>
+                  ) : null}
+                </div>
               </li>
             )
           })}
         </ul>
       ) : (
-        <p className="text-sm text-neutral-400">Фото не вибрано.</p>
+        <p className="text-app-dim text-[12.5px]">
+          Фото ще не вибрано. Додайте знімки — покупці бачать їх у картці
+          деталі.
+        </p>
       )}
-    </fieldset>
+    </SectionPanel>
   )
+}
+
+type PartFieldErrors = Partial<
+  Record<
+    'name' | 'quantity' | 'desiredSalePrice' | 'carYear' | 'sourceId',
+    string
+  >
+>
+
+function partFieldErrors(
+  values: PartFormValues,
+  { requireSource }: { requireSource: boolean },
+): PartFieldErrors {
+  const errors: PartFieldErrors = {}
+  if (!values.name.trim())
+    errors.name = 'Введіть назву деталі — за нею її знаходять на складі.'
+  const quantity = Number(values.quantity)
+  if (!Number.isInteger(quantity) || quantity <= 0)
+    errors.quantity = 'Вкажіть ціле число від 1, наприклад 3.'
+  const price = optionalNumber(values.desiredSalePrice)
+  if (price !== undefined && (!Number.isFinite(price) || price < 0))
+    errors.desiredSalePrice =
+      'Вкажіть число від 0, наприклад 1250.50, або залиште поле порожнім.'
+  const year = optionalNumber(values.carYear)
+  if (year !== undefined && (!Number.isInteger(year) || year <= 0))
+    errors.carYear =
+      'Вкажіть рік чотирма цифрами, наприклад 2018, або залиште поле порожнім.'
+  if (requireSource && !values.sourceId.trim())
+    errors.sourceId =
+      values.sourceType === 'car'
+        ? 'Оберіть автомобіль зі списку.'
+        : 'Оберіть приймання зі списку.'
+  return errors
 }
 
 function PartFields({
@@ -1109,6 +1188,7 @@ function PartFields({
   sourceOptions,
   canViewCars,
   canViewIntakes,
+  errors,
   edit,
 }: {
   values: PartFormValues
@@ -1116,202 +1196,274 @@ function PartFields({
   sourceOptions: SourceOptions
   canViewCars: boolean
   canViewIntakes: boolean
+  errors: PartFieldErrors
   edit?: boolean
 }) {
   const field =
     (name: keyof PartFormValues) =>
-    (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (
+      event: React.ChangeEvent<
+        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+      >,
+    ) =>
       setValues({ ...values, [name]: event.target.value })
+  const showCompatibility = !edit && values.sourceType === 'free'
   return (
     <>
-      <label className="grid gap-1 text-sm text-neutral-300">
-        Тип джерела
-        <select
-          aria-label="Тип джерела"
-          disabled={edit}
-          onChange={(event) =>
-            setValues({
-              ...values,
-              sourceType: event.target.value,
-              sourceId: '',
-            })
-          }
-          value={values.sourceType}
-        >
-          <option value="free">Вільне</option>
-          {canViewCars || values.sourceType === 'car' ? (
-            <option value="car">Автомобіль</option>
-          ) : null}
-          {canViewIntakes || values.sourceType === 'batch' ? (
-            <option value="batch">Приймання</option>
-          ) : null}
-        </select>
-      </label>
-      {values.sourceType === 'car' && !canViewCars ? (
-        <p role="status">
-          Вибір автомобіля недоступний без права перегляду автомобілів.
-        </p>
-      ) : values.sourceType === 'car' ? (
-        <label className="grid gap-1 text-sm text-neutral-300">
-          Автомобіль-джерело
-          <select
-            aria-label="Автомобіль-джерело"
-            disabled={(edit ?? false) || sourceOptions.carsUnavailable}
-            onChange={field('sourceId')}
-            value={values.sourceId}
+      <SectionPanel
+        description="Звідки походить деталь. Після створення джерело не змінюється."
+        title="Джерело"
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field
+            hint={
+              edit
+                ? 'Тип джерела задається під час створення деталі.'
+                : 'Вільна деталь не прив’язана ні до авто, ні до приймання.'
+            }
+            label="Тип джерела"
           >
-            <option value="">Оберіть автомобіль</option>
-            {sourceOptions.cars.map((car) => (
-              <option key={car.id} value={car.id}>
-                {carLabel(car)}
-              </option>
-            ))}
-            {values.sourceId &&
-            !sourceOptions.cars.some((car) => car.id === values.sourceId) ? (
-              <option value={values.sourceId}>
-                Автомобіль недоступний у поточній вибірці
-              </option>
-            ) : null}
-          </select>
-          {sourceOptions.carsUnavailable ? (
-            <span role="status">
-              Вибір автомобіля недоступний: список не завантажено.
-            </span>
+            <SelectInput
+              aria-label="Тип джерела"
+              disabled={edit}
+              onChange={(event) =>
+                setValues({
+                  ...values,
+                  sourceType: event.target.value,
+                  sourceId: '',
+                })
+              }
+              value={values.sourceType}
+            >
+              <option value="free">Вільне</option>
+              {canViewCars || values.sourceType === 'car' ? (
+                <option value="car">Автомобіль</option>
+              ) : null}
+              {canViewIntakes || values.sourceType === 'batch' ? (
+                <option value="batch">Приймання</option>
+              ) : null}
+            </SelectInput>
+          </Field>
+          {values.sourceType === 'car' && canViewCars ? (
+            <Field
+              error={errors.sourceId}
+              hint={
+                edit
+                  ? 'Автомобіль-джерело змінити не можна.'
+                  : 'Деталь буде прив’язана до цього авто.'
+              }
+              label="Автомобіль-джерело"
+              required={!edit}
+            >
+              <SelectInput
+                aria-label="Автомобіль-джерело"
+                disabled={(edit ?? false) || sourceOptions.carsUnavailable}
+                onChange={field('sourceId')}
+                value={values.sourceId}
+              >
+                <option value="">Оберіть автомобіль</option>
+                {sourceOptions.cars.map((car) => (
+                  <option key={car.id} value={car.id}>
+                    {carLabel(car)}
+                  </option>
+                ))}
+                {values.sourceId &&
+                !sourceOptions.cars.some(
+                  (car) => car.id === values.sourceId,
+                ) ? (
+                  <option value={values.sourceId}>
+                    Автомобіль недоступний у поточній вибірці
+                  </option>
+                ) : null}
+              </SelectInput>
+            </Field>
+          ) : values.sourceType === 'batch' && canViewIntakes ? (
+            <Field
+              error={errors.sourceId}
+              hint={
+                edit
+                  ? 'Приймання-джерело змінити не можна.'
+                  : 'Деталь буде прив’язана до цього приймання.'
+              }
+              label="Приймання-джерело"
+              required={!edit}
+            >
+              <SelectInput
+                aria-label="Приймання-джерело"
+                disabled={(edit ?? false) || sourceOptions.intakesUnavailable}
+                onChange={field('sourceId')}
+                value={values.sourceId}
+              >
+                <option value="">Оберіть приймання</option>
+                {sourceOptions.intakes.map((intake) => (
+                  <option key={intake.id} value={intake.id}>
+                    {intakeLabel(intake)}
+                  </option>
+                ))}
+                {values.sourceId &&
+                !sourceOptions.intakes.some(
+                  (intake) => intake.id === values.sourceId,
+                ) ? (
+                  <option value={values.sourceId}>
+                    Приймання недоступне у поточній вибірці
+                  </option>
+                ) : null}
+              </SelectInput>
+            </Field>
           ) : null}
-        </label>
-      ) : values.sourceType === 'batch' && !canViewIntakes ? (
-        <p role="status">
-          Вибір приймання недоступний без права перегляду приймань.
-        </p>
-      ) : values.sourceType === 'batch' ? (
-        <label className="grid gap-1 text-sm text-neutral-300">
-          Приймання-джерело
-          <select
-            aria-label="Приймання-джерело"
-            disabled={(edit ?? false) || sourceOptions.intakesUnavailable}
-            onChange={field('sourceId')}
-            value={values.sourceId}
+        </div>
+        {values.sourceType === 'car' && !canViewCars ? (
+          <Notice role="status" tone="warn">
+            Вибір автомобіля недоступний без права перегляду автомобілів.
+            Попросіть власника кабінету відкрити доступ до автомобілів або
+            оберіть інший тип джерела.
+          </Notice>
+        ) : null}
+        {values.sourceType === 'batch' && !canViewIntakes ? (
+          <Notice role="status" tone="warn">
+            Вибір приймання недоступний без права перегляду приймань. Попросіть
+            власника кабінету відкрити доступ до приймань або оберіть інший тип
+            джерела.
+          </Notice>
+        ) : null}
+        {values.sourceType === 'car' &&
+        canViewCars &&
+        sourceOptions.carsUnavailable ? (
+          <Notice role="status" tone="warn">
+            Вибір автомобіля недоступний: список не завантажено. Оновіть
+            сторінку, щоб повторити запит.
+          </Notice>
+        ) : null}
+        {values.sourceType === 'batch' &&
+        canViewIntakes &&
+        sourceOptions.intakesUnavailable ? (
+          <Notice role="status" tone="warn">
+            Вибір приймання недоступний: список не завантажено. Оновіть
+            сторінку, щоб повторити запит.
+          </Notice>
+        ) : null}
+      </SectionPanel>
+      <SectionPanel
+        description="Як деталь виглядає у списку складу та в пошуку."
+        title="Опис деталі"
+      >
+        <Field error={errors.name} label="Назва" required>
+          <TextInput
+            aria-label="Назва"
+            onChange={field('name')}
+            value={values.name}
+          />
+        </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field hint="Наприклад: кузов, оптика, двигун" label="Тип деталі">
+            <TextInput
+              aria-label="Тип деталі"
+              onChange={field('partType')}
+              value={values.partType}
+            />
+          </Field>
+          <Field
+            hint={
+              edit
+                ? 'OEM-код не змінюється після створення.'
+                : 'Каталожний номер виробника'
+            }
+            label="OEM-код"
           >
-            <option value="">Оберіть приймання</option>
-            {sourceOptions.intakes.map((intake) => (
-              <option key={intake.id} value={intake.id}>
-                {intakeLabel(intake)}
-              </option>
-            ))}
-            {values.sourceId &&
-            !sourceOptions.intakes.some(
-              (intake) => intake.id === values.sourceId,
-            ) ? (
-              <option value={values.sourceId}>
-                Приймання недоступне у поточній вибірці
-              </option>
-            ) : null}
-          </select>
-          {sourceOptions.intakesUnavailable ? (
-            <span role="status">
-              Вибір приймання недоступний: список не завантажено.
-            </span>
-          ) : null}
-        </label>
-      ) : null}
-      <label className="grid gap-1 text-sm text-neutral-300">
-        Назва
-        <input
-          aria-label="Назва"
-          onChange={field('name')}
-          value={values.name}
-        />
-      </label>
-      <label className="grid gap-1 text-sm text-neutral-300">
-        Кількість
-        <input
-          aria-label="Кількість"
-          min="1"
-          onChange={field('quantity')}
-          type="number"
-          value={values.quantity}
-        />
-      </label>
-      <label className="grid gap-1 text-sm text-neutral-300">
-        Одиниця
-        <input
-          aria-label="Одиниця"
-          onChange={field('unit')}
-          value={values.unit}
-        />
-      </label>
-      <label className="grid gap-1 text-sm text-neutral-300">
-        Стан
-        <input
-          aria-label="Стан"
-          onChange={field('condition')}
-          value={values.condition}
-        />
-      </label>
-      <label className="grid gap-1 text-sm text-neutral-300">
-        Нотатки
-        <input
-          aria-label="Нотатки"
-          onChange={field('notes')}
-          value={values.notes}
-        />
-      </label>
-      <label className="grid gap-1 text-sm text-neutral-300">
-        OEM-код
-        <input
-          aria-label="OEM-код"
-          disabled={edit}
-          onChange={field('oemCode')}
-          value={values.oemCode}
-        />
-      </label>
-      <label className="grid gap-1 text-sm text-neutral-300">
-        Тип деталі
-        <input
-          aria-label="Тип деталі"
-          onChange={field('partType')}
-          value={values.partType}
-        />
-      </label>
-      <label className="grid gap-1 text-sm text-neutral-300">
-        Бажана ціна
-        <input
-          aria-label="Бажана ціна"
-          min="0"
-          onChange={field('desiredSalePrice')}
-          step="0.01"
-          type="number"
-          value={values.desiredSalePrice}
-        />
-      </label>
-      {!edit && values.sourceType === 'free' ? (
-        <>
-          <label className="grid gap-1 text-sm text-neutral-300">
-            Марка сумісності
-            <input
-              aria-label="Марка сумісності"
-              onChange={field('carBrand')}
-              value={values.carBrand}
+            <TextInput
+              aria-label="OEM-код"
+              disabled={edit}
+              onChange={field('oemCode')}
+              value={values.oemCode}
             />
-          </label>
-          <label className="grid gap-1 text-sm text-neutral-300">
-            Модель сумісності
-            <input
-              aria-label="Модель сумісності"
-              onChange={field('carModel')}
-              value={values.carModel}
-            />
-          </label>
-          <label className="grid gap-1 text-sm text-neutral-300">
-            Рік сумісності
-            <input
-              aria-label="Рік сумісності"
-              onChange={field('carYear')}
+          </Field>
+        </div>
+        <Field hint="Наприклад: б/в, після ремонту, нова" label="Стан">
+          <TextInput
+            aria-label="Стан"
+            onChange={field('condition')}
+            value={values.condition}
+          />
+        </Field>
+        <Field hint="Дефекти, комплектність, місце зберігання" label="Нотатки">
+          <TextArea
+            aria-label="Нотатки"
+            onChange={field('notes')}
+            rows={3}
+            value={values.notes}
+          />
+        </Field>
+      </SectionPanel>
+      <SectionPanel
+        description="Скільки одиниць на складі та за скільки їх продавати."
+        title="Кількість і ціна"
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field error={errors.quantity} label="Кількість" required>
+            <TextInput
+              aria-label="Кількість"
+              inputMode="numeric"
+              min="1"
+              onChange={field('quantity')}
               type="number"
-              value={values.carYear}
+              value={values.quantity}
             />
-          </label>
-        </>
+          </Field>
+          <Field hint="Наприклад: шт, компл" label="Одиниця">
+            <TextInput
+              aria-label="Одиниця"
+              onChange={field('unit')}
+              value={values.unit}
+            />
+          </Field>
+          <Field
+            error={errors.desiredSalePrice}
+            hint="У гривнях, можна залишити порожнім"
+            label="Бажана ціна"
+          >
+            <TextInput
+              aria-label="Бажана ціна"
+              inputMode="decimal"
+              min="0"
+              onChange={field('desiredSalePrice')}
+              step="0.01"
+              type="number"
+              value={values.desiredSalePrice}
+            />
+          </Field>
+        </div>
+      </SectionPanel>
+      {showCompatibility ? (
+        <SectionPanel
+          description="До якого авто підходить деталь. Задається лише під час створення."
+          title="Сумісність"
+        >
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Марка сумісності">
+              <TextInput
+                aria-label="Марка сумісності"
+                onChange={field('carBrand')}
+                value={values.carBrand}
+              />
+            </Field>
+            <Field label="Модель сумісності">
+              <TextInput
+                aria-label="Модель сумісності"
+                onChange={field('carModel')}
+                value={values.carModel}
+              />
+            </Field>
+            <Field error={errors.carYear} label="Рік сумісності">
+              <TextInput
+                aria-label="Рік сумісності"
+                inputMode="numeric"
+                onChange={field('carYear')}
+                type="number"
+                value={values.carYear}
+              />
+            </Field>
+          </div>
+        </SectionPanel>
       ) : null}
     </>
   )
@@ -1358,19 +1510,21 @@ function PartForm({
   const [pending, setPending] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showErrors, setShowErrors] = useState(false)
   const mediaPending = mediaItems.some((item) => item.status !== 'uploaded')
+  const requireSource = values.sourceType !== 'free'
+  const errors = showErrors ? partFieldErrors(values, { requireSource }) : {}
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (pendingRef.current || mediaPending) return
     const parsed = validFormNumbers(values)
-    if (
-      !values.name.trim() ||
-      !parsed.valid ||
-      (values.sourceType !== 'free' && !values.sourceId.trim())
-    ) {
-      setError('Перевірте обов’язкові поля та числові значення.')
+    if (Object.keys(partFieldErrors(values, { requireSource })).length > 0) {
+      setShowErrors(true)
+      setStatus(null)
+      setError('Деталь не створено: виправте позначені нижче поля.')
       return
     }
+    setShowErrors(false)
     const unit = optional(values.unit)
     const condition = optional(values.condition)
     const notes = optional(values.notes)
@@ -1416,7 +1570,9 @@ function PartForm({
       await partsApi.create(request, { signal: scope.signal })
       setStatus('Деталь створено.')
     } catch {
-      setError('Не вдалося створити деталь.')
+      setError(
+        'Не вдалося створити деталь. Перевірте зв’язок і надішліть форму ще раз.',
+      )
     } finally {
       pendingRef.current = false
       setPending(false)
@@ -1425,10 +1581,15 @@ function PartForm({
   return (
     <PageBody width="narrow">
       <PageHeader eyebrow="Склад · Деталі" title={title} />
-      <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
+      <form
+        className="grid gap-4"
+        noValidate
+        onSubmit={(event) => void submit(event)}
+      >
         <PartFields
           canViewCars={canViewCars}
           canViewIntakes={canViewIntakes}
+          errors={errors}
           setValues={setValues}
           sourceOptions={sourceOptions}
           values={values}
@@ -1438,7 +1599,17 @@ function PartForm({
           requireLatestMutation={requireLatestMutation}
           setItems={setMediaItems}
         />
-        <div className="border-app-line rounded-panel bg-app-raised flex flex-wrap justify-end gap-2 border p-3">
+        {status ? <Notice tone="ok">{status}</Notice> : null}
+        {error ? <Notice tone="danger">{error}</Notice> : null}
+        <div className="border-app-line rounded-panel bg-app-raised flex flex-wrap items-center justify-end gap-2 border p-3">
+          {mediaPending ? (
+            <p className="text-app-dim mr-auto text-[12.5px]">
+              Дочекайтеся, доки завантажаться всі фото.
+            </p>
+          ) : null}
+          <Button asChild>
+            <Link to="..">Скасувати</Link>
+          </Button>
           <Button
             aria-busy={pending || mediaPending}
             disabled={pending || mediaPending}
@@ -1449,15 +1620,13 @@ function PartForm({
           </Button>
         </div>
       </form>
-      {status ? <Notice tone="ok">{status}</Notice> : null}
-      {error ? <Notice tone="danger">{error}</Notice> : null}
-      <p className="text-app-dim text-[12.5px]">
-        VIN та OEM-декодування недоступні: сервер не визначає операцію
-        декодування.
-      </p>
-      <p className="text-app-dim text-[12.5px]">
-        Сумісність недоступна для редагування
-      </p>
+      <div className="text-app-dim grid gap-1 text-[12.5px]">
+        <p>
+          VIN та OEM-декодування недоступні: сервер не визначає операцію
+          декодування.
+        </p>
+        <p>Сумісність недоступна для редагування</p>
+      </div>
     </PageBody>
   )
 }
@@ -1485,13 +1654,20 @@ function PartEdit({
   const [pending, setPending] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showErrors, setShowErrors] = useState(false)
   const mediaPending = mediaItems.some((item) => item.status !== 'uploaded')
+  const errors =
+    showErrors && values
+      ? partFieldErrors(values, { requireSource: false })
+      : {}
   useEffect(() => {
     const controller = new AbortController()
     void partsApi.get(partId, { signal: controller.signal }).then(
       (part) => {
         if (!part) {
-          setError('Не вдалося завантажити деталь для редагування.')
+          setError(
+            'Не вдалося завантажити деталь для редагування. Оновіть сторінку або поверніться до списку.',
+          )
           return
         }
         setValues({
@@ -1524,7 +1700,9 @@ function PartEdit({
       },
       () => {
         if (!controller.signal.aborted)
-          setError('Не вдалося завантажити деталь для редагування.')
+          setError(
+            'Не вдалося завантажити деталь для редагування. Оновіть сторінку або поверніться до списку.',
+          )
       },
     )
     return () => controller.abort()
@@ -1533,10 +1711,15 @@ function PartEdit({
     event.preventDefault()
     if (!values || pendingRef.current || mediaPending) return
     const parsed = validFormNumbers(values)
-    if (!values.name.trim() || !parsed.valid) {
-      setError('Перевірте обов’язкові поля та числові значення.')
+    if (
+      Object.keys(partFieldErrors(values, { requireSource: false })).length > 0
+    ) {
+      setShowErrors(true)
+      setStatus(null)
+      setError('Зміни не збережено: виправте позначені нижче поля.')
       return
     }
+    setShowErrors(false)
     pendingRef.current = true
     setPending(true)
     setStatus(null)
@@ -1562,7 +1745,9 @@ function PartEdit({
       )
       setStatus('Зміни збережено.')
     } catch {
-      setError('Не вдалося зберегти зміни.')
+      setError(
+        'Не вдалося зберегти зміни. Перевірте зв’язок і надішліть форму ще раз.',
+      )
     } finally {
       pendingRef.current = false
       setPending(false)
@@ -1572,11 +1757,16 @@ function PartEdit({
     <PageBody width="narrow">
       <PageHeader eyebrow="Склад · Деталі" title="Редагувати деталь" />
       {values ? (
-        <form className="grid gap-4" onSubmit={(event) => void save(event)}>
+        <form
+          className="grid gap-4"
+          noValidate
+          onSubmit={(event) => void save(event)}
+        >
           <PartFields
             canViewCars={canViewCars}
             canViewIntakes={canViewIntakes}
             edit
+            errors={errors}
             setValues={setValues}
             sourceOptions={sourceOptions}
             values={values}
@@ -1586,7 +1776,17 @@ function PartEdit({
             requireLatestMutation={requireLatestMutation}
             setItems={setMediaItems}
           />
-          <div className="border-app-line rounded-panel bg-app-raised flex flex-wrap justify-end gap-2 border p-3">
+          {status ? <Notice tone="ok">{status}</Notice> : null}
+          {error ? <Notice tone="danger">{error}</Notice> : null}
+          <div className="border-app-line rounded-panel bg-app-raised flex flex-wrap items-center justify-end gap-2 border p-3">
+            {mediaPending ? (
+              <p className="text-app-dim mr-auto text-[12.5px]">
+                Дочекайтеся, доки завантажаться всі фото.
+              </p>
+            ) : null}
+            <Button asChild>
+              <Link to="..">Скасувати</Link>
+            </Button>
             <Button
               aria-busy={pending || mediaPending}
               disabled={pending || mediaPending}
@@ -1598,18 +1798,15 @@ function PartEdit({
           </div>
         </form>
       ) : !error ? (
-        <p className="text-app-dim text-sm" role="status">
+        <Notice role="status" tone="info">
           Завантажуємо дані деталі…
-        </p>
+        </Notice>
       ) : null}
-      {status ? <Notice tone="ok">{status}</Notice> : null}
-      {error ? <Notice tone="danger">{error}</Notice> : null}
-      <p className="text-app-dim text-[12.5px]">
-        Сумісність недоступна для редагування
-      </p>
-      <p className="text-app-dim text-[12.5px]">
-        Видалення деталі перевіряється сервером.
-      </p>
+      {values ? null : error ? <Notice tone="danger">{error}</Notice> : null}
+      <div className="text-app-dim grid gap-1 text-[12.5px]">
+        <p>Сумісність недоступна для редагування</p>
+        <p>Видалення деталі перевіряється сервером.</p>
+      </div>
     </PageBody>
   )
 }

@@ -9,6 +9,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { Copy, MessageSquare, Phone, Plus } from 'lucide-react'
 import {
   Button,
+  Fact,
   DataTable,
   DeniedState,
   EmptyState,
@@ -331,22 +332,15 @@ function CustomerDetailScreen({
         title={customer.name}
       />
       <dl className="grid gap-3 sm:grid-cols-3">
-        <Metric
-          label="Замовлень"
-          value={
-            customer.ordersCount === null ? '—' : String(customer.ordersCount)
-          }
-        />
+        <Fact label="Замовлень">
+          {customer.ordersCount === null ? '—' : String(customer.ordersCount)}
+        </Fact>
         {financeViewAllowed && (
           <>
-            <Metric
-              label="Витрачено"
-              value={String(customer.totalAmount ?? '—')}
-            />
-            <Metric
-              label="Середній чек"
-              value={String(customer.averageAmount ?? '—')}
-            />
+            <Fact label="Витрачено">{String(customer.totalAmount ?? '—')}</Fact>
+            <Fact label="Середній чек">
+              {String(customer.averageAmount ?? '—')}
+            </Fact>
           </>
         )}
       </dl>
@@ -632,13 +626,5 @@ function CustomerForm({
         </button>
       </form>
     </section>
-  )
-}
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt>{label}</dt>
-      <dd className="text-2xl text-white">{value}</dd>
-    </div>
   )
 }

@@ -10,9 +10,23 @@ import { useFieldControl } from './field-context'
 const controlBase =
   'bg-app-input text-app-ink placeholder:text-app-dim border-app-line-2 rounded-control min-h-11 w-full border px-3 text-sm outline-none transition-colors hover:border-white/20 focus-visible:border-brand disabled:cursor-not-allowed disabled:opacity-55 aria-[invalid=true]:border-state-danger'
 
-export function TextInput({ className, ...props }: ComponentProps<'input'>) {
+export function TextInput({
+  className,
+  numeric = false,
+  ...props
+}: ComponentProps<'input'> & { numeric?: boolean }) {
   const field = useFieldControl()
-  return <input {...field} {...props} className={cn(controlBase, className)} />
+  return (
+    <input
+      {...field}
+      {...props}
+      className={cn(
+        controlBase,
+        numeric && 'text-right tabular-nums',
+        className,
+      )}
+    />
+  )
 }
 
 export function TextArea({ className, ...props }: ComponentProps<'textarea'>) {

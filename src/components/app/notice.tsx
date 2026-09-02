@@ -28,12 +28,15 @@ export function Notice({
   children,
   role = tone === 'danger' ? 'alert' : 'status',
   action,
+  block = false,
   className,
 }: {
   tone?: NoticeTone
   children: ReactNode
   role?: 'status' | 'alert'
   action?: ReactNode
+  /** Render the body as a block, so it can host a list or several paragraphs. */
+  block?: boolean
   className?: string
 }) {
   const Icon = toneIcon[tone]
@@ -41,14 +44,18 @@ export function Notice({
   return (
     <div
       className={cn(
-        'rounded-control flex items-start gap-2.5 border px-3.5 py-2.5 text-[13.5px]',
+        'rounded-control flex flex-wrap items-start gap-2.5 border px-3.5 py-2.5 text-[13.5px]',
         toneClass[tone],
         className,
       )}
       role={role}
     >
       <Icon aria-hidden className="mt-0.5 size-4 shrink-0" />
-      <span className="text-app-ink min-w-0 flex-1">{children}</span>
+      {block ? (
+        <div className="text-app-ink min-w-0 flex-1">{children}</div>
+      ) : (
+        <span className="text-app-ink min-w-0 flex-1">{children}</span>
+      )}
       {action}
     </div>
   )
