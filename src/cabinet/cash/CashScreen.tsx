@@ -7,6 +7,16 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
+import { Plus } from 'lucide-react'
+import {
+  Button,
+  DataTable,
+  EmptyState,
+  Notice,
+  PageBody,
+  PageHeader,
+  Panel,
+} from '@/components/app'
 import { normalizeApiProblem } from '@/api/errors'
 import {
   cashApi,
@@ -190,45 +200,68 @@ function CashOverview({ definition }: CabinetModuleScreenProps) {
     return () => controller.abort()
   }, [date, timeZone])
   return (
-    <section className="grid gap-6">
-      <header className="flex justify-between">
-        <div>
-          <p className="text-xs text-neutral-500">
-            Фінанси · {date} · {timeZone}
-          </p>
-          <h1 className="text-3xl text-white">Каси</h1>
-        </div>
-        {mutationsAllowed && <Link to="new">Нова каса</Link>}
-      </header>
-      {error && <p role="alert">{error}</p>}
-      <section className="grid gap-4">
+    <PageBody>
+      <PageHeader
+        actions={
+          mutationsAllowed ? (
+            <Button asChild variant="primary">
+              <Link to="new">
+                <Plus aria-hidden />
+                Нова каса
+              </Link>
+            </Button>
+          ) : undefined
+        }
+        eyebrow={`Фінанси · ${date} · ${timeZone}`}
+        title="Каси"
+      />
+      {error && <Notice tone="danger">{error}</Notice>}
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {summary?.registers.map((register) => (
-          <article key={register.id}>
-            <h2>{register.name}</h2>
-            <ul>
+          <Panel key={register.id}>
+            <h2 className="text-app-ink text-sm font-semibold">
+              {register.name}
+            </h2>
+            <ul className="mt-2 grid gap-2">
               {register.currencies.map((currency) => (
-                <li key={currency.currency}>
-                  <strong>
+                <li className="grid gap-0.5" key={currency.currency}>
+                  <strong className="text-lg font-light tabular-nums text-white">
                     {currency.balance} {currency.currency}
                   </strong>
-                  <span>
+                  <span className="text-app-dim font-mono text-[11.5px]">
                     {' '}
                     {currency.income} / {currency.expense}
                   </span>
                 </li>
               ))}
             </ul>
-          </article>
+          </Panel>
         ))}
       </section>
-      <ul>
-        {registers.map((register) => (
-          <li key={register.id}>
-            <Link to={register.id}>{register.name}</Link>
-          </li>
-        ))}
-      </ul>
-    </section>
+      <DataTable
+        caption="Список кас"
+        columns={[
+          {
+            key: 'name',
+            label: 'Каса',
+            variant: 'primary',
+            cell: (register) => (
+              <Link className="hover:text-brand block" to={register.id}>
+                {register.name}
+              </Link>
+            ),
+          },
+        ]}
+        empty={
+          <EmptyState
+            description="Створіть першу касу, щоб фіксувати надходження та витрати."
+            title="Кас поки немає"
+          />
+        }
+        rowKey={(register) => register.id}
+        rows={registers}
+      />
+    </PageBody>
   )
 }
 

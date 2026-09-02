@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Button, Notice, PageBody, PageHeader, Panel } from '@/components/app'
 import { useAuth } from '@/auth/AuthContext'
 import { credentials } from '@/api/credentials'
 import { profileApi } from '@/api/profile'
@@ -130,26 +131,22 @@ export function ProfileScreen() {
     : 'Не вказано'
 
   return (
-    <section className="mx-auto grid w-full max-w-3xl gap-8">
-      <header className="grid gap-2">
-        <p className="text-brand text-xs font-medium tracking-[0.18em] uppercase">
-          Налаштування
-        </p>
-        <h1 className="text-3xl font-light tracking-tight text-white sm:text-4xl">
-          Профіль
-        </h1>
-        <p className="text-sm text-neutral-400">
-          Основна інформація вашого облікового запису.
-        </p>
-      </header>
+    <PageBody className="gap-6" width="narrow">
+      <PageHeader eyebrow="Налаштування" title="Профіль" />
+      <p className="text-app-muted text-sm">
+        Основна інформація вашого облікового запису.
+      </p>
 
-      <div className="bg-surface-1 grid min-w-0 gap-8 rounded-3xl border border-white/[0.06] p-5 sm:p-6">
+      <Panel className="grid min-w-0 gap-8 p-5 sm:p-6" padded={false}>
         <form
           onSubmit={(event) => void handleSubmit(event)}
           className="grid gap-4"
         >
           <div className="grid gap-2">
-            <label htmlFor="profile-name" className="text-xs text-neutral-400">
+            <label
+              htmlFor="profile-name"
+              className="text-app-muted text-[12.5px]"
+            >
               Ім’я
             </label>
             <input
@@ -158,31 +155,30 @@ export function ProfileScreen() {
               disabled={busy}
               onChange={(event) => handleNameChange(event.target.value)}
               autoComplete="name"
-              className="bg-background focus:ring-brand h-14 w-full rounded-2xl px-5 text-base text-white ring-1 ring-white/10 transition-all outline-none focus:ring-2 disabled:opacity-60"
+              className="bg-app-input border-app-line-2 rounded-control text-app-ink focus-visible:border-brand min-h-11 w-full border px-3 text-sm outline-none transition-colors disabled:opacity-55"
             />
           </div>
 
           {saveState === 'success' && (
-            <p role="status" className="text-sm text-neutral-400">
-              Ім’я успішно оновлено.
-            </p>
+            <Notice tone="ok">Ім’я успішно оновлено.</Notice>
           )}
           {saveState === 'error' && (
-            <p role="alert" className="text-sm text-red-400">
+            <Notice tone="danger">
               Не вдалося зберегти ім’я. Спробуйте ще раз.
-            </p>
+            </Notice>
           )}
 
-          <button
-            type="submit"
+          <Button
+            className="w-full sm:w-fit"
             disabled={!canSave}
-            className="bg-brand hover:bg-brand-hover text-brand-foreground inline-flex min-h-11 min-w-11 w-full items-center justify-center rounded-full px-6 text-sm transition-colors disabled:opacity-50 sm:w-fit"
+            type="submit"
+            variant="primary"
           >
             {busy ? 'Зберігаємо…' : 'Зберегти'}
-          </button>
+          </Button>
         </form>
 
-        <dl className="grid gap-5 border-t border-white/[0.06] pt-6 sm:grid-cols-3">
+        <dl className="border-app-line grid gap-5 border-t pt-6 sm:grid-cols-3">
           <ProfileValue
             label="Телефон"
             value={auth.user?.phone ?? 'Не вказано'}
@@ -196,69 +192,63 @@ export function ProfileScreen() {
 
         <section className="grid gap-3 border-t border-red-500/20 pt-6">
           <div className="grid gap-1">
-            <h2 className="text-base text-white">Видалити акаунт</h2>
-            <p className="text-sm text-neutral-400">
+            <h2 className="text-base font-semibold text-white">
+              Видалити акаунт
+            </h2>
+            <p className="text-app-muted text-sm">
               Цю дію неможливо скасувати. Ви втратите доступ до всіх розбірок.
             </p>
           </div>
           {deleteState === 'error' && (
-            <p role="alert" className="text-sm text-red-400">
+            <Notice tone="danger">
               Не вдалося видалити акаунт. Спробуйте ще раз.
-            </p>
+            </Notice>
           )}
           {deleteState === 'confirming' || deleteState === 'pending' ? (
             <div
               role="group"
               aria-labelledby="delete-account-title"
               aria-live="polite"
-              className="grid gap-3 rounded-2xl border border-red-500/30 p-4"
+              className="border-state-danger/30 rounded-panel grid gap-3 border p-4"
             >
               <p id="delete-account-title" className="text-sm text-white">
                 Підтвердіть видалення акаунта. Ця дія незворотна.
               </p>
               {deleteState === 'pending' ? (
-                <p role="status" className="text-sm text-neutral-300">
+                <p role="status" className="text-app-muted text-sm">
                   Видалення розпочато. Локальний вихід буде виконано для
                   безпеки.
                 </p>
               ) : (
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setDeleteState('idle')}
-                    className="inline-flex min-h-11 items-center justify-center rounded-full px-5 text-sm text-white ring-1 ring-white/15"
-                  >
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => setDeleteState('idle')}>
                     Скасувати
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleDelete()}
-                    className="inline-flex min-h-11 items-center justify-center rounded-full bg-red-500 px-5 text-sm text-white"
-                  >
+                  </Button>
+                  <Button onClick={() => void handleDelete()} variant="danger">
                     Так, видалити акаунт
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
           ) : (
-            <button
-              type="button"
+            <Button
+              className="w-fit"
               onClick={() => setDeleteState('confirming')}
-              className="inline-flex min-h-11 w-fit items-center justify-center rounded-full px-5 text-sm text-red-300 ring-1 ring-red-500/30 disabled:opacity-50"
+              variant="danger"
             >
               Видалити акаунт
-            </button>
+            </Button>
           )}
         </section>
-      </div>
-    </section>
+      </Panel>
+    </PageBody>
   )
 }
 
 function ProfileValue({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid min-w-0 gap-1">
-      <dt className="text-xs text-neutral-400">{label}</dt>
+      <dt className="text-app-dim text-[12.5px]">{label}</dt>
       <dd className="truncate text-sm text-white" title={value}>
         {value}
       </dd>

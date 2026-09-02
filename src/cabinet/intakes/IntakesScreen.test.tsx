@@ -228,7 +228,7 @@ it('uses authoritative server page metadata for pagination controls', async () =
   )
 
   expect(await screen.findByText('Сторінка 4 з 7')).toBeVisible()
-  await user.click(screen.getByRole('button', { name: 'Наступна' }))
+  await user.click(screen.getByRole('button', { name: 'Наступна сторінка' }))
   await waitFor(() =>
     expect(intakesApi.list).toHaveBeenLastCalledWith(
       { search: undefined, status: undefined, page: 5, pageSize: 10 },

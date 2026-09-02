@@ -1,5 +1,21 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
+import { Plus } from 'lucide-react'
+import {
+  Button,
+  DataTable,
+  EmptyState,
+  Field,
+  Notice,
+  PageBody,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  SelectInput,
+  StatusPill,
+  Toolbar,
+  type StatusTone,
+} from '@/components/app'
 import { normalizeApiProblem } from '@/api/errors'
 import {
   customersApi,
@@ -50,6 +66,16 @@ const useOrderIdempotencyKeys = () => {
       keysRef.current.delete(operation)
     },
   }
+}
+
+const orderStatusPresentation = (
+  status: string,
+): { label: string; tone: StatusTone } => {
+  if (status === 'confirmed') return { label: 'Підтверджено', tone: 'ok' }
+  if (status === 'pending') return { label: 'Очікує', tone: 'warn' }
+  if (status === 'cancelled') return { label: 'Скасовано', tone: 'neutral' }
+  if (status === 'refunded') return { label: 'Повернено', tone: 'info' }
+  return { label: status, tone: 'neutral' }
 }
 
 export function OrdersScreen({ definition }: CabinetModuleScreenProps) {
@@ -137,84 +163,105 @@ function OrderDirectory({ definition }: CabinetModuleScreenProps) {
       })
     return () => controller.abort()
   }, [customerId, page, search, status])
+  const setParam = (name: string, value: string) => {
+    const next = new URLSearchParams(params)
+    if (value) next.set(name, value)
+    else next.delete(name)
+    next.set('page', '1')
+    setParams(next)
+  }
+  const goToPage = (nextPage: number) => {
+    const next = new URLSearchParams(params)
+    next.set('page', String(nextPage))
+    setParams(next)
+  }
   return (
-    <section className="grid gap-6">
-      <header className="flex justify-between">
-        <h1 className="text-3xl text-white">Замовлення</h1>
-        {createAllowed && <Link to="new">Нове замовлення</Link>}
-      </header>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label>
-          Пошук замовлень
-          <input
+    <PageBody>
+      <PageHeader
+        actions={
+          createAllowed ? (
+            <Button asChild variant="primary">
+              <Link to="new">
+                <Plus aria-hidden />
+                Нове замовлення
+              </Link>
+            </Button>
+          ) : undefined
+        }
+        eyebrow="Продажі"
+        title="Замовлення"
+      />
+      <Toolbar>
+        <Field className="min-w-52 flex-1" label="Пошук замовлень">
+          <SearchInput
+            onChange={(event) => setParam('q', event.target.value)}
             value={params.get('q') ?? ''}
-            onChange={(event) => {
-              const next = new URLSearchParams(params)
-              if (event.target.value) next.set('q', event.target.value)
-              else next.delete('q')
-              next.set('page', '1')
-              setParams(next)
-            }}
           />
-        </label>
-        <label>
-          Статус замовлення
-          <select
+        </Field>
+        <Field className="min-w-48" label="Статус замовлення">
+          <SelectInput
+            onChange={(event) => setParam('status', event.target.value)}
             value={params.get('status') ?? ''}
-            onChange={(event) => {
-              const next = new URLSearchParams(params)
-              if (event.target.value) next.set('status', event.target.value)
-              else next.delete('status')
-              next.set('page', '1')
-              setParams(next)
-            }}
           >
             <option value="">Усі</option>
             <option value="pending">Очікує</option>
             <option value="confirmed">Підтверджено</option>
             <option value="cancelled">Скасовано</option>
             <option value="refunded">Повернено</option>
-          </select>
-        </label>
-      </div>
-      {error && <p role="alert">{error}</p>}
-      <ul>
-        {orders.map((order) => (
-          <li key={order.id}>
-            <Link to={order.id}>
-              #{order.number} · {order.status} · {order.totalAmount ?? '—'}
-            </Link>
-          </li>
-        ))}
-      </ul>
-      <nav aria-label="Сторінки замовлень" className="flex gap-3">
-        <button
-          type="button"
-          disabled={page <= 1}
-          onClick={() => {
-            const next = new URLSearchParams(params)
-            next.set('page', String(page - 1))
-            setParams(next)
-          }}
-        >
-          Попередня сторінка
-        </button>
-        <span>
-          Сторінка {page} з {Math.max(totalPages, 1)}
-        </span>
-        <button
-          type="button"
-          disabled={totalPages === 0 || page >= totalPages}
-          onClick={() => {
-            const next = new URLSearchParams(params)
-            next.set('page', String(page + 1))
-            setParams(next)
-          }}
-        >
-          Наступна сторінка
-        </button>
-      </nav>
-    </section>
+          </SelectInput>
+        </Field>
+      </Toolbar>
+      {error && <Notice tone="danger">{error}</Notice>}
+      <DataTable
+        caption="Список замовлень"
+        columns={[
+          {
+            key: 'number',
+            label: 'Замовлення',
+            variant: 'primary',
+            cell: (order) => (
+              <Link className="hover:text-brand block" to={order.id}>
+                #{order.number}
+              </Link>
+            ),
+          },
+          {
+            key: 'status',
+            label: 'Статус',
+            cell: (order) => {
+              const presentation = orderStatusPresentation(order.status)
+              return (
+                <StatusPill tone={presentation.tone}>
+                  {presentation.label}
+                </StatusPill>
+              )
+            },
+          },
+          {
+            key: 'total',
+            label: 'Сума',
+            align: 'end',
+            cell: (order) => order.totalAmount ?? '—',
+          },
+        ]}
+        empty={
+          <EmptyState
+            description="Замовлення з’являться тут, щойно ви створите перше або клієнт зробить його сам."
+            title="Замовлень поки немає"
+          />
+        }
+        footer={
+          <Pagination
+            label="Сторінки замовлень"
+            onPage={goToPage}
+            page={page}
+            totalPages={Math.max(totalPages, 1)}
+          />
+        }
+        rowKey={(order) => order.id}
+        rows={orders}
+      />
+    </PageBody>
   )
 }
 

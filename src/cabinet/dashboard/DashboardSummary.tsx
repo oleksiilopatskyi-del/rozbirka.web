@@ -1,3 +1,5 @@
+import { EmptyState } from '@/components/app'
+import { cn } from '@/lib/utils'
 import type { DashboardData, LastActivity } from '@/api/dashboard-contract'
 
 const numberFormatter = new Intl.NumberFormat('uk-UA')
@@ -19,15 +21,17 @@ const dateFormatter = new Intl.DateTimeFormat('uk-UA', {
 interface SummaryItem {
   label: string
   value: string
+  accent?: boolean
 }
 
 export function DashboardSummary({ data }: { data: DashboardData }) {
+  const revenue = revenueItem(data)
   const commonItems = compact([
+    revenue === null ? null : { ...revenue, accent: true },
     item('Продажів сьогодні', data.todaySalesCount),
     item('Доступних запчастин', data.availablePartsCount),
     item('Приймань', data.intakesCount),
     item('Нових запчастин сьогодні', data.todayNewPartsCount),
-    revenueItem(data),
   ])
   const managementItems = compact([
     item('Активних авто', data.activeCarsCount),
@@ -45,7 +49,7 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
   ])
 
   return (
-    <section aria-label="Зведення" className="grid gap-5">
+    <section aria-label="Зведення" className="grid gap-4">
       {data.isYardEmpty ? <DashboardEmptyState /> : null}
       <SummaryList items={commonItems} />
       {managementItems.length > 0 ? (
@@ -60,24 +64,30 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
 
 function DashboardEmptyState() {
   return (
-    <div className="rounded-2xl border border-brand/30 bg-brand/[0.06] p-5">
-      <h2 className="text-base font-medium text-white">
-        Почніть наповнювати розбірку
-      </h2>
-      <p className="mt-2 text-sm leading-6 text-neutral-400">
-        Додайте перше авто або запчастину, щоб побачити робоче зведення.
-      </p>
-    </div>
+    <EmptyState
+      description="Додайте перше авто або запчастину, щоб побачити робоче зведення."
+      title="Почніть наповнювати розбірку"
+    />
   )
 }
 
 function SummaryList({ items }: { items: readonly SummaryItem[] }) {
   return (
     <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {items.map(({ label, value }) => (
-        <div className="rounded-2xl border border-white/[0.06] p-4" key={label}>
-          <dt className="text-sm text-neutral-400">{label}</dt>
-          <dd className="mt-2 text-2xl font-light text-white">{value}</dd>
+      {items.map(({ label, value, accent }) => (
+        <div
+          className={cn(
+            'rounded-panel border p-4',
+            accent
+              ? 'border-brand/30 bg-brand/[0.06]'
+              : 'border-app-line bg-app-raised',
+          )}
+          key={label}
+        >
+          <dt className="text-app-dim text-[12.5px]">{label}</dt>
+          <dd className="mt-1.5 text-[25px] leading-tight font-light tracking-[-0.02em] tabular-nums text-white">
+            {value}
+          </dd>
         </div>
       ))}
     </dl>
@@ -96,10 +106,10 @@ function Activity({
   return (
     <section
       aria-label={title}
-      className="rounded-2xl border border-white/[0.06] p-4"
+      className="border-app-line rounded-panel bg-app-raised border p-4"
     >
       <h2 className="text-sm font-medium text-white">{title}</h2>
-      <p className="mt-2 text-sm text-neutral-400">
+      <p className="text-app-muted mt-2 text-sm">
         {activity.type} · {activity.userName} · {formatDate(activity.timestamp)}
       </p>
     </section>

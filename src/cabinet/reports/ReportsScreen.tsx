@@ -6,6 +6,14 @@ import {
   useState,
   type ComponentType,
 } from 'react'
+import {
+  Button,
+  EmptyState,
+  Notice,
+  PageBody,
+  PageHeader,
+  SkeletonRows,
+} from '@/components/app'
 import { reportsApi, type ReportJob } from '@/api/reports'
 import { useCabinet } from '../CabinetContext'
 import type { CabinetModuleScreenProps } from '../ModuleBoundary'
@@ -364,29 +372,19 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
   const rangeIsValid = validRange(range)
 
   return (
-    <section
-      aria-labelledby="reports-title"
-      className="cabinet-access-quality mx-auto grid w-full max-w-4xl gap-6"
-    >
-      <header className="grid gap-2">
-        <p className="text-brand text-xs font-medium tracking-[0.18em] uppercase">
-          Кабінет
-        </p>
-        <h1
-          className="text-3xl font-light tracking-tight text-white"
-          id="reports-title"
-        >
-          Звіти
-        </h1>
-        <p className="text-sm text-neutral-400">
-          Формуйте PDF-звіти з продажів за обраний період.
-        </p>
-      </header>
+    <PageBody aria-labelledby="reports-title" className="max-w-4xl gap-6">
+      <PageHeader
+        eyebrow="Гроші"
+        title={<span id="reports-title">Звіти</span>}
+      />
+      <p className="text-app-muted text-sm">
+        Формуйте PDF-звіти з продажів за обраний період.
+      </p>
 
       {canManage ? (
         <form
           aria-label="Створення звіту"
-          className="bg-surface-1 grid gap-4 rounded-3xl border border-white/[0.06] p-5"
+          className="border-app-line rounded-panel bg-app-raised grid gap-4 border p-5"
           onSubmit={(event) => {
             event.preventDefault()
             void createReport()
@@ -394,12 +392,12 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <label
-              className="grid gap-2 text-sm text-neutral-300"
+              className="text-app-muted grid gap-2 text-[12.5px]"
               htmlFor="report-from"
             >
               Початок періоду
               <input
-                className="min-h-11 rounded-xl border border-white/[0.12] bg-transparent px-3 text-white"
+                className="bg-app-input border-app-line-2 rounded-control text-app-ink min-h-11 border px-3 text-sm"
                 id="report-from"
                 max={range.to}
                 onChange={(event) =>
@@ -414,12 +412,12 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
               />
             </label>
             <label
-              className="grid gap-2 text-sm text-neutral-300"
+              className="text-app-muted grid gap-2 text-[12.5px]"
               htmlFor="report-to"
             >
               Кінець періоду
               <input
-                className="min-h-11 rounded-xl border border-white/[0.12] bg-transparent px-3 text-white"
+                className="bg-app-input border-app-line-2 rounded-control text-app-ink min-h-11 border px-3 text-sm"
                 id="report-to"
                 min={range.from}
                 onChange={(event) =>
@@ -434,20 +432,24 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
               />
             </label>
           </div>
-          <button
-            className="min-h-11 rounded-full bg-brand px-4 text-sm font-medium text-black disabled:opacity-60"
+          <Button
+            className="justify-self-start"
             disabled={isCreating || !rangeIsValid}
             type="submit"
+            variant="primary"
           >
             {isCreating ? 'Створюємо…' : 'Створити звіт'}
-          </button>
+          </Button>
         </form>
       ) : null}
 
-      {visibleError ? <p role="alert">{visibleError}</p> : null}
-      {isLoading ? <p role="status">Завантажуємо звіти…</p> : null}
+      {visibleError ? <Notice tone="danger">{visibleError}</Notice> : null}
+      {isLoading ? <SkeletonRows label="Завантажуємо звіти…" rows={3} /> : null}
       {!isLoading && visibleReports.length === 0 ? (
-        <p>Ще немає звітів.</p>
+        <EmptyState
+          description="Оберіть період і сформуйте перший звіт — він з’явиться у цьому списку."
+          title="Ще немає звітів"
+        />
       ) : null}
 
       <div aria-label="Список звітів" className="grid gap-3">
@@ -455,7 +457,7 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
           const status = statusOf(report)
           return (
             <article
-              className="rounded-2xl border border-white/[0.06] p-4"
+              className="border-app-line rounded-panel bg-app-raised border p-4"
               key={report.id}
             >
               <h2 className="text-lg text-white">{statusLabel[status]}</h2>
@@ -471,38 +473,36 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
               ) : null}
               {status === 'completed' ? (
                 <div className="mt-3 flex flex-wrap gap-3">
-                  <button
+                  <Button
                     disabled={currentDownloading !== null}
                     onClick={() => void download(report, false)}
-                    type="button"
+                    variant="primary"
                   >
                     Завантажити PDF
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     disabled={currentDownloading !== null}
                     onClick={() => void download(report, true)}
-                    type="button"
                   >
                     Друкувати
-                  </button>
+                  </Button>
                 </div>
               ) : null}
               {canManage && (status === 'failed' || status === 'expired') ? (
-                <button
+                <Button
                   className="mt-3"
                   disabled={isCreating || !rangeIsValid}
                   onClick={() => void createReport()}
-                  type="button"
                 >
                   {status === 'failed'
                     ? 'Створити заміну'
                     : 'Створити новий звіт'}
-                </button>
+                </Button>
               ) : null}
             </article>
           )
         })}
       </div>
-    </section>
+    </PageBody>
   )
 }

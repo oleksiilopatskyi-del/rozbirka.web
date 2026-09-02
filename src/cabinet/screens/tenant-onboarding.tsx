@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Notice } from '@/components/app'
 import { useNavigate } from 'react-router'
 import { ArrowRight, LogOut } from 'lucide-react'
 import { tenantsApi } from '@/api/tenants'
@@ -172,11 +173,7 @@ export function TenantOnboardingScreen() {
               />
             </div>
 
-            {error && (
-              <p role="alert" className="text-[13px] text-red-400">
-                {error}
-              </p>
-            )}
+            {error && <Notice tone="danger">{error}</Notice>}
 
             <button
               type="submit"

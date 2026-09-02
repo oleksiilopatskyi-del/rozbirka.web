@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Button, Notice, PageBody, PageHeader } from '@/components/app'
 import { businessApi } from '@/api/business'
 import { useCabinet } from '../CabinetContext'
 import { cabinetModules } from '../module-registry'
@@ -92,22 +93,18 @@ export function BusinessSettingsScreen() {
   }
 
   return (
-    <section className="mx-auto grid w-full max-w-3xl gap-8">
-      <header className="grid gap-2">
-        <p className="text-brand text-xs font-medium tracking-[0.18em] uppercase">
-          Налаштування
-        </p>
-        <h1 className="text-3xl font-light tracking-tight text-white sm:text-4xl">
-          Бізнес
-        </h1>
-        <p className="text-sm text-neutral-400">Дані поточної розбірки.</p>
-      </header>
+    <PageBody className="gap-6" width="narrow">
+      <PageHeader eyebrow="Налаштування" title="Бізнес" />
+      <p className="text-app-muted text-sm">Дані поточної розбірки.</p>
       <form
         onSubmit={(event) => void save(event)}
-        className="bg-surface-1 grid gap-5 rounded-3xl border border-white/[0.06] p-5 sm:p-6"
+        className="border-app-line rounded-panel bg-app-raised grid gap-5 border p-5 sm:p-6"
       >
         <div className="grid gap-2">
-          <label htmlFor="business-name" className="text-xs text-neutral-400">
+          <label
+            htmlFor="business-name"
+            className="text-app-muted text-[12.5px]"
+          >
             Назва розбірки
           </label>
           <input
@@ -118,11 +115,14 @@ export function BusinessSettingsScreen() {
               setName(event.target.value)
               if (!busy) setSaveState('idle')
             }}
-            className="bg-background focus:ring-brand h-14 w-full rounded-2xl px-5 text-base text-white ring-1 ring-white/10 outline-none focus:ring-2 disabled:opacity-60"
+            className="bg-app-input border-app-line-2 rounded-control text-app-ink focus-visible:border-brand min-h-11 w-full border px-3 text-sm outline-none transition-colors disabled:opacity-55"
           />
         </div>
         <div className="grid gap-2">
-          <label htmlFor="business-city" className="text-xs text-neutral-400">
+          <label
+            htmlFor="business-city"
+            className="text-app-muted text-[12.5px]"
+          >
             Місто
           </label>
           <input
@@ -133,32 +133,31 @@ export function BusinessSettingsScreen() {
               setCity(event.target.value)
               if (!busy) setSaveState('idle')
             }}
-            className="bg-background focus:ring-brand h-14 w-full rounded-2xl px-5 text-base text-white ring-1 ring-white/10 outline-none focus:ring-2 disabled:opacity-60"
+            className="bg-app-input border-app-line-2 rounded-control text-app-ink focus-visible:border-brand min-h-11 w-full border px-3 text-sm outline-none transition-colors disabled:opacity-55"
           />
         </div>
         {saveState === 'success' && (
-          <p role="status" className="text-sm text-neutral-400">
-            Налаштування бізнесу збережено.
-          </p>
+          <Notice tone="ok">Налаштування бізнесу збережено.</Notice>
         )}
         {saveState === 'denied' && (
-          <p role="alert" className="text-sm text-red-400">
+          <Notice tone="danger">
             Ви більше не маєте права змінювати налаштування бізнесу.
-          </p>
+          </Notice>
         )}
         {saveState === 'error' && (
-          <p role="alert" className="text-sm text-red-400">
+          <Notice tone="danger">
             Не вдалося зберегти налаштування бізнесу. Спробуйте ще раз.
-          </p>
+          </Notice>
         )}
-        <button
-          type="submit"
+        <Button
+          className="w-fit"
           disabled={!canSave}
-          className="bg-brand hover:bg-brand-hover text-brand-foreground inline-flex min-h-11 w-fit items-center justify-center rounded-full px-6 text-sm disabled:opacity-50"
+          type="submit"
+          variant="primary"
         >
           {busy ? 'Зберігаємо…' : 'Зберегти'}
-        </button>
+        </Button>
       </form>
-    </section>
+    </PageBody>
   )
 }

@@ -146,5 +146,5 @@ it('renders the minimal tenant dashboard home', () => {
   expect(
     screen.getByRole('heading', { name: 'Вітаємо в Koval Auto' }),
   ).toBeVisible()
-  expect(screen.getByText('Ваш робочий простір готовий.')).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Оновити дані' })).toBeVisible()
 })

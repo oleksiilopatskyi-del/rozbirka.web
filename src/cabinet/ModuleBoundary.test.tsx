@@ -115,7 +115,7 @@ describe('ModuleBoundary', () => {
     renderBoundary('cars', Screen)
 
     expect(
-      screen.getByRole('heading', { name: 'Модуль готується до запуску' }),
+      screen.getByRole('heading', { name: 'Розділ поки недоступний' }),
     ).toBeVisible()
     expect(screen.getByRole('link', { name: 'До головної' })).toHaveAttribute(
       'href',
@@ -187,7 +187,7 @@ describe('ModuleBoundary', () => {
       '/app/koval/dashboard',
     )
     expect(
-      screen.queryByRole('heading', { name: 'Модуль готується до запуску' }),
+      screen.queryByRole('heading', { name: 'Розділ поки недоступний' }),
     ).not.toBeInTheDocument()
     expect(screen.queryByText('Reports module code')).not.toBeInTheDocument()
     expect(load).not.toHaveBeenCalled()

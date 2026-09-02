@@ -6,10 +6,27 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router'
+import { Plus } from 'lucide-react'
+import {
+  Button,
+  DataTable,
+  EmptyState,
+  Field,
+  Notice,
+  PageBody,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  SelectInput,
+  StatStrip,
+  StatusPill,
+  Toolbar,
+} from '@/components/app'
 import {
   carsApi,
   type Car,
   type CarExpense,
+  type CarListItem,
   type CarListParams,
   type CreateCarRequest,
   type UpdateCarRequest,
@@ -104,9 +121,9 @@ function Denied({ decision }: { decision: ModuleAccessDecision }) {
         ? 'Поточна підписка не дозволяє цю дію.'
         : 'Недостатньо прав.'
   return (
-    <section role="alert">
-      <h1>{message}</h1>
-    </section>
+    <Notice role="alert" tone="warn">
+      {message}
+    </Notice>
   )
 }
 
@@ -176,95 +193,126 @@ function CarsList({ base }: { base: string }) {
   }
   const page = data?.page ?? selected.page ?? 1
   return (
-    <section>
-      <header>
-        <h1>Автомобілі</h1>
-        {createDecision.kind === 'allowed' ? (
-          <Link to={`${base}/new`}>Додати автомобіль</Link>
-        ) : null}
-      </header>
+    <PageBody>
+      <PageHeader
+        actions={
+          createDecision.kind === 'allowed' ? (
+            <Button asChild variant="primary">
+              <Link to={`${base}/new`}>
+                <Plus aria-hidden />
+                Додати автомобіль
+              </Link>
+            </Button>
+          ) : undefined
+        }
+        eyebrow="Склад"
+        title="Автомобілі"
+      />
       <form
         onSubmit={(event) => {
           event.preventDefault()
           change({ search: query.trim() || undefined, page: '1' })
         }}
       >
-        <label>
-          Пошук автомобілів
-          <input
-            aria-label="Пошук автомобілів"
-            onChange={(event) => setQuery(event.target.value)}
-            value={query}
-          />
-        </label>
-        <label>
-          Статус
-          <select
-            onChange={(event) =>
-              change({ status: event.target.value || undefined, page: '1' })
-            }
-            value={selected.status ?? ''}
-          >
-            <option value="">Усі</option>
-            <option value="active">Активні</option>
-            <option value="archived">Архів</option>
-          </select>
-        </label>
-        <label>
-          Розмір сторінки
-          <select
-            onChange={(event) =>
-              change({ pageSize: event.target.value, page: '1' })
-            }
-            value={String(selected.pageSize)}
-          >
-            <option value="20">20</option>
-            <option value="50">50</option>
-            <option value="100">100</option>
-          </select>
-        </label>
-        <button type="submit">Шукати</button>
+        <Toolbar>
+          <Field className="min-w-52 flex-1" label="Пошук автомобілів">
+            <SearchInput
+              aria-label="Пошук автомобілів"
+              onChange={(event) => setQuery(event.target.value)}
+              value={query}
+            />
+          </Field>
+          <Field className="min-w-40" label="Статус">
+            <SelectInput
+              onChange={(event) =>
+                change({ status: event.target.value || undefined, page: '1' })
+              }
+              value={selected.status ?? ''}
+            >
+              <option value="">Усі</option>
+              <option value="active">Активні</option>
+              <option value="archived">Архів</option>
+            </SelectInput>
+          </Field>
+          <Field className="min-w-40" label="Розмір сторінки">
+            <SelectInput
+              onChange={(event) =>
+                change({ pageSize: event.target.value, page: '1' })
+              }
+              value={String(selected.pageSize)}
+            >
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </SelectInput>
+          </Field>
+          <Button type="submit" variant="primary">
+            Шукати
+          </Button>
+        </Toolbar>
       </form>
-      {problem ? <p role="alert">{problem}</p> : null}
-      <p>Знайдено: {data?.total ?? 0}</p>
-      <ul aria-label="Список автомобілів">
-        {(data?.items ?? []).map((car) => (
-          <li key={car.id}>
-            <Link to={`${base}/${car.id}`}>
-              {car.code} · {car.brand} {car.model} ({car.year})
-            </Link>
-            <p>
-              Статус: {car.status}; запчастин: {car.partsCount}
-            </p>
-            {financeView && car.profitability ? (
-              <p>
-                Повернено: {money(car.profitability.recouped)} (
-                {car.profitability.recoupedPercent ?? '—'}%)
-              </p>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-      <nav aria-label="Пагінація автомобілів">
-        <button
-          disabled={page <= 1}
-          onClick={() => change({ page: String(page - 1) })}
-          type="button"
-        >
-          Попередня
-        </button>
-        <span>
-          Сторінка {page} з {data?.totalPages ?? 1}
-        </span>
-        <button
-          disabled={page >= (data?.totalPages ?? 1)}
-          onClick={() => change({ page: String(page + 1) })}
-          type="button"
-        >
-          Наступна
-        </button>
-      </nav>
-    </section>
+      {problem ? <Notice tone="danger">{problem}</Notice> : null}
+      <StatStrip items={[{ label: 'знайдено', value: data?.total ?? 0 }]} />
+      <DataTable
+        caption="Список автомобілів"
+        columns={[
+          {
+            key: 'car',
+            label: 'Автомобіль',
+            variant: 'primary',
+            cell: (car) => (
+              <Link className="hover:text-brand block" to={`${base}/${car.id}`}>
+                {car.code} · {car.brand} {car.model} ({car.year})
+              </Link>
+            ),
+          },
+          {
+            key: 'status',
+            label: 'Статус',
+            cell: (car) => (
+              <StatusPill tone={car.status === 'active' ? 'ok' : 'neutral'}>
+                {car.status === 'active' ? 'Активний' : 'Архів'}
+              </StatusPill>
+            ),
+          },
+          {
+            key: 'parts',
+            label: 'Запчастин',
+            align: 'end',
+            cell: (car) => car.partsCount,
+          },
+          ...(financeView
+            ? [
+                {
+                  key: 'recouped',
+                  label: 'Повернено',
+                  align: 'end' as const,
+                  cell: (car: CarListItem) =>
+                    car.profitability
+                      ? `${money(car.profitability.recouped)} (${String(car.profitability.recoupedPercent ?? '—')}%)`
+                      : '—',
+                },
+              ]
+            : []),
+        ]}
+        empty={
+          <EmptyState
+            description="Додайте перше авто — після розбирання його деталі потраплять на склад."
+            title="Автомобілів поки немає"
+          />
+        }
+        footer={
+          <Pagination
+            label="Пагінація автомобілів"
+            onPage={(next) => change({ page: String(next) })}
+            page={page}
+            totalPages={data?.totalPages ?? 1}
+          />
+        }
+        rowKey={(car) => car.id}
+        rows={data?.items ?? []}
+      />
+    </PageBody>
   )
 }
 

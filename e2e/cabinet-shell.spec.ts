@@ -1505,7 +1505,7 @@ test('shows a truthful unavailable state for an unreleased module', async ({
   await loginFrom(page)
   await page.goto('/app/koval/team')
   await expect(
-    page.getByRole('heading', { name: 'Модуль готується до запуску' }),
+    page.getByRole('heading', { name: 'Розділ поки недоступний' }),
   ).toBeVisible()
 })
 

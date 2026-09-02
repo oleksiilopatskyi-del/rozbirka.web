@@ -1,4 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Button,
+  Field,
+  Notice,
+  PageBody,
+  PageHeader,
+  SelectInput,
+  TextInput,
+  Toolbar,
+} from '@/components/app'
 import { partsApi, type PartListItem } from '@/api/parts'
 import { stickersApi } from '@/api/stickers'
 import { useCabinet } from '../CabinetContext'
@@ -329,21 +339,21 @@ function TenantStickerQueue({
     'Деталь недоступна у поточній вибірці'
 
   return (
-    <section className="mx-auto grid w-full max-w-3xl gap-4">
-      <h1 className="text-3xl text-white">Стікери</h1>
-      <p className="text-neutral-400">Черга стікерів для поточної розбірки</p>
+    <PageBody width="narrow">
+      <PageHeader eyebrow="Склад" title="Стікери" />
+      <p className="text-app-muted text-sm">
+        Черга стікерів для поточної розбірки
+      </p>
       {!scope ? (
-        <p role="alert">
+        <Notice tone="danger">
           Відновлення черги заблоковано без стабільної ідентичності користувача
           та розбірки.
-        </p>
+        </Notice>
       ) : null}
-      <div className="grid gap-2 sm:grid-cols-3">
-        <label className="grid gap-1 text-sm text-neutral-300">
-          Деталь
-          <select
+      <Toolbar>
+        <Field className="min-w-52 flex-1" label="Деталь">
+          <SelectInput
             aria-label="Деталь"
-            className="rounded border border-white/[0.12] bg-transparent p-2 text-white"
             disabled={!canGenerate || partsUnavailable}
             onChange={(event) => setId(event.target.value)}
             value={id}
@@ -357,34 +367,33 @@ function TenantStickerQueue({
             {id && !parts.some((part) => part.id === id) ? (
               <option value={id}>Деталь недоступна у поточній вибірці</option>
             ) : null}
-          </select>
-        </label>
-        <label className="grid gap-1 text-sm text-neutral-300">
-          Кількість стікерів
-          <input
+          </SelectInput>
+        </Field>
+        <Field className="min-w-40" label="Кількість стікерів">
+          <TextInput
             aria-label="Кількість стікерів"
             min="1"
             onChange={(event) => setQuantity(event.target.value)}
             type="number"
             value={quantity}
           />
-        </label>
-        <button
+        </Field>
+        <Button
           disabled={!canGenerate || partsUnavailable}
           onClick={add}
-          type="button"
+          variant="primary"
         >
           Додати
-        </button>
-      </div>
+        </Button>
+      </Toolbar>
       {partsUnavailable ? (
-        <p role="status">
+        <p className="text-app-dim text-[12.5px]" role="status">
           Вибір деталей недоступний: список не завантажено, пошук за внутрішнім
           ID вимкнено.
         </p>
       ) : null}
       {!canGenerate ? (
-        <p role="status">
+        <p className="text-app-dim text-[12.5px]" role="status">
           {generationDecision === 'subscription-blocked'
             ? 'Поточна підписка не дозволяє генерацію стікерів.'
             : generationDecision === 'access-loading'
@@ -394,11 +403,16 @@ function TenantStickerQueue({
                 : 'Недостатньо прав для генерації стікерів.'}
         </p>
       ) : null}
-      <p className="text-neutral-400">У черзі: {total}</p>
+      <p className="text-app-muted text-sm tabular-nums">У черзі: {total}</p>
       {queue.map((item) => (
-        <div className="flex gap-2 text-white" key={item.id}>
-          {labelFor(item.id)} × {item.quantity}
-          <button
+        <div
+          className="border-app-line rounded-panel bg-app-raised flex flex-wrap items-center justify-between gap-2 border px-3.5 py-2 text-sm text-white"
+          key={item.id}
+        >
+          <span>
+            {labelFor(item.id)} × {item.quantity}
+          </span>
+          <Button
             aria-label={`Прибрати ${labelFor(item.id)}`}
             disabled={!canGenerate}
             onClick={() => {
@@ -408,58 +422,40 @@ function TenantStickerQueue({
               setPrintable([])
               setPreview([])
             }}
-            type="button"
           >
             Прибрати
-          </button>
+          </Button>
         </div>
       ))}
       <div className="flex flex-wrap gap-2">
-        <button
+        <Button
           aria-busy={busy}
           disabled={!queue.length || !canGenerate || busy}
           onClick={() => void generate()}
-          type="button"
+          variant="primary"
         >
           Отримати дані стікерів
-        </button>
-        <button
+        </Button>
+        <Button
           disabled={!preview.length || busy}
           onClick={() => void download()}
-          type="button"
         >
           Завантажити макет
-        </button>
-        <button
-          disabled={!preview.length || busy}
-          onClick={() => void print()}
-          type="button"
-        >
+        </Button>
+        <Button disabled={!preview.length || busy} onClick={() => void print()}>
           Друкувати
-        </button>
-        <button
-          disabled={!preview.length || busy}
-          onClick={() => void share()}
-          type="button"
-        >
+        </Button>
+        <Button disabled={!preview.length || busy} onClick={() => void share()}>
           Поділитися
-        </button>
-        <button
-          disabled={!preview.length || busy}
-          onClick={clear}
-          type="button"
-        >
+        </Button>
+        <Button disabled={!preview.length || busy} onClick={clear}>
           Підтвердити друк
-        </button>
-        <button
-          disabled={!queue.length || !canGenerate}
-          onClick={clear}
-          type="button"
-        >
+        </Button>
+        <Button disabled={!queue.length || !canGenerate} onClick={clear}>
           Очистити чергу
-        </button>
+        </Button>
       </div>
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? <Notice tone="danger">{error}</Notice> : null}
       {preview.length ? (
         <section
           aria-label="Макет стікерів"
@@ -482,6 +478,6 @@ function TenantStickerQueue({
           ))}
         </section>
       ) : null}
-    </section>
+    </PageBody>
   )
 }

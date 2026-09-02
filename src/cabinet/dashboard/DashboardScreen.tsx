@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
 import { useSearchParams } from 'react-router'
+import { RefreshCw } from 'lucide-react'
+import { Button, PageBody, PageHeader, Panel, Skeleton } from '@/components/app'
 import { useCabinet } from '../CabinetContext'
 import { readDashboardPeriod, writeDashboardPeriod } from './dashboard-period'
 import { useDashboardData, type DashboardLoadable } from './use-dashboard-data'
@@ -36,23 +38,27 @@ export function DashboardScreen() {
   }
 
   return (
-    <section className="mx-auto grid w-full max-w-6xl gap-8">
-      <header className="grid gap-2">
-        <p className="text-brand text-xs font-medium tracking-[0.18em] uppercase">
-          Кабінет
-        </p>
-        <h1 className="text-3xl font-light tracking-tight text-white sm:text-4xl">
-          Вітаємо в {tenantName}
-        </h1>
-        <p className="text-sm text-neutral-400">Ваш робочий простір готовий.</p>
-      </header>
+    <PageBody className="gap-6">
+      <PageHeader
+        actions={
+          <Button
+            disabled={dashboard.refreshing}
+            onClick={() => void dashboard.refresh()}
+          >
+            <RefreshCw aria-hidden />
+            {dashboard.refreshing ? 'Оновлюємо…' : 'Оновити дані'}
+          </Button>
+        }
+        eyebrow="Огляд"
+        title={`Вітаємо в ${tenantName}`}
+      />
       <div
         aria-busy={dashboard.refreshing}
         aria-label="Панель зведення"
-        className="bg-surface-1 min-w-0 rounded-3xl border border-white/[0.06] p-5 sm:p-6"
+        className="min-w-0"
         role="region"
       >
-        <div className="mt-5 grid gap-5">
+        <div className="grid gap-4">
           {snapshot !== null && targetTenant !== null ? (
             <DashboardBillingBanner snapshot={snapshot} tenant={targetTenant} />
           ) : null}
@@ -72,16 +78,8 @@ export function DashboardScreen() {
             <DashboardDestinations snapshot={snapshot} tenant={targetTenant} />
           ) : null}
         </div>
-        <button
-          className="mt-4 min-h-11 rounded-full border border-white/[0.12] px-4 text-sm text-white disabled:opacity-60"
-          disabled={dashboard.refreshing}
-          onClick={() => void dashboard.refresh()}
-          type="button"
-        >
-          {dashboard.refreshing ? 'Оновлюємо…' : 'Оновити дані'}
-        </button>
       </div>
-    </section>
+    </PageBody>
   )
 }
 
@@ -111,20 +109,11 @@ function DashboardSummaryState({
   }
 
   return (
-    <section
-      aria-label="Зведення"
-      className="rounded-2xl border border-white/[0.06] p-4"
-    >
+    <Panel aria-label="Зведення">
       <div aria-label="Завантаження зведення" role="status">
-        <span
-          aria-hidden
-          className="block h-5 w-32 animate-pulse rounded bg-white/[0.08]"
-        />
-        <span
-          aria-hidden
-          className="mt-3 block h-16 animate-pulse rounded bg-white/[0.08]"
-        />
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="mt-3 h-16" />
       </div>
-    </section>
+    </Panel>
   )
 }

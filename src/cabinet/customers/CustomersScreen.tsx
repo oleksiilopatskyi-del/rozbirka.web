@@ -6,6 +6,20 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
+import { Plus } from 'lucide-react'
+import {
+  Button,
+  DataTable,
+  EmptyState,
+  Field,
+  Notice,
+  PageBody,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  StatStrip,
+  Toolbar,
+} from '@/components/app'
 import {
   customersApi,
   readCustomerPhoneConflict,
@@ -119,78 +133,78 @@ function CustomerDirectory({ definition }: CabinetModuleScreenProps) {
   }, [page, q])
 
   return (
-    <section className="grid gap-6">
-      <header className="flex items-end justify-between gap-4">
-        <div>
-          <p className="text-xs text-neutral-500">Клієнти</p>
-          <h1 className="text-3xl text-white">Клієнти</h1>
-        </div>
-        {mutationsAllowed && (
-          <Link
-            to="new"
-            className="rounded-full bg-brand px-5 py-3 text-sm text-brand-foreground"
-          >
-            Новий клієнт
-          </Link>
-        )}
-      </header>
-      <label className="grid gap-2 text-sm">
-        Пошук
-        <input
-          value={q}
-          onChange={(event) =>
-            setParams(
-              event.target.value ? { q: event.target.value, page: '1' } : {},
-            )
-          }
-          placeholder="Ім’я або телефон"
-        />
-      </label>
-      {error && <p role="alert">{error}</p>}
-      <p className="text-sm text-neutral-400">Знайдено: {total}</p>
-      <ul className="grid gap-3">
-        {customers.map((customer) => (
-          <li key={customer.id}>
-            <Link
-              to={customer.id}
-              className="block rounded-xl bg-surface-1 p-4 text-white"
-            >
-              {customer.name}
-              <span className="ml-2 text-neutral-400">
-                Замовлень: {customer.ordersCount}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-      <nav aria-label="Сторінки клієнтів" className="flex gap-3">
-        <button
-          type="button"
-          disabled={page <= 1}
-          onClick={() => {
-            const next = new URLSearchParams(params)
-            next.set('page', String(page - 1))
-            setParams(next)
-          }}
-        >
-          Попередня сторінка
-        </button>
-        <span>
-          Сторінка {page} з {Math.max(totalPages, 1)}
-        </span>
-        <button
-          type="button"
-          disabled={totalPages === 0 || page >= totalPages}
-          onClick={() => {
-            const next = new URLSearchParams(params)
-            next.set('page', String(page + 1))
-            setParams(next)
-          }}
-        >
-          Наступна сторінка
-        </button>
-      </nav>
-    </section>
+    <PageBody>
+      <PageHeader
+        actions={
+          mutationsAllowed ? (
+            <Button asChild variant="primary">
+              <Link to="new">
+                <Plus aria-hidden />
+                Новий клієнт
+              </Link>
+            </Button>
+          ) : undefined
+        }
+        eyebrow="Продажі"
+        title="Клієнти"
+      />
+      <Toolbar>
+        <Field className="min-w-52 flex-1" label="Пошук">
+          <SearchInput
+            onChange={(event) =>
+              setParams(
+                event.target.value ? { q: event.target.value, page: '1' } : {},
+              )
+            }
+            placeholder="Ім’я або телефон"
+            value={q}
+          />
+        </Field>
+      </Toolbar>
+      {error && <Notice tone="danger">{error}</Notice>}
+      <StatStrip items={[{ label: 'знайдено', value: total }]} />
+      <DataTable
+        caption="Список клієнтів"
+        columns={[
+          {
+            key: 'name',
+            label: 'Клієнт',
+            variant: 'primary',
+            cell: (customer) => (
+              <Link className="hover:text-brand block" to={customer.id}>
+                {customer.name}
+              </Link>
+            ),
+          },
+          {
+            key: 'orders',
+            label: 'Замовлень',
+            align: 'end',
+            cell: (customer) => customer.ordersCount,
+          },
+        ]}
+        empty={
+          <EmptyState
+            description="Клієнти з’являються після першого замовлення або коли ви додасте їх самі."
+            title="Клієнтів поки немає"
+          />
+        }
+        footer={
+          <Pagination
+            label="Сторінки клієнтів"
+            onPage={(nextPage) => {
+              const next = new URLSearchParams(params)
+              next.set('page', String(nextPage))
+              setParams(next)
+            }}
+            page={page}
+            totalPages={Math.max(totalPages, 1)}
+          />
+        }
+        rowKey={(customer) => customer.id}
+        rows={customers}
+      />
+    </PageBody>
   )
 }
 

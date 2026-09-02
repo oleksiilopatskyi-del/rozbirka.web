@@ -6,6 +6,13 @@ import {
   useState,
   type ComponentType,
 } from 'react'
+import {
+  Button,
+  Notice,
+  PageBody,
+  PageHeader,
+  SkeletonRows,
+} from '@/components/app'
 import { AlertDialog, Dialog } from 'radix-ui'
 import { ALL_PERMISSIONS } from '../access-types'
 import { useCabinet } from '../CabinetContext'
@@ -221,71 +228,56 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
 
   if (!canView) {
     return (
-      <section className="mx-auto grid w-full max-w-6xl gap-8">
-        <header className="grid gap-2">
-          <h1 className="text-3xl font-light tracking-tight text-white sm:text-4xl">
-            Команда
-          </h1>
-        </header>
-        <p role="alert" className="text-sm text-red-400">
+      <PageBody>
+        <PageHeader eyebrow="Налаштування доступу" title="Команда" />
+        <Notice role="alert" tone="danger">
           Недостатньо прав для перегляду команди.
-        </p>
-      </section>
+        </Notice>
+      </PageBody>
     )
   }
 
   return (
-    <section className="cabinet-access-quality mx-auto grid w-full max-w-6xl gap-8">
-      <header className="grid gap-2">
-        <p className="text-brand text-xs font-medium tracking-[0.18em] uppercase">
-          Налаштування доступу
-        </p>
-        <h1 className="text-3xl font-light tracking-tight text-white sm:text-4xl">
-          Команда
-        </h1>
-        <p className="text-sm text-neutral-400">
-          Керуйте учасниками, ролями та запрошеннями розбірки.
-        </p>
-      </header>
+    <PageBody className="gap-6">
+      <PageHeader eyebrow="Налаштування доступу" title="Команда" />
+      <p className="text-app-muted text-sm">
+        Керуйте учасниками, ролями та запрошеннями розбірки.
+      </p>
 
-      {feedback && (
-        <p role="status" className="text-sm text-neutral-300">
-          {feedback}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="text-sm text-red-400">
-          {error}
-        </p>
-      )}
+      {feedback && <Notice tone="ok">{feedback}</Notice>}
+      {error && <Notice tone="danger">{error}</Notice>}
       {accessWarning && (
-        <div role="alert" className="grid gap-2 text-sm text-amber-300">
-          <p>{accessWarning}</p>
-          <button
-            type="button"
-            disabled={accessRefreshState === 'refreshing'}
-            onClick={() => {
-              void refreshAccess()
-            }}
-          >
-            Оновити права
-          </button>
-        </div>
+        <Notice
+          action={
+            <Button
+              disabled={accessRefreshState === 'refreshing'}
+              onClick={() => {
+                void refreshAccess()
+              }}
+            >
+              Оновити права
+            </Button>
+          }
+          role="alert"
+          tone="warn"
+        >
+          {accessWarning}
+        </Notice>
       )}
-      {loading && <p role="status">Завантажуємо команду…</p>}
+      {loading && <SkeletonRows label="Завантажуємо команду…" />}
 
       {teamData && (
         <>
           <section
             aria-labelledby="team-members-heading"
-            className="grid gap-4"
+            className="grid min-w-0 gap-4"
           >
             <h2 id="team-members-heading" className="text-xl text-white">
               Учасники
             </h2>
-            <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
+            <div className="border-app-line rounded-panel bg-app-raised overflow-x-auto border">
               <table className="w-full text-left text-sm">
-                <thead className="text-neutral-400">
+                <thead className="text-app-dim font-mono text-[10.5px] tracking-[0.08em] uppercase">
                   <tr>
                     <th scope="col" className="p-4">
                       Учасник
@@ -348,14 +340,12 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                       {canManageAccess && (
                         <td className="p-4">
                           <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
+                            <Button
                               onClick={() => void openPermissions(member)}
                             >
                               Права {member.name}
-                            </button>
-                            <button
-                              type="button"
+                            </Button>
+                            <Button
                               onClick={() =>
                                 askConfirmation({
                                   title: member.isActive
@@ -383,9 +373,8 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                               {member.isActive
                                 ? `Вимкнути ${member.name}`
                                 : `Активувати ${member.name}`}
-                            </button>
-                            <button
-                              type="button"
+                            </Button>
+                            <Button
                               onClick={() =>
                                 askConfirmation({
                                   title: 'Видалити учасника',
@@ -400,7 +389,7 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                               }
                             >
                               Видалити {member.name}
-                            </button>
+                            </Button>
                           </div>
                         </td>
                       )}
@@ -431,9 +420,8 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                       )}
                     </div>
                     {canManageAccess && !role.isSystem && (
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
+                      <div className="flex flex-wrap gap-2">
+                        <Button
                           onClick={() => {
                             restoreFocusRef.current =
                               document.activeElement instanceof HTMLElement
@@ -445,9 +433,8 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                           }}
                         >
                           Редагувати {role.name}
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button
                           onClick={() =>
                             askConfirmation({
                               title: 'Видалити роль',
@@ -460,7 +447,7 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                           }
                         >
                           Видалити {role.name}
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -495,14 +482,15 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                   selected={newRolePermissions}
                   onToggle={toggleNewRolePermission}
                 />
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
                   disabled={
                     !newRoleName.trim() || newRolePermissions.length === 0
                   }
                 >
                   Створити роль
-                </button>
+                </Button>
               </form>
             )}
           </section>
@@ -540,7 +528,9 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                     ))}
                   </select>
                 </label>
-                <button type="submit">Створити запрошення</button>
+                <Button type="submit" variant="primary">
+                  Створити запрошення
+                </Button>
               </form>
             )}
             <ul className="grid gap-3">
@@ -558,8 +548,7 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                       </p>
                     </div>
                     {canManageAccess && status === 'Активне' && (
-                      <button
-                        type="button"
+                      <Button
                         onClick={() =>
                           askConfirmation({
                             title: 'Відкликати запрошення',
@@ -572,7 +561,7 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                         }
                       >
                         Відкликати {item.code}
-                      </button>
+                      </Button>
                     )}
                   </li>
                 )
@@ -593,7 +582,7 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
           {editingRole && (
             <Dialog.Content
               aria-label={`Роль: ${editingRole.name}`}
-              className="cabinet-access-quality bg-surface-2 fixed inset-x-3 top-1/2 z-50 max-h-[90dvh] max-w-lg -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/10 p-4 text-white sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2"
+              className="bg-app-overlay fixed inset-x-3 top-1/2 z-50 max-h-[90dvh] max-w-lg -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/10 p-4 text-white sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2"
               onCloseAutoFocus={restoreFocus}
             >
               <Dialog.Title>{`Роль: ${editingRole.name}`}</Dialog.Title>
@@ -630,8 +619,9 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                   selected={editingRolePermissions}
                   onToggle={toggleEditingRolePermission}
                 />
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
                   disabled={
                     !canManageAccess ||
                     !editingRoleName.trim() ||
@@ -639,8 +629,10 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                   }
                 >
                   Зберегти роль
-                </button>
-                <Dialog.Close type="button">Скасувати</Dialog.Close>
+                </Button>
+                <Dialog.Close asChild>
+                  <Button>Скасувати</Button>
+                </Dialog.Close>
               </form>
             </Dialog.Content>
           )}
@@ -658,7 +650,7 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
           {permissionMember && (
             <Dialog.Content
               aria-label={`Права: ${permissionMember.name}`}
-              className="cabinet-access-quality bg-surface-2 fixed inset-x-3 top-1/2 z-50 max-h-[90dvh] max-w-lg -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/10 p-4 text-white sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2"
+              className="bg-app-overlay fixed inset-x-3 top-1/2 z-50 max-h-[90dvh] max-w-lg -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/10 p-4 text-white sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2"
               onCloseAutoFocus={restoreFocus}
             >
               <Dialog.Title>{`Права: ${permissionMember.name}`}</Dialog.Title>
@@ -686,10 +678,16 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
                   onToggle={toggleUserPermission}
                   legend="Права користувача"
                 />
-                <button type="submit" disabled={!canManageAccess}>
+                <Button
+                  disabled={!canManageAccess}
+                  type="submit"
+                  variant="primary"
+                >
                   Зберегти права
-                </button>
-                <Dialog.Close type="button">Скасувати</Dialog.Close>
+                </Button>
+                <Dialog.Close asChild>
+                  <Button>Скасувати</Button>
+                </Dialog.Close>
               </form>
             </Dialog.Content>
           )}
@@ -707,33 +705,38 @@ export const TeamScreen: ComponentType<CabinetModuleScreenProps> = () => {
           {confirmation && (
             <AlertDialog.Content
               aria-label={confirmation.title}
-              className="cabinet-access-quality bg-surface-2 fixed inset-x-3 top-1/2 z-50 max-w-md -translate-y-1/2 rounded-2xl border border-white/10 p-4 text-white sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2"
+              className="bg-app-overlay fixed inset-x-3 top-1/2 z-50 max-w-md -translate-y-1/2 rounded-2xl border border-white/10 p-4 text-white sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2"
               onCloseAutoFocus={restoreFocus}
             >
               <AlertDialog.Title>{confirmation.title}</AlertDialog.Title>
               <AlertDialog.Description className="text-neutral-400">
                 {confirmation.description}
               </AlertDialog.Description>
-              <div className="mt-3 flex gap-2">
-                <AlertDialog.Action
-                  disabled={!canManageAccess}
-                  onClick={(event) => {
-                    event.preventDefault()
-                    void (async () => {
-                      await confirmation.confirm()
-                      setConfirmation(null)
-                    })()
-                  }}
-                >
-                  Підтвердити
+              <div className="mt-3 flex flex-wrap gap-2">
+                <AlertDialog.Action asChild>
+                  <Button
+                    disabled={!canManageAccess}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      void (async () => {
+                        await confirmation.confirm()
+                        setConfirmation(null)
+                      })()
+                    }}
+                    variant="danger"
+                  >
+                    Підтвердити
+                  </Button>
                 </AlertDialog.Action>
-                <AlertDialog.Cancel>Скасувати</AlertDialog.Cancel>
+                <AlertDialog.Cancel asChild>
+                  <Button>Скасувати</Button>
+                </AlertDialog.Cancel>
               </div>
             </AlertDialog.Content>
           )}
         </AlertDialog.Portal>
       </AlertDialog.Root>
-    </section>
+    </PageBody>
   )
 }
 
@@ -748,14 +751,18 @@ function PermissionChecklist({
 }) {
   return (
     <fieldset className="grid gap-2">
-      <legend>{legend}</legend>
+      <legend className="text-app-dim text-[12.5px]">{legend}</legend>
       {ALL_PERMISSIONS.map((permission) => (
-        <label key={permission} className="flex gap-2">
+        <label
+          key={permission}
+          className="text-app-muted flex min-h-11 min-w-11 items-center gap-2.5 text-sm"
+        >
           <input
             type="checkbox"
             aria-label={permission}
             checked={selected.includes(permission)}
             onChange={() => onToggle(permission)}
+            className="accent-brand size-4"
           />
           {permission}
         </label>

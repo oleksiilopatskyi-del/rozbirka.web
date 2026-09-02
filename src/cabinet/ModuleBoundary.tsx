@@ -1,4 +1,13 @@
-import { lazy, Suspense, type ComponentType } from 'react'
+import { lazy, Suspense, type ComponentType, type ReactNode } from 'react'
+import { Link } from 'react-router'
+import { AlertTriangle } from 'lucide-react'
+import {
+  Button,
+  DeniedState,
+  SkeletonRows,
+  StateScreen,
+} from '@/components/app'
+import { cabinetPath } from './cabinet-paths'
 import { useCabinet } from './CabinetContext'
 import {
   cabinetModules,
@@ -41,15 +50,7 @@ export function ModuleBoundary({
 
   if (decision.kind === 'allowed') {
     return (
-      <Suspense
-        fallback={
-          <BoundaryStateScreen
-            title="Завантажуємо модуль…"
-            description="Це займе лише мить."
-            role="status"
-          />
-        }
-      >
+      <Suspense fallback={<SkeletonRows label="Завантажуємо модуль…" />}>
         <Screen definition={definition} />
       </Suspense>
     )
@@ -81,61 +82,82 @@ function decisionScreen(
       return <FeatureUnavailableScreen definition={definition} />
     case 'permission-denied':
       return (
-        <BoundaryStateScreen
+        <DeniedState
+          description="Доступ до цього розділу відкриває власник розбірки в «Команді»."
           title="Недостатньо прав"
-          description="Зверніться до власника розбірки, щоб отримати доступ до цього розділу."
         />
       )
     case 'subscription-blocked':
       return (
         <BoundaryStateScreen
+          action={<BillingLink label="Перейти до підписки" module="billing" />}
+          description="Поки підписка неактивна, розділ доступний лише для перегляду історії в білінгу."
           title="Підписка потребує уваги"
-          description="Перевірте стан підписки в налаштуваннях білінгу."
+          tone="warn"
         />
       )
     case 'quota-exhausted':
       return (
         <BoundaryStateScreen
+          action={<BillingLink label="Порівняти тарифи" module="plans" />}
+          description={`Ліміт тарифу вичерпано: ${String(decision.used)} з ${String(decision.max)}. Підвищте тариф або звільніть місце.`}
           title="Ліміт вичерпано"
-          description="Змініть тариф або звільніть місце, щоб продовжити."
+          tone="warn"
         />
       )
     case 'access-error':
       return (
         <BoundaryStateScreen
+          description="Не вдалося отримати ваші права для цієї розбірки. Оновіть сторінку та спробуйте ще раз."
+          role="alert"
           title="Не вдалося перевірити доступ"
-          description="Оновіть сторінку та спробуйте ще раз."
+          tone="danger"
         />
       )
     case 'access-loading':
-      return (
-        <BoundaryStateScreen
-          title="Перевіряємо доступ…"
-          description="Це займе лише мить."
-          role="status"
-        />
-      )
+      return <SkeletonRows label="Перевіряємо доступ…" />
   }
+}
+
+function BillingLink({
+  label,
+  module,
+}: {
+  label: string
+  module: 'billing' | 'plans'
+}) {
+  const { targetTenant } = useCabinet()
+  if (targetTenant === null) return null
+
+  return (
+    <Button asChild variant="primary">
+      <Link to={cabinetPath(targetTenant.slug, module)}>{label}</Link>
+    </Button>
+  )
 }
 
 function BoundaryStateScreen({
   title,
   description,
-  role = 'alert',
+  action,
+  role = 'status',
+  tone = 'neutral',
 }: {
   title: string
   description: string
+  action?: ReactNode
   role?: 'alert' | 'status'
+  tone?: 'neutral' | 'warn' | 'danger'
 }) {
   return (
-    <section
-      className="grid min-h-[50dvh] place-items-center px-6 py-12 text-center"
+    <StateScreen
+      actions={action}
+      className="min-h-[50dvh] content-center"
+      description={description}
+      icon={<AlertTriangle aria-hidden />}
       role={role}
-    >
-      <div className="grid max-w-md gap-3">
-        <h1 className="text-2xl font-medium text-white">{title}</h1>
-        <p className="text-sm leading-6 text-neutral-400">{description}</p>
-      </div>
-    </section>
+      title={title}
+      tone={tone}
+    />
   )
 }

@@ -6,6 +6,27 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router'
+import { Plus } from 'lucide-react'
+import {
+  ActiveFilters,
+  Button,
+  ConfirmDialog,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  Field,
+  Notice,
+  PageBody,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  SelectInput,
+  StatStrip,
+  StatusPill,
+  TextInput,
+  Toolbar,
+  type StatusTone,
+} from '@/components/app'
 import {
   partsApi,
   type CreatePartRequest,
@@ -25,8 +46,6 @@ import {
 import { evaluateModuleAccess, type ModuleAccessDecision } from '../policy'
 import { useLatestMutationGuard } from '../use-latest-mutation-guard'
 
-const buttonClass =
-  'min-h-11 rounded-full border border-white/[0.12] px-4 text-sm text-white'
 const partStatuses = new Set(['available', 'reserved', 'sold'])
 const positiveInteger = (value: string | null, fallback: number) => {
   const parsed = Number(value)
@@ -36,6 +55,15 @@ const pageSizeParam = (value: string | null, fallback: number) => {
   const parsed = positiveInteger(value, fallback)
   return parsed <= 100 ? parsed : fallback
 }
+const statusPresentation = (
+  status: string,
+): { label: string; tone: StatusTone } => {
+  if (status === 'available') return { label: 'Доступно', tone: 'ok' }
+  if (status === 'reserved') return { label: 'У резерві', tone: 'warn' }
+  if (status === 'sold') return { label: 'Продано', tone: 'neutral' }
+  return { label: status, tone: 'neutral' }
+}
+
 const optional = (value: string) => value.trim() || undefined
 const optionalNumber = (value: string) =>
   value.trim() ? Number(value) : undefined
@@ -139,7 +167,11 @@ function AccessDenied({ decision }: { decision: ModuleAccessDecision }) {
           : decision.kind === 'access-error'
             ? 'Не вдалося перевірити доступ.'
             : 'Недостатньо прав.'
-  return <section role="alert">{message}</section>
+  return (
+    <Notice role="alert" tone="warn">
+      {message}
+    </Notice>
+  )
 }
 
 const allowedToView = (
@@ -342,61 +374,89 @@ export function PartsScreen({ definition }: CabinetModuleScreenProps) {
     next.delete('page')
     setSearchParams(next)
   }
+  const clearFilter = (name: string) => {
+    const next = new URLSearchParams(searchParams)
+    next.delete(name)
+    next.delete('page')
+    setSearchParams(next)
+  }
+  const activeFilters = [
+    ...(filters.q === undefined
+      ? []
+      : [
+          {
+            key: 'q',
+            label: `Пошук: ${filters.q}`,
+            onClear: () => clearFilter('q'),
+          },
+        ]),
+    ...(filters.status === undefined
+      ? []
+      : [
+          {
+            key: 'status',
+            label: `Стан: ${statusPresentation(filters.status).label}`,
+            onClear: () => clearFilter('status'),
+          },
+        ]),
+    ...(filters.make === undefined
+      ? []
+      : [
+          {
+            key: 'make',
+            label: `Марка: ${filters.make}`,
+            onClear: () => clearFilter('make'),
+          },
+        ]),
+  ]
+
   return (
-    <section className="mx-auto grid w-full max-w-6xl gap-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-brand text-xs uppercase">Склад</p>
-          <h1 className="text-3xl text-white">Деталі</h1>
-        </div>
-        {createDecision.kind === 'allowed' ? (
-          <Link className={buttonClass} to="new">
-            Додати деталь
-          </Link>
-        ) : null}
-      </header>
-      <form
-        className="flex flex-wrap gap-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-        }}
-      >
-        <label className="grid gap-1 text-sm text-neutral-300">
-          Пошук
-          <input
+    <PageBody>
+      <PageHeader
+        actions={
+          createDecision.kind === 'allowed' ? (
+            <Button asChild variant="primary">
+              <Link to="new">
+                <Plus aria-hidden />
+                Додати деталь
+              </Link>
+            </Button>
+          ) : undefined
+        }
+        eyebrow="Склад"
+        title="Деталі"
+      />
+      <Toolbar>
+        <Field className="min-w-52 flex-1" label="Пошук">
+          <SearchInput
+            name="q"
             onChange={(event) => updateFilter('q', event.target.value)}
             value={filters.q ?? ''}
-            name="q"
-            className="rounded border border-white/[0.12] bg-transparent p-2 text-white"
           />
-        </label>
-        <label className="grid gap-1 text-sm text-neutral-300">
-          Статус
-          <select
+        </Field>
+        <Field className="min-w-40" label="Статус">
+          <SelectInput
             aria-label="Статус"
-            onChange={(event) => updateFilter('status', event.target.value)}
             name="status"
-            className="rounded border border-white/[0.12] bg-transparent p-2 text-white"
+            onChange={(event) => updateFilter('status', event.target.value)}
             value={filters.status ?? ''}
           >
             <option value="">Усі</option>
             <option value="available">Доступні</option>
             <option value="reserved">Зарезервовані</option>
             <option value="sold">Продані</option>
-          </select>
-        </label>
-        <label className="grid gap-1 text-sm text-neutral-300">
-          Марка
-          <input
+          </SelectInput>
+        </Field>
+        <Field className="min-w-36" label="Марка">
+          <TextInput
             aria-label="Марка"
-            onChange={(event) => updateFilter('make', event.target.value)}
             name="make"
-            className="rounded border border-white/[0.12] bg-transparent p-2 text-white"
+            onChange={(event) => updateFilter('make', event.target.value)}
             value={filters.make ?? ''}
           />
-        </label>
+        </Field>
         {links.cars ? (
-          <label className="grid gap-1 text-sm text-neutral-300">
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             Авто
             <select
               aria-label="Авто"
@@ -411,7 +471,7 @@ export function PartsScreen({ definition }: CabinetModuleScreenProps) {
                 )
               }
               name="carIds"
-              className="rounded border border-white/[0.12] bg-transparent p-2 text-white"
+              className="bg-app-input border-app-line-2 rounded-control text-app-ink min-h-11 border px-2 py-1.5 text-sm"
               value={filters.carIds}
             >
               {sourceOptions.cars.map((car) => (
@@ -430,14 +490,14 @@ export function PartsScreen({ definition }: CabinetModuleScreenProps) {
                 ))}
             </select>
             {sourceOptions.carsUnavailable ? (
-              <span role="status">
+              <span className="text-app-dim text-[11.5px]" role="status">
                 Пошук автомобілів недоступний: список не завантажено.
               </span>
             ) : null}
           </label>
         ) : null}
         {links.intakes ? (
-          <label className="grid gap-1 text-sm text-neutral-300">
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             Приймання
             <select
               aria-label="Приймання"
@@ -452,7 +512,7 @@ export function PartsScreen({ definition }: CabinetModuleScreenProps) {
                 )
               }
               name="intakeIds"
-              className="rounded border border-white/[0.12] bg-transparent p-2 text-white"
+              className="bg-app-input border-app-line-2 rounded-control text-app-ink min-h-11 border px-2 py-1.5 text-sm"
               value={filters.intakeIds}
             >
               {sourceOptions.intakes.map((intake) => (
@@ -472,76 +532,123 @@ export function PartsScreen({ definition }: CabinetModuleScreenProps) {
                 ))}
             </select>
             {sourceOptions.intakesUnavailable ? (
-              <span role="status">
+              <span className="text-app-dim text-[11.5px]" role="status">
                 Пошук приймань недоступний: список не завантажено.
               </span>
             ) : null}
           </label>
         ) : null}
-        <label className="grid gap-1 text-sm text-neutral-300">
-          Розмір сторінки
-          <select
+        <Field className="min-w-40" label="Розмір сторінки">
+          <SelectInput
             aria-label="Розмір сторінки"
-            onChange={(event) => updateFilter('per_page', event.target.value)}
             name="per_page"
+            onChange={(event) => updateFilter('per_page', event.target.value)}
             value={String(filters.pageSize)}
           >
             <option value="10">10</option>
             <option value="30">30</option>
             <option value="50">50</option>
             <option value="100">100</option>
-          </select>
-        </label>
-        <button className={buttonClass} type="submit">
-          Застосувати
-        </button>
-      </form>
-      {pageMeta ? (
-        <nav aria-label="Пагінація деталей">
-          <button
-            disabled={pageMeta.page <= 1}
-            onClick={() => updatePage(pageMeta.page - 1)}
-            type="button"
-          >
-            Попередня сторінка
-          </button>
-          <span className="text-neutral-400">
-            Сторінка {pageMeta.page} з {pageMeta.totalPages}
-          </span>
-          <button
-            disabled={
-              pageMeta.totalPages === 0 || pageMeta.page >= pageMeta.totalPages
-            }
-            onClick={() => updatePage(pageMeta.page + 1)}
-            type="button"
-          >
-            Наступна сторінка
-          </button>
-        </nav>
+          </SelectInput>
+        </Field>
+        <ActiveFilters
+          filters={activeFilters}
+          onReset={() => setSearchParams(new URLSearchParams())}
+        />
+      </Toolbar>
+      {summary ? (
+        <StatStrip
+          items={[
+            { label: 'усього', value: summary.total },
+            { label: 'доступно', value: summary.available },
+            { label: 'у резерві', value: summary.reserved },
+          ]}
+        />
       ) : null}
-      <p className="text-sm text-neutral-400">
-        {summary
-          ? `Усього: ${summary.total}; доступно: ${summary.available}; у резерві: ${summary.reserved}`
-          : 'Завантажуємо серверний стан…'}
-      </p>
       {error ? (
-        <p role="alert">Не вдалося завантажити склад.</p>
+        <ErrorState
+          description="Не вдалося завантажити склад. Дані на місці — потрібно лише повторити запит."
+          onRetry={() => setSearchParams(new URLSearchParams(searchParams))}
+          title="Склад не завантажився"
+        />
       ) : (
-        <ul className="grid gap-2">
-          {items.map((part) => (
-            <li key={part.id}>
-              <Link
-                className="block rounded border border-white/[0.08] p-3 text-white"
-                to={part.id}
-              >
-                {part.name} · доступно {part.quantityAvailable} · резерв{' '}
-                {part.quantityReserved}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <DataTable
+          caption="Деталі на складі"
+          columns={[
+            {
+              key: 'name',
+              label: 'Деталь',
+              variant: 'primary',
+              cell: (part) => (
+                <Link className="hover:text-brand block" to={part.id}>
+                  {part.name}
+                </Link>
+              ),
+            },
+            {
+              key: 'car',
+              label: 'Авто-джерело',
+              cell: (part) =>
+                part.car
+                  ? `${part.car.make} ${part.car.model} · ${String(part.car.year)}`
+                  : '—',
+            },
+            {
+              key: 'status',
+              label: 'Стан',
+              cell: (part) => {
+                const presentation = statusPresentation(part.status ?? '')
+                return presentation.label === '' ? (
+                  '—'
+                ) : (
+                  <StatusPill tone={presentation.tone}>
+                    {presentation.label}
+                  </StatusPill>
+                )
+              },
+            },
+            {
+              key: 'available',
+              label: 'Доступно',
+              align: 'end',
+              cell: (part) => part.quantityAvailable,
+            },
+            {
+              key: 'reserved',
+              label: 'Резерв',
+              align: 'end',
+              cell: (part) => part.quantityReserved,
+            },
+          ]}
+          empty={
+            <EmptyState
+              description={
+                activeFilters.length > 0
+                  ? 'За цими фільтрами нічого немає. Спробуйте прибрати частину умов.'
+                  : 'Додайте першу деталь або розберіть авто — позиції з’являться тут.'
+              }
+              title={
+                activeFilters.length > 0
+                  ? 'Нічого не знайдено'
+                  : 'Тут поки порожньо'
+              }
+            />
+          }
+          footer={
+            pageMeta ? (
+              <Pagination
+                label="Пагінація деталей"
+                onPage={updatePage}
+                page={pageMeta.page}
+                totalPages={pageMeta.totalPages}
+              />
+            ) : null
+          }
+          rowKey={(part) => part.id}
+          rows={items}
+        />
       )}
-    </section>
+    </PageBody>
   )
 }
 
@@ -568,14 +675,16 @@ function PartDetailScreen({
 }) {
   const navigate = useNavigate()
   const [deleting, setDeleting] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const remove = async () => {
-    if (deleting || !window.confirm('Видалити деталь?')) return
+    if (deleting) return
     setDeleting(true)
     setDeleteError(null)
     try {
       const scope = requireLatestMutation({ quota: false })
       await partsApi.delete(partId, { signal: scope.signal })
+      setConfirmingDelete(false)
       void navigate('..', { replace: true })
     } catch (failure) {
       const status =
@@ -597,19 +706,29 @@ function PartDetailScreen({
     }
   }
   return (
-    <section className="mx-auto grid w-full max-w-3xl gap-4">
-      <h1 className="text-3xl text-white">Деталь</h1>
+    <PageBody width="narrow">
+      <PageHeader
+        eyebrow="Склад · Деталі"
+        title={detail === null ? 'Деталь' : detail.name}
+      />
       {error ? (
-        <p role="alert">Не вдалося завантажити деталь.</p>
+        <ErrorState
+          description="Деталь не вдалося завантажити. Спробуйте ще раз."
+          title="Не вдалося завантажити деталь"
+        />
       ) : detail ? (
         <>
-          <h2 className="text-xl text-white">{detail.name}</h2>
-          <p className="text-neutral-300">
-            Усього: {detail.quantityTotal}; доступно: {detail.quantityAvailable}
-            ; у резерві: {detail.quantityReserved}; продано:{' '}
-            {detail.quantitySoldTotal}
-          </p>
-          <p className="text-neutral-400">
+          <div className="flex flex-wrap items-center gap-3">
+            <StatusPill tone={statusPresentation(detail.status).tone}>
+              {statusPresentation(detail.status).label}
+            </StatusPill>
+            <p className="text-app-muted text-sm tabular-nums">
+              Усього: {detail.quantityTotal}; доступно:{' '}
+              {detail.quantityAvailable}; у резерві: {detail.quantityReserved};
+              продано: {detail.quantitySoldTotal}
+            </p>
+          </div>
+          <p className="text-app-dim text-sm">
             Сумісність:{' '}
             {[
               detail.compatCarBrand,
@@ -619,7 +738,7 @@ function PartDetailScreen({
               .filter(Boolean)
               .join(' ') || 'не вказано'}
           </p>
-          <dl className="grid gap-1 text-neutral-300">
+          <dl className="border-app-line rounded-panel bg-app-raised text-app-muted grid gap-1.5 border p-4 text-sm">
             <div>OEM: {detail.oemCode ?? '—'}</div>
             <div>Стан: {detail.condition}</div>
             <div>Статус: {detail.status}</div>
@@ -736,30 +855,47 @@ function PartDetailScreen({
           ) : null}
         </>
       ) : (
-        <p className="text-neutral-400">Завантажуємо серверний стан…</p>
+        <p className="text-app-dim text-sm" role="status">
+          Завантажуємо серверний стан…
+        </p>
       )}
-      <p className="text-neutral-400">Сумісність недоступна для редагування</p>
-      <p className="text-neutral-400">
+      <p className="text-app-dim text-[12.5px]">
+        Сумісність недоступна для редагування
+      </p>
+      <p className="text-app-dim text-[12.5px]">
         Видалення деталі перевіряється сервером.
       </p>
       {canManage ? (
-        <>
-          <Link to={`/app/${tenantSlug}/parts/${partId}/edit`}>
-            Редагувати деталь
-          </Link>
-          <button
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="primary">
+            <Link to={`/app/${tenantSlug}/parts/${partId}/edit`}>
+              Редагувати деталь
+            </Link>
+          </Button>
+          <Button
             aria-busy={deleting}
-            className={buttonClass}
             disabled={deleting}
-            onClick={() => void remove()}
-            type="button"
+            onClick={() => setConfirmingDelete(true)}
+            variant="danger"
           >
             Видалити деталь
-          </button>
-        </>
+          </Button>
+        </div>
       ) : null}
-      {deleteError ? <p role="alert">{deleteError}</p> : null}
-    </section>
+      <ConfirmDialog
+        confirmLabel="Видалити"
+        consequence="Історія продажів, резерви та фото цієї деталі зникнуть назавжди."
+        error={deleteError}
+        onConfirm={() => void remove()}
+        onOpenChange={setConfirmingDelete}
+        open={confirmingDelete}
+        pending={deleting}
+        title="Видалити деталь?"
+      />
+      {deleteError !== null && !confirmingDelete ? (
+        <Notice tone="danger">{deleteError}</Notice>
+      ) : null}
+    </PageBody>
   )
 }
 
@@ -1287,9 +1423,9 @@ function PartForm({
     }
   }
   return (
-    <section className="mx-auto grid w-full max-w-3xl gap-4">
-      <h1 className="text-3xl text-white">{title}</h1>
-      <form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+    <PageBody width="narrow">
+      <PageHeader eyebrow="Склад · Деталі" title={title} />
+      <form className="grid gap-4" onSubmit={(event) => void submit(event)}>
         <PartFields
           canViewCars={canViewCars}
           canViewIntakes={canViewIntakes}
@@ -1302,23 +1438,27 @@ function PartForm({
           requireLatestMutation={requireLatestMutation}
           setItems={setMediaItems}
         />
-        <button
-          aria-busy={pending || mediaPending}
-          className="min-h-11 rounded-full bg-brand px-4 text-black"
-          disabled={pending || mediaPending}
-          type="submit"
-        >
-          Створити деталь
-        </button>
+        <div className="border-app-line rounded-panel bg-app-raised flex flex-wrap justify-end gap-2 border p-3">
+          <Button
+            aria-busy={pending || mediaPending}
+            disabled={pending || mediaPending}
+            type="submit"
+            variant="primary"
+          >
+            Створити деталь
+          </Button>
+        </div>
       </form>
-      {status ? <p role="status">{status}</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
-      <p className="text-neutral-400">
+      {status ? <Notice tone="ok">{status}</Notice> : null}
+      {error ? <Notice tone="danger">{error}</Notice> : null}
+      <p className="text-app-dim text-[12.5px]">
         VIN та OEM-декодування недоступні: сервер не визначає операцію
         декодування.
       </p>
-      <p className="text-neutral-400">Сумісність недоступна для редагування</p>
-    </section>
+      <p className="text-app-dim text-[12.5px]">
+        Сумісність недоступна для редагування
+      </p>
+    </PageBody>
   )
 }
 
@@ -1429,10 +1569,10 @@ function PartEdit({
     }
   }
   return (
-    <section className="mx-auto grid w-full max-w-3xl gap-4">
-      <h1 className="text-3xl text-white">Редагувати деталь</h1>
+    <PageBody width="narrow">
+      <PageHeader eyebrow="Склад · Деталі" title="Редагувати деталь" />
       {values ? (
-        <form className="grid gap-3" onSubmit={(event) => void save(event)}>
+        <form className="grid gap-4" onSubmit={(event) => void save(event)}>
           <PartFields
             canViewCars={canViewCars}
             canViewIntakes={canViewIntakes}
@@ -1446,24 +1586,30 @@ function PartEdit({
             requireLatestMutation={requireLatestMutation}
             setItems={setMediaItems}
           />
-          <button
-            aria-busy={pending || mediaPending}
-            className="min-h-11 rounded-full bg-brand px-4 text-black"
-            disabled={pending || mediaPending}
-            type="submit"
-          >
-            Зберегти зміни
-          </button>
+          <div className="border-app-line rounded-panel bg-app-raised flex flex-wrap justify-end gap-2 border p-3">
+            <Button
+              aria-busy={pending || mediaPending}
+              disabled={pending || mediaPending}
+              type="submit"
+              variant="primary"
+            >
+              Зберегти зміни
+            </Button>
+          </div>
         </form>
       ) : !error ? (
-        <p role="status">Завантажуємо дані деталі…</p>
+        <p className="text-app-dim text-sm" role="status">
+          Завантажуємо дані деталі…
+        </p>
       ) : null}
-      {status ? <p role="status">{status}</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
-      <p className="text-neutral-400">Сумісність недоступна для редагування</p>
-      <p className="text-neutral-400">
+      {status ? <Notice tone="ok">{status}</Notice> : null}
+      {error ? <Notice tone="danger">{error}</Notice> : null}
+      <p className="text-app-dim text-[12.5px]">
+        Сумісність недоступна для редагування
+      </p>
+      <p className="text-app-dim text-[12.5px]">
         Видалення деталі перевіряється сервером.
       </p>
-    </section>
+    </PageBody>
   )
 }

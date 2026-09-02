@@ -6,6 +6,21 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router'
+import { Plus } from 'lucide-react'
+import {
+  Button,
+  DataTable,
+  EmptyState,
+  Field,
+  Notice,
+  PageBody,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  SelectInput,
+  StatStrip,
+  Toolbar,
+} from '@/components/app'
 import {
   intakesApi,
   type AddIntakePartRequest,
@@ -122,9 +137,9 @@ function Denied({ decision }: { decision: ModuleAccessDecision }) {
         ? 'Поточна підписка не дозволяє цю дію.'
         : 'Недостатньо прав.'
   return (
-    <section role="alert">
-      <h1>{message}</h1>
-    </section>
+    <Notice role="alert" tone="warn">
+      {message}
+    </Notice>
   )
 }
 
@@ -238,92 +253,106 @@ function IntakesList({ base }: { base: string }) {
     state.page?.pageSize ?? selection.pageSize ?? defaultPageSize
   const totalPages = state.page?.totalPages ?? 1
   return (
-    <section className="mx-auto grid w-full max-w-6xl gap-6">
-      <header className="flex flex-wrap justify-between gap-3">
-        <div>
-          <p className="text-brand text-xs font-medium tracking-[0.18em] uppercase">
-            Кабінет
-          </p>
-          <h1 className="text-3xl font-light text-white">Приймання авто</h1>
-        </div>
-        {createDecision.kind === 'allowed' ? (
-          <Link
-            className="rounded-full bg-brand px-4 py-3 text-sm font-medium text-black"
-            to={`${base}/new`}
-          >
-            Нове приймання
-          </Link>
-        ) : null}
-      </header>
+    <PageBody>
+      <PageHeader
+        actions={
+          createDecision.kind === 'allowed' ? (
+            <Button asChild variant="primary">
+              <Link to={`${base}/new`}>
+                <Plus aria-hidden />
+                Нове приймання
+              </Link>
+            </Button>
+          ) : undefined
+        }
+        eyebrow="Склад"
+        title="Приймання авто"
+      />
       <form
-        className="flex flex-wrap gap-3"
         onSubmit={(event) => {
           event.preventDefault()
           updateSearch()
         }}
       >
-        <label className="grid gap-1">
-          Пошук приймань
-          <input
-            aria-label="Пошук приймань"
-            onChange={(event) => setQuery(event.target.value)}
-            value={query}
-          />
-        </label>
-        <label className="grid gap-1">
-          Статус
-          <select
-            onChange={(event) => {
-              const next = new URLSearchParams(searchParams)
-              if (event.target.value) next.set('status', event.target.value)
-              else next.delete('status')
-              next.set('page', '1')
-              setSearchParams(next)
-            }}
-            value={selection.status ?? ''}
-          >
-            <option value="">Усі</option>
-            <option value="active">Активні</option>
-            <option value="closed">Закриті</option>
-          </select>
-        </label>
-        <button type="submit">Шукати</button>
+        <Toolbar>
+          <Field className="min-w-52 flex-1" label="Пошук приймань">
+            <SearchInput
+              aria-label="Пошук приймань"
+              onChange={(event) => setQuery(event.target.value)}
+              value={query}
+            />
+          </Field>
+          <Field className="min-w-40" label="Статус">
+            <SelectInput
+              onChange={(event) => {
+                const next = new URLSearchParams(searchParams)
+                if (event.target.value) next.set('status', event.target.value)
+                else next.delete('status')
+                next.set('page', '1')
+                setSearchParams(next)
+              }}
+              value={selection.status ?? ''}
+            >
+              <option value="">Усі</option>
+              <option value="active">Активні</option>
+              <option value="closed">Закриті</option>
+            </SelectInput>
+          </Field>
+          <Button type="submit" variant="primary">
+            Шукати
+          </Button>
+        </Toolbar>
       </form>
-      {state.error ? <p role="alert">{state.error}</p> : null}
-      <p>Знайдено: {state.page?.total ?? 0}</p>
-      <ul aria-label="Список приймань">
-        {(state.page?.items ?? []).map((intake) => (
-          <li key={intake.id}>
-            <Link to={`${base}/${intake.id}`}>
-              {intake.name ?? 'Без назви'}
-            </Link>
-            <p>
-              {intake.supplier ?? 'Постачальника не вказано'} · запчастин:{' '}
-              {intake.partsCount}
-            </p>
-          </li>
-        ))}
-      </ul>
-      <nav aria-label="Пагінація приймань">
-        <button
-          disabled={currentPage <= 1}
-          onClick={() => updatePage(currentPage - 1, currentPageSize)}
-          type="button"
-        >
-          Попередня
-        </button>
-        <span>
-          Сторінка {currentPage} з {totalPages}
-        </span>
-        <button
-          disabled={currentPage >= totalPages}
-          onClick={() => updatePage(currentPage + 1, currentPageSize)}
-          type="button"
-        >
-          Наступна
-        </button>
-      </nav>
-    </section>
+      {state.error ? <Notice tone="danger">{state.error}</Notice> : null}
+      <StatStrip
+        items={[{ label: 'знайдено', value: state.page?.total ?? 0 }]}
+      />
+      <DataTable
+        caption="Список приймань"
+        columns={[
+          {
+            key: 'name',
+            label: 'Приймання',
+            variant: 'primary',
+            cell: (intake) => (
+              <Link
+                className="hover:text-brand block"
+                to={`${base}/${intake.id}`}
+              >
+                {intake.name ?? 'Без назви'}
+              </Link>
+            ),
+          },
+          {
+            key: 'supplier',
+            label: 'Постачальник',
+            cell: (intake) => intake.supplier ?? 'Постачальника не вказано',
+          },
+          {
+            key: 'parts',
+            label: 'Запчастин',
+            align: 'end',
+            cell: (intake) => intake.partsCount,
+          },
+        ]}
+        empty={
+          <EmptyState
+            description="Створіть перше приймання, щоб оприбуткувати партію запчастин."
+            title="Приймань поки немає"
+          />
+        }
+        footer={
+          <Pagination
+            label="Пагінація приймань"
+            onPage={(nextPage) => updatePage(nextPage, currentPageSize)}
+            page={currentPage}
+            totalPages={totalPages}
+          />
+        }
+        rowKey={(intake) => intake.id}
+        rows={state.page?.items ?? []}
+      />
+    </PageBody>
   )
 }
 

@@ -253,7 +253,6 @@ it('keeps controlled filters synced with back navigation and resets page when fi
   fireEvent.change(screen.getByLabelText('Марка'), {
     target: { value: 'Ford' },
   })
-  fireEvent.click(screen.getByRole('button', { name: 'Застосувати' }))
   expect(screen.getByLabelText('Поточний маршрут')).toHaveTextContent(
     'make=Ford',
   )
@@ -905,7 +904,6 @@ it('uses opaque media labels and never renders storage keys', async () => {
 
 it('confirms deletion, prevents duplicates, and reports a server conflict', async () => {
   partMocks.delete.mockRejectedValueOnce({ response: { status: 409 } })
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
   render(
     <MemoryRouter initialEntries={['/app/yard/parts/part-1']}>
       <Routes>
@@ -918,7 +916,9 @@ it('confirms deletion, prevents duplicates, and reports a server conflict', asyn
   )
   await screen.findByRole('heading', { name: 'Деталь' })
   fireEvent.click(screen.getByRole('button', { name: 'Видалити деталь' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Видалити деталь' }))
+  const confirmDelete = await screen.findByRole('button', { name: 'Видалити' })
+  fireEvent.click(confirmDelete)
+  fireEvent.click(confirmDelete)
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Не вдалося видалити деталь через конфлікт.',
   )
@@ -1035,7 +1035,6 @@ it('applies the parts quota only to create, not edit or delete', async () => {
   edit.unmount()
 
   partMocks.get.mockResolvedValue(null)
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
   render(
     <MemoryRouter initialEntries={['/app/yard/parts/part-1']}>
       <Routes>
@@ -1049,6 +1048,7 @@ it('applies the parts quota only to create, not edit or delete', async () => {
   fireEvent.click(
     await screen.findByRole('button', { name: 'Видалити деталь' }),
   )
+  fireEvent.click(await screen.findByRole('button', { name: 'Видалити' }))
   await vi.waitFor(() =>
     expect(partMocks.delete).toHaveBeenCalledWith(
       'part-1',
@@ -1189,14 +1189,16 @@ it('ignores an aborted stale list failure after filters change', async () => {
   fireEvent.change(screen.getByLabelText('Пошук'), {
     target: { value: 'mirror' },
   })
-  expect(await screen.findByText(/Mirror · доступно 1/)).toBeInTheDocument()
+  expect(
+    await screen.findByRole('link', { name: 'Mirror' }),
+  ).toBeInTheDocument()
   await act(async () => {
     rejectFirst?.(new Error('stale failure'))
     await Promise.resolve()
   })
 
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-  expect(screen.getByText(/Mirror · доступно 1/)).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Mirror' })).toBeInTheDocument()
 })
 
 it('ignores an aborted stale detail failure after navigation', async () => {

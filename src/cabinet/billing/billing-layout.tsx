@@ -1,3 +1,4 @@
+import { EmptyState } from '@/components/app'
 import { useCabinet } from '../CabinetContext'
 import { AccessGate } from '../AccessGate'
 import { cabinetModules, type CabinetModuleKey } from '../module-registry'
@@ -20,20 +21,21 @@ export function BillingHeader({
 }) {
   const Heading = level === 1 ? 'h1' : 'h2'
   return (
-    <header className="mb-10 flex flex-col gap-2">
-      <Heading className="text-[36px] leading-[1] font-light tracking-[-0.02em] lg:text-[48px]">
+    <header className="mb-8 flex flex-col gap-1.5">
+      <Heading className="text-2xl font-semibold tracking-[-0.02em] text-white">
         {title}
       </Heading>
-      {subtitle && <p className="text-[14px] text-neutral-400">{subtitle}</p>}
+      {subtitle && <p className="text-app-muted text-sm">{subtitle}</p>}
     </header>
   )
 }
 
 export function EmptyBillingPanel() {
   return (
-    <p className="text-[14px] text-neutral-400">
-      Дані недоступні. Спробуйте оновити сторінку.
-    </p>
+    <EmptyState
+      description="Дані недоступні. Спробуйте оновити сторінку."
+      title="Немає даних білінгу"
+    />
   )
 }
 

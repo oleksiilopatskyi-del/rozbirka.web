@@ -820,7 +820,7 @@ it('loads URL-backed car search and displays the server profitability unchanged'
   expect(
     await screen.findByRole('heading', { name: 'Автомобілі' }),
   ).toBeVisible()
-  expect(screen.getByText(/Повернено: 5\s000 \(42%\)/)).toBeVisible()
+  expect(screen.getByText(/5\s000 \(42%\)/)).toBeVisible()
   expect(carsApi.list).toHaveBeenCalledWith(
     { search: 'BMW', status: 'active', page: 2, pageSize: 25 },
     expect.anything(),

@@ -86,7 +86,8 @@ it('renders the server-returned directory result instead of deriving customer st
   )
 
   expect(await screen.findByText('Ірина')).toBeVisible()
-  expect(screen.getByText('Знайдено: 27')).toBeVisible()
+  expect(screen.getByText('знайдено')).toBeVisible()
+  expect(screen.getByText('27')).toBeVisible()
   expect(customerMocks.list).toHaveBeenCalledWith(
     { q: 'Ірина', page: 1 },
     expect.any(Object),
