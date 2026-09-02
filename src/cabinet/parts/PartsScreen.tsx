@@ -221,6 +221,7 @@ export function PartsScreen({ definition }: CabinetModuleScreenProps) {
     cars: allowedToView(cabinetModules.cars, cabinet),
     intakes: allowedToView(cabinetModules.intakes, cabinet),
     orders: allowedToView(cabinetModules.orders, cabinet),
+    inventory: allowedToView(cabinetModules.inventory, cabinet),
   }
   const sourceOptions = useSourceOptions(
     !partId && !isNew && links.cars,
@@ -670,7 +671,12 @@ function PartDetailScreen({
   partId: string
   error: boolean
   canManage: boolean
-  links: { cars: boolean; intakes: boolean; orders: boolean }
+  links: {
+    cars: boolean
+    intakes: boolean
+    orders: boolean
+    inventory: boolean
+  }
   requireLatestMutation: ReturnType<
     typeof useLatestMutationGuard
   >['requireLatestMutation']
@@ -884,6 +890,13 @@ function PartDetailScreen({
             Видалити деталь
           </Button>
         </div>
+      ) : null}
+      {links.inventory ? (
+        <Button asChild variant="ghost">
+          <Link to={`/app/${tenantSlug}/parts/${partId}/inventory`}>
+            Розміщення на складі
+          </Link>
+        </Button>
       ) : null}
       <ConfirmDialog
         confirmLabel="Видалити"

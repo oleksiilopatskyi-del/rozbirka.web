@@ -76,6 +76,7 @@ const permissionGroupTitles: Record<string, string> = {
   customers: 'Клієнти',
   finance: 'Фінанси',
   intakes: 'Приймання',
+  inventory: 'Інвентаризація',
   stickers: 'Стікери',
   reports: 'Звіти',
   team: 'Команда',

@@ -1060,6 +1060,7 @@ it('applies the parts quota only to create, not edit or delete', async () => {
 })
 
 it('renders the immutable detail and history contract with permission-aware links', async () => {
+  cabinetMock.snapshot.permissions.add('inventory.view')
   partMocks.get.mockResolvedValue({
     id: 'part-1',
     name: 'Bumper',
@@ -1146,6 +1147,9 @@ it('renders the immutable detail and history contract with permission-aware link
   expect(
     screen.getByRole('link', { name: 'Редагувати деталь' }),
   ).toHaveAttribute('href', '/app/yard/parts/part-1/edit')
+  expect(
+    screen.getByRole('link', { name: 'Розміщення на складі' }),
+  ).toHaveAttribute('href', '/app/yard/parts/part-1/inventory')
   expect(
     screen.getAllByRole('link', { name: /Замовлення 42/ }),
   ).not.toHaveLength(0)

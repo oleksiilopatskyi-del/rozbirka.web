@@ -2347,6 +2347,138 @@ systemCapabilities:
       - rozbirka.core:src/Rozbirka.API/Controllers/MeController.cs
       - rozbirka.web:src/api/billing.ts
 
+  - id: inventory.structure.manage
+    domain: inventory
+    name: Manage warehouses, zones, zone labels, and part placement
+    trigger: An authorized user configures physical inventory storage or part placement
+    mobileBehavior: Create, rename, and archive warehouses and zones, print zone QR labels, and assign parts to physical zones
+    webOutcome: Configure the same inventory structure from responsive management screens and print browser-native QR label sheets
+    contract:
+      service: core
+      status: ready
+      operations:
+        - GET /api/v1/warehouses
+        - POST /api/v1/warehouses
+        - PUT /api/v1/warehouses/{id}
+        - DELETE /api/v1/warehouses/{id}
+        - GET /api/v1/inventory/zones
+        - POST /api/v1/inventory/zones
+        - PUT /api/v1/inventory/zones/{id}
+        - DELETE /api/v1/inventory/zones/{id}
+        - GET /api/v1/parts/{partId}/inventory-zones
+        - PUT /api/v1/parts/{partId}/inventory-zones
+    access:
+      permissions:
+        - inventory.view
+        - inventory.zones.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/inventory/index.tsx
+      - rozbirka.mobile:app/inventory/warehouses/[id]/index.tsx
+      - rozbirka.mobile:app/inventory/part-zones/[partId].tsx
+      - rozbirka.core:src/Rozbirka.API/Controllers/WarehousesController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/InventoryZonesController.cs
+      - rozbirka.web:src/cabinet/inventory/InventoryScreen.tsx
+
+  - id: inventory.sessions.manage
+    domain: inventory
+    name: Create and manage inventory sessions
+    trigger: An authorized user prepares or controls a physical inventory count
+    mobileBehavior: Select zones, create a draft, manage the session lifecycle, and monitor zone progress and lease ownership
+    webOutcome: Create and control inventory sessions while monitoring Mobile counting progress without taking a scanner lease
+    contract:
+      service: core
+      status: ready
+      operations:
+        - GET /api/v1/inventory/sessions
+        - POST /api/v1/inventory/sessions
+        - GET /api/v1/inventory/sessions/{id}
+        - POST /api/v1/inventory/sessions/{id}/start
+        - POST /api/v1/inventory/sessions/{id}/cancel
+        - POST /api/v1/inventory/sessions/{id}/complete
+        - POST /api/v1/inventory/sessions/{id}/reopen
+    access:
+      permissions:
+        - inventory.view
+        - inventory.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/inventory/new.tsx
+      - rozbirka.mobile:app/inventory/sessions/[id]/index.tsx
+      - rozbirka.core:src/Rozbirka.API/Controllers/InventorySessionsController.cs
+      - rozbirka.web:src/cabinet/inventory/InventoryScreen.tsx
+
+  - id: inventory.results.review
+    domain: inventory
+    name: Review inventory results, discrepancies, adjustments, and audit
+    trigger: An inventory count reaches review or an operator inspects historical counting activity
+    mobileBehavior: Compare expected and counted quantities, apply a reasoned adjustment, and review audit and scan journals
+    webOutcome: Review responsive discrepancy results, apply authorized adjustments, and inspect immutable audit and scan journals
+    contract:
+      service: core
+      status: ready
+      operations:
+        - GET /api/v1/inventory/sessions/{id}/results
+        - GET /api/v1/inventory/sessions/{id}/audit
+        - GET /api/v1/inventory/sessions/{sessionId}/zones/{zoneId}/scans
+        - POST /api/v1/inventory/sessions/{sessionId}/adjustments/{partId}
+    access:
+      permissions:
+        - inventory.view
+        - inventory.adjust
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/inventory/sessions/[id]/index.tsx
+      - rozbirka.mobile:app/inventory/sessions/[id]/journal/[zoneId].tsx
+      - rozbirka.core:src/Rozbirka.API/Controllers/InventorySessionsController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/InventoryScansController.cs
+      - rozbirka.web:src/cabinet/inventory/InventoryScreen.tsx
+
+  - id: inventory.count.mobile-only
+    domain: inventory
+    name: Physically count a zone with QR scanning and an exclusive lease
+    trigger: A worker starts physically counting an inventory zone
+    mobileBehavior: Scan the zone, acquire and heartbeat its exclusive lease, scan parts with an offline queue, undo the latest scan, and complete the zone
+    webOutcome: Show count progress and the resulting scan journal without camera, scan, lease, undo, offline-queue, or zone-completion controls
+    contract:
+      service: core
+      status: ready
+      operations:
+        - GET /api/v1/inventory/sessions/{id}
+        - GET /api/v1/inventory/sessions/{sessionId}/zones/{zoneId}/scans
+      notes: Web intentionally consumes only read operations; scan mutation, lease, offline queue, undo, and zone completion remain Mobile-only
+    access:
+      permissions:
+        - inventory.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/inventory/sessions/[id]/zone-scan.tsx
+      - rozbirka.mobile:app/inventory/sessions/[id]/count/[zoneId].tsx
+      - rozbirka.mobile:src/inventory/offlineScanQueue.ts
+      - rozbirka.mobile:src/inventory/useZoneLease.ts
+      - rozbirka.web:src/api/inventory.ts
+      - rozbirka.web:src/cabinet/inventory/InventoryScreen.tsx
+
 excludedRoutes:
   - route: /_layout
     classification: unreachable

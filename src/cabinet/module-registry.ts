@@ -3,6 +3,7 @@ import {
   BarChart3,
   Building2,
   Car,
+  ClipboardCheck,
   ClipboardList,
   CreditCard,
   LayoutDashboard,
@@ -28,6 +29,7 @@ export type CabinetModuleKey =
   | 'dashboard'
   | 'cars'
   | 'parts'
+  | 'inventory'
   | 'orders'
   | 'customers'
   | 'cash'
@@ -128,6 +130,21 @@ export const cabinetModules: Readonly<
       placement: 'primary',
       group: 'stock',
       mobilePriority: 2,
+    },
+  },
+  inventory: {
+    key: 'inventory',
+    routeSegment: '/inventory',
+    released: true,
+    viewPermission: 'inventory.view',
+    mutationPermission: 'inventory.manage',
+    allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
+    navigation: {
+      label: 'Інвентаризація',
+      icon: ClipboardCheck,
+      placement: 'primary',
+      group: 'stock',
+      mobilePriority: 7,
     },
   },
   orders: {

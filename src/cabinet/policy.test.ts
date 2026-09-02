@@ -595,6 +595,7 @@ describe('cabinetModules', () => {
       '/customers',
       '/dashboard',
       '/intakes',
+      '/inventory',
       '/orders',
       '/parts',
       '/reports',

@@ -145,6 +145,7 @@ interface CabinetFixtureOptions {
   subscribeFailureStatus?: 403 | 409
   cancelSubscriptionFailureStatus?: 403 | 409
   cancelPaymentFailureStatus?: 403 | 409
+  inventoryManage?: boolean
 }
 
 interface CabinetRequest {
@@ -203,6 +204,11 @@ const isRecognizedTeamPath = (path: string) =>
 const isRecognizedReportsPath = (path: string) =>
   path === '/api/v1/reports' ||
   /^\/api\/v1\/reports\/[^/]+(?:\/download)?$/.test(path)
+
+const isRecognizedInventoryPath = (path: string) =>
+  path === '/api/v1/warehouses' ||
+  path === '/api/v1/inventory/sessions' ||
+  /^\/api\/v1\/inventory\/sessions\/[^/]+(?:\/(?:results|audit))?$/.test(path)
 
 async function installCabinetApiBoundary(
   page: Page,
@@ -266,6 +272,7 @@ async function installCabinetApiBoundary(
       isRecognizedDashboardPath(path) ||
       isRecognizedTeamPath(path) ||
       isRecognizedReportsPath(path) ||
+      isRecognizedInventoryPath(path) ||
       isPaymentCancellationPath(path)
     if (isTenantScoped) {
       if (tenantId === null) {
@@ -331,6 +338,10 @@ async function installCabinetApiBoundary(
             'team.manage',
             'reports.view',
             'reports.manage',
+            'inventory.view',
+            'inventory.zones.manage',
+            'inventory.adjust',
+            ...(options.inventoryManage === false ? [] : ['inventory.manage']),
           ],
           features: ['reports.advanced', 'team_collaboration'],
           entitlement: {
@@ -545,6 +556,119 @@ async function installCabinetApiBoundary(
           error: {
             code: 'FIXTURE_METHOD_NOT_ALLOWED',
             message: 'Reports fixture method not allowed',
+          },
+        },
+        405,
+      )
+      return
+    }
+    if (path === '/api/v1/warehouses' && request.method() === 'GET') {
+      await fulfillData(route, [
+        {
+          id: 'warehouse-1',
+          tenantId,
+          name: 'Основний склад',
+          code: 'main',
+          isSystemDefault: true,
+          isActive: true,
+          zoneCount: 4,
+          createdAt: '2026-09-02T09:00:00.000Z',
+          updatedAt: '2026-09-02T09:00:00.000Z',
+        },
+      ])
+      return
+    }
+    if (path === '/api/v1/inventory/sessions' && request.method() === 'GET') {
+      await fulfillData(route, [
+        {
+          id: 'session-1',
+          number: 'INV-001',
+          status: 'inProgress',
+          createdAt: '2026-09-02T10:00:00.000Z',
+          zones: [
+            {
+              zoneId: 'zone-1',
+              status: 'counting',
+            },
+          ],
+        },
+      ])
+      return
+    }
+    if (
+      path === '/api/v1/inventory/sessions/session-1' &&
+      request.method() === 'GET'
+    ) {
+      await fulfillData(route, {
+        id: 'session-1',
+        number: 'INV-001',
+        status: 'review',
+        createdBy: namedUser.id,
+        startedBy: namedUser.id,
+        completedBy: null,
+        createdAt: '2026-09-02T10:00:00.000Z',
+        startedAt: '2026-09-02T10:05:00.000Z',
+        completedAt: null,
+        cancelledAt: null,
+        cancellationReason: null,
+        preview: {
+          includedPartCount: 12,
+          coverageWarningPartCount: 0,
+          conflictingPartCount: 0,
+        },
+        zones: [
+          {
+            zoneId: 'zone-1',
+            warehouseId: 'warehouse-1',
+            warehouseName: 'Основний склад',
+            zoneName: 'Стелаж A1',
+            zoneCode: 'A1',
+            status: 'completed',
+            leaseOwnerUserId: null,
+            leaseExpiresAt: null,
+            completedAt: '2026-09-02T10:30:00.000Z',
+          },
+        ],
+      })
+      return
+    }
+    if (
+      path === '/api/v1/inventory/sessions/session-1/results' &&
+      request.method() === 'GET'
+    ) {
+      await fulfillData(route, {
+        inventorySessionId: 'session-1',
+        number: 'INV-001',
+        parts: [
+          {
+            partId: 'part-1',
+            partName: 'Крило',
+            partQrCode: 'QR-1',
+            expectedQuantity: 2,
+            actualQuantity: 1,
+            delta: -1,
+            result: 'Shortage',
+            hasCoverageWarning: false,
+            unselectedZoneIds: [],
+          },
+        ],
+      })
+      return
+    }
+    if (
+      path === '/api/v1/inventory/sessions/session-1/audit' &&
+      request.method() === 'GET'
+    ) {
+      await fulfillData(route, [])
+      return
+    }
+    if (isRecognizedInventoryPath(path)) {
+      await fulfillData(
+        route,
+        {
+          error: {
+            code: 'FIXTURE_METHOD_NOT_ALLOWED',
+            message: 'Inventory fixture method not allowed',
           },
         },
         405,
@@ -1421,6 +1545,52 @@ test('uses mobile, tablet, and desktop cabinet presentations at their breakpoint
       page.getByRole('navigation', { name: visibleNavigation }),
     ).toBeVisible()
   }
+})
+
+test('inventory overview remains usable at mobile and desktop widths @cabinet-smoke', async ({
+  page,
+}) => {
+  await installCabinetApiBoundary(page)
+  await loginFrom(page)
+
+  for (const width of [320, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/app/koval/inventory')
+    await expect(
+      page.getByRole('heading', { name: 'Інвентаризація' }),
+    ).toBeVisible()
+    await expect(page.getByText('Основний склад')).toBeVisible()
+    await expect(page.getByText('INV-001')).toBeVisible()
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true)
+  }
+
+  await page.goto('/app/koval/inventory/sessions/session-1')
+  await expect(page.getByRole('heading', { name: 'INV-001' })).toBeVisible()
+  await expect(page.getByText(/увімкнути камеру/i)).toHaveCount(0)
+  await page.getByRole('link', { name: 'Результати' }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Результати інвентаризації' }),
+  ).toBeVisible()
+  await expect(page.getByText('Крило')).toBeVisible()
+})
+
+test('inventory hides management actions when manage permission is absent @cabinet-smoke', async ({
+  page,
+}) => {
+  await installCabinetApiBoundary(page, { inventoryManage: false })
+  await loginFrom(page)
+  await page.goto('/app/koval/inventory')
+
+  await expect(
+    page.getByRole('heading', { name: 'Інвентаризація' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('link', { name: 'Нова інвентаризація' }),
+  ).toHaveCount(0)
 })
 
 test('opens More by keyboard, traps focus, and restores it on close @cabinet-smoke', async ({

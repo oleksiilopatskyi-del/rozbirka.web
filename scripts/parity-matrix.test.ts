@@ -462,6 +462,7 @@ describe('parity matrix generator', () => {
         'customers',
         'dashboard',
         'intake',
+        'inventory',
         'orders',
         'parts',
         'profile',

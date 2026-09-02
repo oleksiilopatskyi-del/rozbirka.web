@@ -6,6 +6,7 @@ describe('integrated cabinet module release registry', () => {
     'cars',
     'intakes',
     'parts',
+    'inventory',
     'stickers',
     'customers',
     'orders',
@@ -15,5 +16,14 @@ describe('integrated cabinet module release registry', () => {
     'business',
   ])('releases %s through the existing access boundary', (module) => {
     expect(cabinetModules[module].released).toBe(true)
+  })
+
+  it('gates inventory navigation and management with inventory permissions', () => {
+    expect(cabinetModules.inventory).toMatchObject({
+      routeSegment: '/inventory',
+      viewPermission: 'inventory.view',
+      mutationPermission: 'inventory.manage',
+      navigation: { label: 'Інвентаризація', group: 'stock' },
+    })
   })
 })

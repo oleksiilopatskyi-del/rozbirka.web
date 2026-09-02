@@ -82,6 +82,11 @@ const releasedCabinetRoutes: Partial<Record<CabinetModuleKey, RouteObject>> = {
     const { PartsScreen } = await import('@/cabinet/parts/PartsScreen')
     return PartsScreen
   }),
+  inventory: cabinetScreenRoute('inventory', async () => {
+    const { InventoryScreen } =
+      await import('@/cabinet/inventory/InventoryScreen')
+    return InventoryScreen
+  }),
   stickers: cabinetScreenRoute('stickers', async () => {
     const { StickersScreen } = await import('@/cabinet/stickers/StickersScreen')
     return StickersScreen
@@ -107,6 +112,24 @@ const releasedCabinetRoutes: Partial<Record<CabinetModuleKey, RouteObject>> = {
 }
 
 const commerceDetailRoutes: RouteObject[] = [
+  ...[
+    'inventory/warehouses/:warehouseId',
+    'inventory/sessions/new',
+    'inventory/sessions/:sessionId',
+    'inventory/sessions/:sessionId/results',
+    'inventory/sessions/:sessionId/audit',
+    'inventory/sessions/:sessionId/journal/:zoneId',
+  ].map((path) =>
+    cabinetScreenRoute(
+      'inventory',
+      async () => {
+        const { InventoryScreen } =
+          await import('@/cabinet/inventory/InventoryScreen')
+        return InventoryScreen
+      },
+      path,
+    ),
+  ),
   ...[
     'cars/new',
     'cars/:carId',
@@ -148,6 +171,15 @@ const commerceDetailRoutes: RouteObject[] = [
       },
       path,
     ),
+  ),
+  cabinetScreenRoute(
+    'inventory',
+    async () => {
+      const { InventoryScreen } =
+        await import('@/cabinet/inventory/InventoryScreen')
+      return InventoryScreen
+    },
+    'parts/:partId/inventory',
   ),
   cabinetScreenRoute(
     'parts',

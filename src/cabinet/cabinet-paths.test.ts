@@ -21,6 +21,9 @@ describe('cabinetPath', () => {
     expect(cabinetPath('koval', 'cars', 'car 42/photos')).toBe(
       '/app/koval/cars/car%2042/photos',
     )
+    expect(
+      cabinetPath('koval', 'inventory', 'sessions/session 1/results'),
+    ).toBe('/app/koval/inventory/sessions/session%201/results')
   })
 
   it.each(['', '-koval', 'Koval', 'koval_auto', 'koval\n', 'a'.repeat(64)])(

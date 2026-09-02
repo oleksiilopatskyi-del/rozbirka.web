@@ -25,6 +25,7 @@ const domains = new Set([
   'customers',
   'dashboard',
   'intake',
+  'inventory',
   'orders',
   'parts',
   'profile',
