@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { Store } from 'lucide-react'
+import { ChevronDown, Store } from 'lucide-react'
 import type { Tenant } from '../api/types'
 import { cn } from '../lib/utils'
 
@@ -34,6 +34,9 @@ export function TenantSwitcher({
     }
   }
 
+  const planLabel = tenant.planTier ?? tenant.plan ?? null
+  const context = [tenant.roleName, planLabel].filter(Boolean).join(' · ')
+
   return (
     <div className={cn('relative min-w-0', compact ? 'size-11' : 'w-full')}>
       <Store
@@ -48,7 +51,7 @@ export function TenantSwitcher({
       <select
         aria-label="Перемкнути розбірку"
         className={cn(
-          'bg-surface-2 min-h-11 min-w-11 appearance-none rounded-xl border border-white/10 text-sm text-white transition-colors outline-none hover:bg-white/[0.06] disabled:cursor-wait disabled:opacity-60',
+          'bg-app-input rounded-control border-app-line-2 min-h-11 min-w-11 appearance-none border text-sm text-white transition-colors outline-none hover:bg-white/[0.06] disabled:cursor-wait disabled:opacity-60',
           compact
             ? 'bg-brand size-11 cursor-pointer px-0 text-transparent'
             : 'w-full cursor-pointer py-2 pr-9 pl-11',
@@ -64,13 +67,19 @@ export function TenantSwitcher({
         ))}
       </select>
       {!compact && (
-        <span
+        <ChevronDown
           aria-hidden
-          className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-xs text-neutral-500"
-        >
-          {isSwitching ? '…' : '⌄'}
-        </span>
+          className={cn(
+            'text-app-dim pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2',
+            isSwitching && 'opacity-40',
+          )}
+        />
       )}
+      {!compact && context ? (
+        <p className="text-app-dim mt-1 px-1 font-mono text-[10.5px]">
+          {isSwitching ? 'Перемикаємо…' : context}
+        </p>
+      ) : null}
     </div>
   )
 }

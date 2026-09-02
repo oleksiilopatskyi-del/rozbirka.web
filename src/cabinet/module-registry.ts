@@ -43,10 +43,24 @@ export type CabinetModuleKey =
 
 export type QuotaResource = keyof PlanUsageDto
 
+/** Sections of the cabinet sidebar, in the order the work actually happens. */
+export type CabinetNavigationGroup =
+  | 'overview'
+  | 'stock'
+  | 'sales'
+  | 'money'
+  | 'settings'
+
 export interface CabinetNavigationItem {
   label: string
   icon: LucideIcon
   placement: 'primary' | 'account'
+  group: CabinetNavigationGroup
+  /**
+   * Order in the mobile tab bar, lowest first; the first few fit, the rest move
+   * under "Ще". Registry order is not usage order, so this is explicit.
+   */
+  mobilePriority?: number
 }
 
 export interface CabinetModuleDefinition {
@@ -80,6 +94,8 @@ export const cabinetModules: Readonly<
       label: 'Головна',
       icon: LayoutDashboard,
       placement: 'primary',
+      group: 'overview',
+      mobilePriority: 1,
     },
   },
   cars: {
@@ -90,7 +106,13 @@ export const cabinetModules: Readonly<
     mutationPermission: 'cars.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     quotaResource: 'cars',
-    navigation: { label: 'Автомобілі', icon: Car, placement: 'primary' },
+    navigation: {
+      label: 'Автомобілі',
+      icon: Car,
+      placement: 'primary',
+      group: 'stock',
+      mobilePriority: 5,
+    },
   },
   parts: {
     key: 'parts',
@@ -100,7 +122,13 @@ export const cabinetModules: Readonly<
     mutationPermission: 'parts.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     quotaResource: 'parts',
-    navigation: { label: 'Запчастини', icon: Package, placement: 'primary' },
+    navigation: {
+      label: 'Запчастини',
+      icon: Package,
+      placement: 'primary',
+      group: 'stock',
+      mobilePriority: 2,
+    },
   },
   orders: {
     key: 'orders',
@@ -113,6 +141,8 @@ export const cabinetModules: Readonly<
       label: 'Замовлення',
       icon: ClipboardList,
       placement: 'primary',
+      group: 'sales',
+      mobilePriority: 3,
     },
   },
   customers: {
@@ -122,7 +152,13 @@ export const cabinetModules: Readonly<
     viewPermission: 'customers.view',
     mutationPermission: 'customers.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
-    navigation: { label: 'Клієнти', icon: Users, placement: 'primary' },
+    navigation: {
+      label: 'Клієнти',
+      icon: Users,
+      placement: 'primary',
+      group: 'sales',
+      mobilePriority: 8,
+    },
   },
   cash: {
     key: 'cash',
@@ -132,7 +168,13 @@ export const cabinetModules: Readonly<
     mutationPermission: 'finance.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     quotaResource: 'cashRegisters',
-    navigation: { label: 'Фінанси', icon: WalletCards, placement: 'primary' },
+    navigation: {
+      label: 'Фінанси',
+      icon: WalletCards,
+      placement: 'primary',
+      group: 'money',
+      mobilePriority: 4,
+    },
   },
   team: {
     key: 'team',
@@ -144,7 +186,12 @@ export const cabinetModules: Readonly<
     requiredFeature: FEATURES.TeamCollaboration,
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     quotaResource: 'users',
-    navigation: { label: 'Команда', icon: UserRoundCog, placement: 'primary' },
+    navigation: {
+      label: 'Команда',
+      icon: UserRoundCog,
+      placement: 'account',
+      group: 'settings',
+    },
   },
   intakes: {
     key: 'intakes',
@@ -155,7 +202,13 @@ export const cabinetModules: Readonly<
     requiredFeature: FEATURES.IntakeManagement,
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     quotaResource: 'intakes',
-    navigation: { label: 'Приймання', icon: ScanLine, placement: 'primary' },
+    navigation: {
+      label: 'Приймання',
+      icon: ScanLine,
+      placement: 'primary',
+      group: 'stock',
+      mobilePriority: 6,
+    },
   },
   stickers: {
     key: 'stickers',
@@ -164,7 +217,13 @@ export const cabinetModules: Readonly<
     viewPermission: 'parts.view',
     mutationPermission: 'stickers.manage',
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
-    navigation: { label: 'Стікери', icon: Sticker, placement: 'primary' },
+    navigation: {
+      label: 'Стікери',
+      icon: Sticker,
+      placement: 'primary',
+      group: 'stock',
+      mobilePriority: 7,
+    },
   },
   reports: {
     key: 'reports',
@@ -175,7 +234,13 @@ export const cabinetModules: Readonly<
     mutationPermission: 'reports.manage',
     requiredFeature: FEATURES.AdvancedReports,
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
-    navigation: { label: 'Звіти', icon: BarChart3, placement: 'primary' },
+    navigation: {
+      label: 'Звіти',
+      icon: BarChart3,
+      placement: 'primary',
+      group: 'money',
+      mobilePriority: 9,
+    },
   },
   billing: {
     key: 'billing',
@@ -185,6 +250,7 @@ export const cabinetModules: Readonly<
     mutationPermission: 'billing.manage',
     navigation: {
       label: 'Підписка',
+      group: 'settings',
       icon: CreditCard,
       placement: 'account',
     },
@@ -197,6 +263,7 @@ export const cabinetModules: Readonly<
     mutationPermission: 'billing.manage',
     navigation: {
       label: 'Тарифи',
+      group: 'settings',
       icon: BadgeDollarSign,
       placement: 'account',
     },
@@ -209,6 +276,7 @@ export const cabinetModules: Readonly<
     mutationPermission: 'billing.manage',
     navigation: {
       label: 'Платежі',
+      group: 'settings',
       icon: ReceiptText,
       placement: 'account',
     },
@@ -219,6 +287,7 @@ export const cabinetModules: Readonly<
     released: true,
     navigation: {
       label: 'Профіль',
+      group: 'settings',
       icon: UserRound,
       placement: 'account',
     },
@@ -233,6 +302,7 @@ export const cabinetModules: Readonly<
     allowedSubscriptionStates: BUSINESS_SUBSCRIPTION_STATES,
     navigation: {
       label: 'Бізнес',
+      group: 'settings',
       icon: Building2,
       placement: 'account',
     },

@@ -196,3 +196,59 @@ it('exposes logout in the keyboard-accessible mobile menu', async () => {
 
   expect(onLogout).toHaveBeenCalledOnce()
 })
+
+it('groups the sidebar by the work the modules belong to', () => {
+  renderNavigation([
+    'cars.view',
+    'parts.view',
+    'orders.view',
+    'finance.view',
+    'billing.view',
+  ])
+
+  const desktop = screen.getByRole('navigation', { name: 'Навігація кабінету' })
+  const sections = within(desktop).getAllByRole('list')
+
+  expect(
+    within(desktop).getByText('Склад', { selector: 'p' }),
+  ).toBeInTheDocument()
+  expect(
+    within(desktop).getByText('Продажі', { selector: 'p' }),
+  ).toBeInTheDocument()
+  expect(
+    within(desktop).getByText('Гроші', { selector: 'p' }),
+  ).toBeInTheDocument()
+  expect(
+    within(desktop).getByText('Налаштування', { selector: 'p' }),
+  ).toBeInTheDocument()
+  // Overview stays unlabelled: a single-item heading is noise.
+  expect(
+    within(sections[0]!).getByRole('link', { name: 'Головна' }),
+  ).toBeVisible()
+})
+
+it('fills the mobile tab bar by declared priority, not registry order', async () => {
+  const user = userEvent.setup()
+  renderNavigation([
+    'cars.view',
+    'parts.view',
+    'orders.view',
+    'finance.view',
+    'intakes.view',
+    'customers.view',
+    'billing.view',
+  ])
+
+  const mobile = screen.getByRole('navigation', { name: 'Мобільна навігація' })
+  expect(
+    within(mobile)
+      .getAllByRole('link')
+      .map((link) => link.textContent),
+  ).toEqual(['Головна', 'Запчастини', 'Замовлення', 'Фінанси'])
+
+  // Everything past the four highest priorities stays reachable under "Ще".
+  await user.click(screen.getByRole('button', { name: 'Ще' }))
+  const dialog = screen.getByRole('dialog', { name: 'Меню кабінету' })
+  expect(within(dialog).getByRole('link', { name: 'Автомобілі' })).toBeVisible()
+  expect(within(dialog).getByRole('link', { name: 'Клієнти' })).toBeVisible()
+})

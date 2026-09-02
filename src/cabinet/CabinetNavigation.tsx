@@ -11,6 +11,7 @@ import {
   cabinetModules,
   type CabinetModuleDefinition,
   type CabinetModuleKey,
+  type CabinetNavigationGroup,
 } from './module-registry'
 import { evaluateModuleAccess } from './policy'
 import { TenantSwitcher } from './TenantSwitcher'
@@ -20,8 +21,41 @@ interface NavigationEntry {
   label: string
   icon: NonNullable<CabinetModuleDefinition['navigation']>['icon']
   placement: NonNullable<CabinetModuleDefinition['navigation']>['placement']
+  group: CabinetNavigationGroup
+  mobilePriority: number
   to: string
 }
+
+const groupLabel: Record<CabinetNavigationGroup, string | null> = {
+  overview: null,
+  stock: 'Склад',
+  sales: 'Продажі',
+  money: 'Гроші',
+  settings: 'Налаштування',
+}
+
+const groupOrder: readonly CabinetNavigationGroup[] = [
+  'overview',
+  'stock',
+  'sales',
+  'money',
+  'settings',
+]
+
+/** Four tabs fit a phone; everything else lives behind "Ще". */
+const MOBILE_TAB_LIMIT = 4
+
+const byMobilePriority = (a: NavigationEntry, b: NavigationEntry) =>
+  a.mobilePriority - b.mobilePriority
+
+const groupsOf = (entries: readonly NavigationEntry[]) =>
+  groupOrder
+    .map((group) => ({
+      group,
+      label: groupLabel[group],
+      entries: entries.filter((entry) => entry.group === group),
+    }))
+    .filter((section) => section.entries.length > 0)
 
 export interface CabinetNavigationProps {
   tenant: Tenant
@@ -59,6 +93,9 @@ export function CabinetNavigation({
             label: navigation.label,
             icon: navigation.icon,
             placement: navigation.placement,
+            group: navigation.group,
+            mobilePriority:
+              navigation.mobilePriority ?? Number.MAX_SAFE_INTEGER,
             to: cabinetPath(tenant.slug, definition.key),
           },
         ]
@@ -116,14 +153,25 @@ function DesktopNavigation({
       <BrandLogo href={cabinetPath(tenant.slug, 'dashboard')} />
       <nav
         aria-label="Навігація кабінету"
-        className="mt-9 flex flex-1 flex-col"
+        className="mt-8 flex flex-1 flex-col"
       >
-        <NavigationList entries={primary} presentation="desktop" />
-        <NavigationList
-          className="mt-auto pt-8"
-          entries={account}
-          presentation="desktop"
-        />
+        {groupsOf(primary).map((section) => (
+          <NavigationList
+            className="mt-1"
+            entries={section.entries}
+            key={section.group}
+            label={section.label}
+            presentation="desktop"
+          />
+        ))}
+        {account.length > 0 ? (
+          <NavigationList
+            className="mt-auto pt-6"
+            entries={account}
+            label="Налаштування"
+            presentation="desktop"
+          />
+        ) : null}
       </nav>
       <div className="mt-5 border-t border-white/[0.06] pt-5">
         <TenantSwitcher
@@ -156,12 +204,21 @@ function TabletNavigation({
         aria-label="Навігація планшета"
         className="mt-7 flex w-full flex-1 flex-col"
       >
-        <NavigationList entries={primary} presentation="rail" />
-        <NavigationList
-          className="mt-auto pt-5"
-          entries={account}
-          presentation="rail"
-        />
+        {groupsOf(primary).map((section) => (
+          <NavigationList
+            className="mt-1"
+            entries={section.entries}
+            key={section.group}
+            presentation="rail"
+          />
+        ))}
+        {account.length > 0 ? (
+          <NavigationList
+            className="mt-auto pt-5"
+            entries={account}
+            presentation="rail"
+          />
+        ) : null}
       </nav>
       <div className="mt-4 border-t border-white/[0.06] pt-4">
         <RailControl label="Перемкнути розбірку">
@@ -185,9 +242,10 @@ function MobileNavigation({
   onSwitchTenant,
   onLogout,
 }: PresentationProps) {
-  const mobileEntries = entries
+  const mobileEntries = [...entries]
     .filter((entry) => entry.placement === 'primary')
-    .slice(0, 3)
+    .sort(byMobilePriority)
+    .slice(0, MOBILE_TAB_LIMIT)
   const mobileKeys = new Set(mobileEntries.map((entry) => entry.key))
   const moreEntries = entries.filter((entry) => !mobileKeys.has(entry.key))
 
@@ -290,25 +348,34 @@ function NavigationList({
   entries,
   presentation,
   className,
+  label,
 }: {
   entries: readonly NavigationEntry[]
   presentation: 'desktop' | 'rail'
   className?: string
+  label?: string | null
 }) {
   return (
-    <ul role="list" className={cn('grid gap-1', className)}>
-      {entries.map((entry) => (
-        <li key={entry.key}>
-          {presentation === 'rail' ? (
-            <RailControl label={entry.label}>
+    <div className={className}>
+      {presentation === 'desktop' && label ? (
+        <p className="text-app-dim px-4 pt-3 pb-1.5 font-mono text-[10px] tracking-[0.12em] uppercase">
+          {label}
+        </p>
+      ) : null}
+      <ul role="list" className="grid gap-1">
+        {entries.map((entry) => (
+          <li key={entry.key}>
+            {presentation === 'rail' ? (
+              <RailControl label={entry.label}>
+                <NavigationLink entry={entry} presentation={presentation} />
+              </RailControl>
+            ) : (
               <NavigationLink entry={entry} presentation={presentation} />
-            </RailControl>
-          ) : (
-            <NavigationLink entry={entry} presentation={presentation} />
-          )}
-        </li>
-      ))}
-    </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -336,8 +403,10 @@ function NavigationLink({
           presentation === 'dialog' &&
             'flex items-center gap-3 px-3 py-2 text-sm',
           isActive
-            ? 'bg-brand text-brand-foreground'
-            : 'text-neutral-400 hover:bg-white/[0.05] hover:text-white',
+            ? presentation === 'mobile'
+              ? 'text-brand'
+              : 'bg-brand/[0.12] text-brand shadow-[inset_2px_0_0_var(--color-brand)]'
+            : 'text-app-muted hover:bg-white/[0.05] hover:text-white',
         )
       }
       end
