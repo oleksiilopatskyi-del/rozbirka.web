@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
+import { Compass, Loader2, PauseCircle, RotateCcw } from 'lucide-react'
+import { Button, ErrorState, StateScreen } from '@/components/app'
 import { billingApi } from '../api/billing'
 import { tenantPreference } from '../api/tenant-preference'
 import type { Tenant } from '../api/types'
@@ -407,57 +409,55 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
     case 'ready':
       content =
         auth.tenant?.id === viewState.snapshot?.tenantId &&
-        auth.user?.id === viewState.snapshot?.userId
-          ? children
-          : loadingState
+        auth.user?.id === viewState.snapshot?.userId ? (
+          children
+        ) : (
+          <ShellLoading />
+        )
       break
     case 'switching':
-      content = stateMessage('Перемикаємо розбірку…')
+      content = <ShellSwitching target={viewState.targetTenant} />
       break
     case 'error':
       content =
         state.error instanceof TenantDepartureError ? (
-          <div
-            className="bg-background grid min-h-dvh place-items-center px-4 text-center text-white"
-            role="alert"
-          >
-            <div className="grid max-w-md justify-items-center gap-4">
-              <p>Не вдалося безпечно очистити дані попередньої розбірки.</p>
-              <button
-                type="button"
-                className="bg-brand text-brand-foreground min-h-11 min-w-11 rounded-full px-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-                onClick={() => window.location.reload()}
-              >
-                Перезапустити застосунок
-              </button>
-            </div>
-          </div>
+          <ShellCleanupFailure />
         ) : (
-          <div
-            className="bg-background grid min-h-dvh place-items-center px-4 text-center text-white"
-            role="alert"
-          >
-            <div className="grid max-w-md justify-items-center gap-4">
-              <p>Не вдалося завантажити розбірку.</p>
-              <button
-                type="button"
-                className="bg-brand text-brand-foreground min-h-11 rounded-full px-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-                onClick={() => void retry()}
-              >
-                Спробувати ще раз
-              </button>
-            </div>
-          </div>
+          <ShellLoadFailure onRetry={() => void retry()} />
         )
       break
     case 'not-found':
-      content = tenantRecoveryState('Розбірку не знайдено', recoveryTenant)
+      content = (
+        <ShellRecovery
+          description={
+            recoveryTenant === null
+              ? 'Ця адреса не веде до жодної з ваших розбірок. Перевірте посилання або поверніться на головну сторінку.'
+              : 'Ця адреса не веде до жодної з ваших розбірок. Перевірте посилання або відкрийте активну розбірку.'
+          }
+          icon={<Compass aria-hidden />}
+          label="Невідома розбірка"
+          recoveryTenant={recoveryTenant}
+          title="Розбірку не знайдено"
+        />
+      )
       break
     case 'inactive':
-      content = tenantRecoveryState('Розбірка неактивна', recoveryTenant)
+      content = (
+        <ShellRecovery
+          description={
+            recoveryTenant === null
+              ? 'Доступ до цієї розбірки призупинено. Попросіть власника поновити її або поверніться на головну сторінку.'
+              : 'Доступ до цієї розбірки призупинено. Відкрийте активну розбірку або попросіть власника поновити цю.'
+          }
+          icon={<PauseCircle aria-hidden />}
+          label="Неактивна розбірка"
+          recoveryTenant={recoveryTenant}
+          title="Розбірка неактивна"
+        />
+      )
       break
     default:
-      content = loadingState
+      content = <ShellLoading />
   }
 
   return (
@@ -465,40 +465,123 @@ export function CabinetProvider({ children }: { children: ReactNode }) {
   )
 }
 
-const stateMessage = (message: string, role: 'status' | 'alert' = 'status') => (
-  <div
-    className="bg-background grid min-h-dvh place-items-center px-4 text-center text-neutral-400"
-    role={role}
-  >
-    <p>{message}</p>
-  </div>
-)
-
-const loadingState = stateMessage('Завантажуємо розбірку…')
-
-const tenantRecoveryState = (
-  message: string,
-  recoveryTenant: Tenant | null,
-) => (
-  <div
-    className="bg-background grid min-h-dvh place-items-center px-4 text-center text-neutral-400"
-    role="alert"
-  >
-    <div className="grid max-w-md justify-items-center gap-4">
-      <p>{message}</p>
-      <Link
-        className="bg-brand text-brand-foreground flex min-h-11 items-center rounded-full px-5 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-        to={
-          recoveryTenant === null
-            ? '/'
-            : cabinetPath(recoveryTenant.slug, 'dashboard')
-        }
-      >
-        {recoveryTenant === null ? 'На головну' : 'До активної розбірки'}
-      </Link>
+/**
+ * The shell owns the whole viewport while it has nothing to show: every state
+ * below is one centred card on the app canvas, and each one names its own live
+ * region so a screen reader can never confuse loading with switching.
+ */
+function ShellFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="bg-app-canvas grid min-h-dvh place-items-center px-4 py-10">
+      <div className="w-full max-w-md">{children}</div>
     </div>
-  </div>
-)
+  )
+}
+
+const spinner = <Loader2 aria-hidden className="motion-safe:animate-spin" />
+
+function ShellLoading() {
+  return (
+    <ShellFrame>
+      <StateScreen
+        description="Готуємо доступи, тарифи й дані розбірки. Це триває кілька секунд."
+        icon={spinner}
+        label="Завантаження розбірки"
+        title="Завантажуємо розбірку…"
+        tone="brand"
+      />
+    </ShellFrame>
+  )
+}
+
+function ShellSwitching({ target }: { target: Tenant | null }) {
+  return (
+    <ShellFrame>
+      <StateScreen
+        description="Закриваємо дані попередньої розбірки, щоб вони не змішалися з новою."
+        icon={spinner}
+        label="Перемикання розбірки"
+        title={
+          target === null
+            ? 'Перемикаємо розбірку…'
+            : `Відкриваємо «${target.name}»…`
+        }
+        tone="brand"
+      />
+    </ShellFrame>
+  )
+}
+
+function ShellLoadFailure({ onRetry }: { onRetry: () => void }) {
+  return (
+    <ShellFrame>
+      <ErrorState
+        description="Сервер не віддав доступи до розбірки. Перевірте зв’язок і спробуйте ще раз — дані залишилися на місці."
+        label="Помилка завантаження розбірки"
+        onRetry={onRetry}
+        title="Не вдалося завантажити розбірку"
+      />
+    </ShellFrame>
+  )
+}
+
+function ShellCleanupFailure() {
+  return (
+    <ShellFrame>
+      <ErrorState
+        actions={
+          <Button onClick={() => window.location.reload()} variant="primary">
+            <RotateCcw aria-hidden />
+            Перезапустити застосунок
+          </Button>
+        }
+        description="Дані попередньої розбірки лишилися в пам’яті застосунку. Перезапустіть його, щоб відкрити наступну розбірку з чистими даними."
+        label="Помилка очищення даних розбірки"
+        title="Не вдалося безпечно очистити дані попередньої розбірки."
+      />
+    </ShellFrame>
+  )
+}
+
+function ShellRecovery({
+  title,
+  description,
+  icon,
+  label,
+  recoveryTenant,
+}: {
+  title: string
+  description: string
+  icon: ReactNode
+  label: string
+  recoveryTenant: Tenant | null
+}) {
+  return (
+    <ShellFrame>
+      <StateScreen
+        actions={
+          <Button asChild variant="primary">
+            <Link
+              to={
+                recoveryTenant === null
+                  ? '/'
+                  : cabinetPath(recoveryTenant.slug, 'dashboard')
+              }
+            >
+              {recoveryTenant === null ? 'На головну' : 'До активної розбірки'}
+            </Link>
+          </Button>
+        }
+        description={description}
+        icon={icon}
+        label={label}
+        role="alert"
+        title={title}
+        tone="warn"
+      />
+    </ShellFrame>
+  )
+}
 
 // eslint-disable-next-line react-refresh/only-export-components -- hook colocated with its provider.
 export function useCabinet(): CabinetContextValue {

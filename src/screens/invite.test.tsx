@@ -138,11 +138,31 @@ afterEach(() => {
 })
 
 it('shows invitation information before authentication', async () => {
-  renderInvite()
+  const { container } = renderInvite()
 
   expect(await screen.findByText('Розбірка Соболя')).toBeInTheDocument()
   expect(screen.getByText('Менеджер')).toBeInTheDocument()
   expect(screen.getByText(/Олена/)).toBeInTheDocument()
+  expect(screen.getByText('Роль у кабінеті')).toBeInTheDocument()
+  expect(screen.getByText('Запросив')).toBeInTheDocument()
+  expect(screen.getByText('Запрошення діє до')).toBeInTheDocument()
+  expect(container.querySelector('time')).toHaveAttribute(
+    'datetime',
+    '2026-09-01T00:00:00Z',
+  )
+})
+
+it('states what is being accepted before the accept action', async () => {
+  const { container } = renderInvite()
+
+  const action = await screen.findByRole('link', {
+    name: 'Прийняти запрошення',
+  })
+  const facts = container.querySelector('dl')
+  expect(facts).not.toBeNull()
+  expect(facts?.compareDocumentPosition(action)).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  )
 })
 
 it('links a guest to the encoded invitation login intent', async () => {
@@ -151,6 +171,9 @@ it('links a guest to the encoded invitation login intent', async () => {
   expect(
     await screen.findByRole('link', { name: 'Прийняти запрошення' }),
   ).toHaveAttribute('href', '/login?invite=AB%2FCD')
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'увійдіть за номером телефону',
+  )
 })
 
 it('accepts for a named user, hydrates, then enters the accepted tenant slug', async () => {
@@ -245,6 +268,86 @@ it('renders an honest generic invalid state when the resolved DTO cannot identif
   expect(
     screen.queryByText('Запрошення вже використано'),
   ).not.toBeInTheDocument()
+})
+
+it('renders the wrong-account state with the sign-in action', async () => {
+  info.mockRejectedValue({
+    kind: 'forbidden',
+    code: 'INVITE_PHONE_MISMATCH',
+    message: 'backend wording',
+  })
+
+  renderInvite('AB/CD')
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Запрошення для іншого номера',
+    }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByRole('link', { name: 'Увійти іншим номером' }),
+  ).toHaveAttribute('href', '/login?invite=AB%2FCD')
+  expect(screen.queryByText('backend wording')).not.toBeInTheDocument()
+})
+
+it('reloads the invitation after a failed load', async () => {
+  info.mockRejectedValueOnce({ kind: 'server', message: 'backend wording' })
+  const user = userEvent.setup()
+  renderInvite()
+
+  await user.click(
+    await screen.findByRole('button', { name: 'Спробувати ще раз' }),
+  )
+
+  expect(await screen.findByText('Розбірка Соболя')).toBeInTheDocument()
+  expect(info).toHaveBeenCalledTimes(2)
+})
+
+it('keeps an accept failure on screen with its reason and a retry', async () => {
+  auth = authValue('authenticated')
+  vi.mocked(useAuth).mockReturnValue(auth)
+  accept.mockRejectedValue({
+    kind: 'server',
+    message: 'Сервер тимчасово недоступний',
+  })
+  const user = userEvent.setup()
+  renderInvite()
+
+  await user.click(
+    await screen.findByRole('button', { name: 'Прийняти запрошення' }),
+  )
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Сервер тимчасово недоступний',
+  )
+  const retry = screen.getByRole('button', { name: 'Спробувати ще раз' })
+  expect(retry).toBeEnabled()
+
+  accept.mockResolvedValue({
+    tenantId: 'tenant-2',
+    tenantName: 'Розбірка Соболя',
+    role: 'manager',
+    permissions: [],
+  })
+  await user.click(retry)
+
+  expect(accept).toHaveBeenCalledTimes(2)
+})
+
+it('confirms an accept that hydration has not yet turned into a tenant', async () => {
+  auth = authValue('authenticated')
+  vi.mocked(useAuth).mockReturnValue(auth)
+  const user = userEvent.setup()
+  renderInvite()
+
+  await user.click(
+    await screen.findByRole('button', { name: 'Прийняти запрошення' }),
+  )
+
+  expect(await screen.findByText(/Запрошення прийнято/)).toBeInTheDocument()
+  expect(
+    screen.getByRole('link', { name: 'Перейти до кабінету' }),
+  ).toHaveAttribute('href', '/account')
 })
 
 it('prevents overlapping accepts', async () => {

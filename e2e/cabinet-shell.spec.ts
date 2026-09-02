@@ -883,9 +883,11 @@ async function expectReleasedScreenSettled(page: Page, path: string) {
     return
   }
   if (path.endsWith('/reports')) {
+    // Reports are a table now: the state reads as a pill, not a card heading.
     await expect(
-      page.getByRole('heading', { name: 'Звіт готовий' }),
+      page.getByRole('table', { name: 'Список звітів' }),
     ).toBeVisible()
+    await expect(page.getByText('Готовий', { exact: true })).toBeVisible()
     await expect(
       page.getByRole('button', { name: 'Завантажити PDF' }),
     ).toBeVisible()

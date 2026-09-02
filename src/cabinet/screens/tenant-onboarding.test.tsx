@@ -110,6 +110,53 @@ it('creates the first tenant, hydrates, and enters its dashboard', async () => {
   )
 })
 
+it('names the missing yard at its own field instead of calling the API', async () => {
+  const user = userEvent.setup()
+  renderOnboarding()
+
+  await user.click(screen.getByRole('button', { name: 'Створити розбірку' }))
+
+  const nameInput = screen.getByLabelText('Назва розбірки')
+  expect(nameInput).toHaveAccessibleDescription(
+    'Вкажіть назву розбірки — щонайменше 2 символи',
+  )
+  expect(nameInput).toBeInvalid()
+  expect(nameInput).toHaveFocus()
+  expect(create).not.toHaveBeenCalled()
+})
+
+it('keeps the failure reason on screen and creates the yard on retry', async () => {
+  create.mockRejectedValueOnce({
+    kind: 'conflict',
+    message: 'Розбірка з такою назвою вже існує.',
+  })
+  create.mockResolvedValueOnce({
+    tenantId: 'tenant-new',
+    name: 'New Yard',
+    slug: 'stale-create-response-slug',
+    plan: 'trial',
+    planTier: 'pro',
+    isActive: true,
+  })
+  const user = userEvent.setup()
+  renderOnboarding()
+
+  await user.type(screen.getByLabelText('Назва розбірки'), 'New Yard')
+  await user.click(screen.getByRole('button', { name: 'Створити розбірку' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Не вдалося створити розбірку. Розбірка з такою назвою вже існує.',
+  )
+  expect(hydrate).not.toHaveBeenCalled()
+
+  await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
+
+  expect(create).toHaveBeenCalledTimes(2)
+  expect(await screen.findByLabelText('Поточний маршрут')).toHaveTextContent(
+    '/app/new-yard/dashboard',
+  )
+})
+
 it('invalidates a pending create before logout can resume it', async () => {
   const pendingCreate =
     deferred<Awaited<ReturnType<typeof tenantsApi.create>>>()

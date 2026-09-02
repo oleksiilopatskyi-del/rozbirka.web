@@ -405,3 +405,48 @@ it('does not navigate after an unmounted name flow finishes hydrating', async ()
     '/login?invite=ABCD1234',
   )
 })
+
+it('validates the phone at the field instead of calling the API', async () => {
+  const user = userEvent.setup()
+  renderLogin()
+
+  const phoneInput = screen.getByLabelText('Номер телефону')
+  await user.type(phoneInput, '+380 50 111')
+  await user.click(screen.getByRole('button', { name: 'Отримати код' }))
+
+  expect(otpSend).not.toHaveBeenCalled()
+  expect(phoneInput).toBeInvalid()
+  expect(phoneInput).toHaveAccessibleDescription(
+    'Введіть номер повністю. Формат: +380 XX XXX XX XX',
+  )
+})
+
+it('reports an incomplete code once for the whole group', async () => {
+  otpSend.mockResolvedValueOnce({ cooldownSeconds: 0, retryAfterSeconds: 0 })
+  const user = userEvent.setup()
+  renderLogin()
+  await reachOtpStep(user)
+  await user.type(screen.getByLabelText('Цифра 1'), '1')
+
+  await user.click(screen.getByRole('button', { name: 'Підтвердити' }))
+
+  expect(otpVerify).not.toHaveBeenCalled()
+  expect(screen.getAllByRole('alert')).toHaveLength(1)
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Введіть усі 6 цифр коду з SMS',
+  )
+  expect(screen.getByLabelText('Цифра 1')).toBeInvalid()
+})
+
+it('states the resend wait while the control is disabled', async () => {
+  const user = userEvent.setup()
+  renderLogin()
+  await reachOtpStep(user)
+
+  expect(
+    screen.getByRole('button', { name: 'Надіслати код ще раз' }),
+  ).toBeDisabled()
+  expect(
+    screen.getByText(/^Надіслати код ще раз можна через \d+\sс$/),
+  ).toBeInTheDocument()
+})

@@ -125,11 +125,11 @@ afterEach(() => {
 })
 
 it.each([
-  ['queued', 'Звіт у черзі'],
-  ['processing', 'Звіт обробляється'],
-  ['completed', 'Звіт готовий'],
-  ['failed', 'Не вдалося сформувати звіт'],
-  ['expired', 'Строк дії звіту завершився'],
+  ['queued', 'У черзі'],
+  ['processing', 'Обробляється'],
+  ['completed', 'Готовий'],
+  ['failed', 'Не вдалося'],
+  ['expired', 'Прострочений'],
 ] as const)('shows the %s report lifecycle state', async (status, label) => {
   vi.mocked(reportsApi.list).mockResolvedValue({
     items: [report(status)],
@@ -155,8 +155,8 @@ it('shows an unknown backend status without offering a replacement job', async (
 
   render(<ReportsScreen {...screenProps} />)
 
-  expect(await screen.findByText('Невідомий стан звіту')).toBeVisible()
-  expect(screen.queryByText('Не вдалося сформувати звіт')).toBeNull()
+  expect(await screen.findByText('Невідомий стан')).toBeVisible()
+  expect(screen.queryByText('Не вдалося')).toBeNull()
   expect(screen.queryByRole('button', { name: 'Створити заміну' })).toBeNull()
   expect(reportsApi.create).not.toHaveBeenCalled()
 })
@@ -204,15 +204,19 @@ it('renders queued, processing, and completed states from real polling updates',
     await Promise.resolve()
     await Promise.resolve()
   })
-  expect(screen.getByText('Звіт у черзі')).toBeVisible()
+  expect(screen.getByText('У черзі')).toBeVisible()
+  expect(
+    screen.getByText('У черзі — обробка почнеться автоматично'),
+  ).toBeVisible()
   processing.resolve({ ...report('processing'), progress: 60 })
   await act(() => processing.promise)
-  expect(screen.getByText('Звіт обробляється')).toBeVisible()
+  expect(screen.getByText('Обробляється')).toBeVisible()
+  expect(screen.getByText('Оброблено 60%')).toBeVisible()
 
   void act(() => vi.advanceTimersByTime(5_000))
   completed.resolve(report('completed'))
   await act(() => completed.promise)
-  expect(screen.getByText('Звіт готовий')).toBeVisible()
+  expect(screen.getByText('Готовий')).toBeVisible()
 })
 
 it('does not restart an immediate poll or abort siblings for a progress-only update', async () => {
@@ -409,7 +413,7 @@ it('hides report creation and retry actions when management is denied', async ()
   })
   render(<ReportsScreen {...screenProps} />)
 
-  await screen.findByText('Не вдалося сформувати звіт')
+  await screen.findByText('Не вдалося')
   expect(screen.queryByRole('button', { name: 'Створити звіт' })).toBeNull()
   expect(screen.queryByRole('button', { name: 'Створити заміну' })).toBeNull()
 })
@@ -497,7 +501,7 @@ it('clears and reloads report data on a tenant generation change without accepti
       totalPages: 1,
     }),
   )
-  expect(screen.queryByText('Звіт готовий')).toBeNull()
+  expect(screen.queryByText('Готовий')).toBeNull()
 
   act(() =>
     newList.resolve({
@@ -508,7 +512,7 @@ it('clears and reloads report data on a tenant generation change without accepti
       totalPages: 1,
     }),
   )
-  expect(await screen.findByText('Звіт у черзі')).toBeVisible()
+  expect(await screen.findByText('У черзі')).toBeVisible()
 })
 
 it('aborts detail, create, and download work on tenant change and suppresses their stale results', async () => {
@@ -562,7 +566,7 @@ it('aborts detail, create, and download work on tenant change and suppresses the
     })
   })
 
-  expect(screen.queryByText('Звіт готовий')).toBeNull()
+  expect(screen.queryByText('Готовий')).toBeNull()
 })
 
 it('blocks empty and reversed local calendar ranges before dispatch', async () => {
@@ -577,6 +581,125 @@ it('blocks empty and reversed local calendar ranges before dispatch', async () =
   fireEvent.change(to, { target: { value: '2026-08-01' } })
   expect(create).toBeDisabled()
   expect(reportsApi.create).not.toHaveBeenCalled()
+})
+
+it('names the reversed range problem at the field that can fix it', async () => {
+  render(<ReportsScreen {...screenProps} />)
+  const from = await screen.findByLabelText('Початок періоду')
+  const to = screen.getByLabelText('Кінець періоду')
+
+  fireEvent.change(from, { target: { value: '2026-08-31' } })
+  fireEvent.change(to, { target: { value: '2026-08-01' } })
+
+  expect(to).toBeInvalid()
+  expect(to).toHaveAccessibleDescription(
+    'Кінець періоду не може бути раніше за початок',
+  )
+  expect(screen.getByRole('button', { name: 'Створити звіт' })).toBeDisabled()
+  expect(reportsApi.create).not.toHaveBeenCalled()
+})
+
+it('shows the covered period for a report created in this session', async () => {
+  render(<ReportsScreen {...screenProps} />)
+  fireEvent.change(await screen.findByLabelText('Початок періоду'), {
+    target: { value: '2026-01-15' },
+  })
+  fireEvent.change(screen.getByLabelText('Кінець періоду'), {
+    target: { value: '2026-01-20' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Створити звіт' }))
+
+  await waitFor(() => expect(reportsApi.create).toHaveBeenCalledTimes(1))
+  const row = await screen.findByRole('rowheader')
+  expect(row).toHaveTextContent('15.01.2026')
+  expect(row).toHaveTextContent('20.01.2026')
+})
+
+it('marks a period the server never returned as unknown', async () => {
+  vi.mocked(reportsApi.list).mockResolvedValue({
+    items: [report('completed')],
+    page: 1,
+    pageSize: 20,
+    total: 1,
+    totalPages: 1,
+  })
+  render(<ReportsScreen {...screenProps} />)
+
+  expect(
+    await screen.findByRole('rowheader', { name: 'Період невідомий' }),
+  ).toBeVisible()
+})
+
+it('shows a slow download as pending on its own button', async () => {
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(
+    () => undefined,
+  )
+  const pending = deferred<Awaited<ReturnType<typeof reportsApi.download>>>()
+  vi.mocked(reportsApi.list).mockResolvedValue({
+    items: [report('completed')],
+    page: 1,
+    pageSize: 20,
+    total: 1,
+    totalPages: 1,
+  })
+  vi.mocked(reportsApi.download).mockReturnValue(pending.promise)
+  render(<ReportsScreen {...screenProps} />)
+
+  await userEvent
+    .setup()
+    .click(await screen.findByRole('button', { name: 'Завантажити PDF' }))
+
+  const save = screen.getByRole('button', { name: 'Завантажити PDF' })
+  expect(save).toHaveAttribute('aria-busy', 'true')
+  expect(save).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Друкувати' })).toBeDisabled()
+
+  pending.resolve({
+    blob: new Blob(['pdf'], { type: 'application/pdf' }),
+    filename: 'sales.pdf',
+  })
+  await act(() => pending.promise)
+  expect(save).not.toHaveAttribute('aria-busy', 'true')
+})
+
+it('says what a failed download costs and how to run it again', async () => {
+  vi.mocked(reportsApi.list).mockResolvedValue({
+    items: [report('completed')],
+    page: 1,
+    pageSize: 20,
+    total: 1,
+    totalPages: 1,
+  })
+  vi.mocked(reportsApi.download).mockRejectedValue(new Error('offline'))
+  render(<ReportsScreen {...screenProps} />)
+
+  await userEvent
+    .setup()
+    .click(await screen.findByRole('button', { name: 'Завантажити PDF' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Натисніть «Завантажити PDF» ще раз',
+  )
+})
+
+it('names a blocked print window and how to allow it', async () => {
+  vi.spyOn(window, 'open').mockReturnValue(null)
+  vi.mocked(reportsApi.list).mockResolvedValue({
+    items: [report('completed')],
+    page: 1,
+    pageSize: 20,
+    total: 1,
+    totalPages: 1,
+  })
+  render(<ReportsScreen {...screenProps} />)
+
+  await userEvent
+    .setup()
+    .click(await screen.findByRole('button', { name: 'Друкувати' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Дозвольте спливні вікна для цього сайту',
+  )
 })
 
 it('aborts stale report polling when the screen unmounts', async () => {

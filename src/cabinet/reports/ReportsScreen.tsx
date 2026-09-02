@@ -6,15 +6,26 @@ import {
   useState,
   type ComponentType,
 } from 'react'
+import { Download, Printer, RefreshCw } from 'lucide-react'
 import {
   Button,
+  DataTable,
+  DateValue,
   EmptyState,
+  Field,
   Notice,
   PageBody,
   PageHeader,
+  SectionPanel,
   SkeletonRows,
+  StatusPill,
+  TextInput,
+  formatFileSize,
+  useOperation,
+  type StatusTone,
 } from '@/components/app'
 import { reportsApi, type ReportJob } from '@/api/reports'
+import { normalizeApiProblem } from '@/api/errors'
 import { useCabinet } from '../CabinetContext'
 import type { CabinetModuleScreenProps } from '../ModuleBoundary'
 import { tenantRequestScope } from '../tenant-request-scope'
@@ -54,6 +65,14 @@ interface ScopedDownload {
   id: string
 }
 
+interface ScopedPeriod {
+  key: string
+  range: DateRange
+}
+
+/** The browser refused the print window: a reason the user can act on. */
+class PrintWindowBlockedError extends Error {}
+
 const EMPTY_REPORTS: ReportJob[] = []
 
 const localDate = (date: Date) =>
@@ -87,6 +106,18 @@ const validRange = (range: DateRange) =>
   isCalendarDate(range.to) &&
   range.from <= range.to
 
+/** What is wrong with each end of the range, said at the field it belongs to. */
+const rangeProblems = (range: DateRange) => ({
+  from: isCalendarDate(range.from)
+    ? null
+    : 'Оберіть перший день періоду у форматі РРРР-ММ-ДД',
+  to: !isCalendarDate(range.to)
+    ? 'Оберіть останній день періоду у форматі РРРР-ММ-ДД'
+    : isCalendarDate(range.from) && range.to < range.from
+      ? 'Кінець періоду не може бути раніше за початок'
+      : null,
+})
+
 const localDayBoundaryUtc = (value: string, endOfDay: boolean) => {
   const year = Number(value.slice(0, 4))
   const month = Number(value.slice(5, 7))
@@ -119,17 +150,36 @@ const statusOf = (report: ReportJob): DisplayStatus => {
   return 'unknown'
 }
 
-const statusLabel: Record<DisplayStatus, string> = {
-  queued: 'Звіт у черзі',
-  processing: 'Звіт обробляється',
-  completed: 'Звіт готовий',
-  failed: 'Не вдалося сформувати звіт',
-  expired: 'Строк дії звіту завершився',
-  unknown: 'Невідомий стан звіту',
+const statusPill: Record<DisplayStatus, { label: string; tone: StatusTone }> = {
+  queued: { label: 'У черзі', tone: 'neutral' },
+  processing: { label: 'Обробляється', tone: 'info' },
+  completed: { label: 'Готовий', tone: 'ok' },
+  failed: { label: 'Не вдалося', tone: 'danger' },
+  expired: { label: 'Прострочений', tone: 'warn' },
+  unknown: { label: 'Невідомий стан', tone: 'neutral' },
 }
 
 const isPollingStatus = (status: DisplayStatus) =>
   status === 'queued' || status === 'processing'
+
+/** A percentage only when the server actually reported one. */
+const percentOf = (report: ReportJob): number | null => {
+  const value = Number(report.progress)
+  if (!Number.isFinite(value) || value <= 0) return null
+  return Math.min(100, Math.round(value))
+}
+
+const progressText = (report: ReportJob, status: DisplayStatus): string => {
+  if (status === 'queued') return 'У черзі — обробка почнеться автоматично'
+  const percent = percentOf(report)
+  if (percent === null) return 'Обробка почалася, відсоток ще не надійшов'
+  const { itemsProcessed, itemsTotal } = report
+  const items =
+    itemsTotal !== null && itemsTotal > 0 && itemsProcessed !== null
+      ? ` · ${String(itemsProcessed)} з ${String(itemsTotal)}`
+      : ''
+  return `Оброблено ${String(percent)}%${items}`
+}
 
 const sameReport = (left: ReportJob, right: ReportJob) =>
   left.id === right.id &&
@@ -166,6 +216,12 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
   const [error, setError] = useState<ScopedError | null>(null)
   const [creatingScopeKey, setCreatingScopeKey] = useState<string | null>(null)
   const [downloading, setDownloading] = useState<ScopedDownload | null>(null)
+  /**
+   * The list endpoint does not return the range a job covers, so the period is
+   * known only for jobs this session asked for — in this tenant. Everything
+   * else says the period is unknown rather than guessing one.
+   */
+  const [periods, setPeriods] = useState<Record<string, ScopedPeriod>>({})
   const currentScopeRef = useRef(scope?.key ?? null)
   const accessRef = useRef({
     key: scope?.key ?? null,
@@ -173,6 +229,7 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
   })
   const createFlightRef = useRef<ScopedFlight | null>(null)
   const downloadFlightRef = useRef<ScopedFlight | null>(null)
+  const transferRef = useRef<ReportJob | null>(null)
 
   const scopeKey = scope?.key ?? null
   const visibleReports = reportsScopeKey === scopeKey ? reports : EMPTY_REPORTS
@@ -210,7 +267,11 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
       })
       .catch(() => {
         if (!signal.aborted && currentScopeRef.current === key) {
-          setError({ key, message: 'Не вдалося завантажити звіти.' })
+          setError({
+            key,
+            message:
+              'Не вдалося завантажити список звітів. Перевірте з’єднання та оновіть сторінку.',
+          })
         }
       })
       .finally(() => {
@@ -278,7 +339,8 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
       if (access.key !== null && currentScopeRef.current === access.key) {
         setError({
           key: access.key,
-          message: 'Недостатньо прав для створення звіту.',
+          message:
+            'Недостатньо прав для створення звіту. Попросіть власника кабінету відкрити доступ до звітів.',
         })
       }
       return
@@ -304,14 +366,23 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
         { signal },
       )
       if (signal.aborted || currentScopeRef.current !== access.key) return
+      const owner = access.key
       setReports((current) => [
         created,
         ...current.filter((report) => report.id !== created.id),
       ])
+      setPeriods((current) => ({
+        ...current,
+        [created.id]: { key: owner, range: { ...range } },
+      }))
       setReportsScopeKey(access.key)
     } catch {
       if (!signal.aborted && currentScopeRef.current === access.key) {
-        setError({ key: access.key, message: 'Не вдалося створити звіт.' })
+        setError({
+          key: access.key,
+          message:
+            'Не вдалося створити звіт. Перевірте з’єднання та натисніть «Створити звіт» ще раз.',
+        })
       }
     } finally {
       if (createFlightRef.current?.controller === controller) {
@@ -321,9 +392,11 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
     }
   }, [range, requireLatestMutation])
 
-  const download = async (report: ReportJob, print: boolean) => {
+  const transfer = async (print: boolean) => {
+    const report = transferRef.current
     const access = accessRef.current
     if (
+      report === null ||
       statusOf(report) !== 'completed' ||
       currentDownloading !== null ||
       access.key === null
@@ -345,6 +418,7 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
         popup?.close()
         return
       }
+      if (print && popup === null) throw new PrintWindowBlockedError()
       const url = URL.createObjectURL(file.blob)
       if (print && popup) {
         popup.addEventListener('load', () => popup.print(), { once: true })
@@ -356,11 +430,11 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
         anchor.click()
       }
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    } catch {
+    } catch (failure) {
       popup?.close()
-      if (!signal.aborted && currentScopeRef.current === access.key) {
-        setError({ key: access.key, message: 'Не вдалося завантажити звіт.' })
-      }
+      // A tenant switch already discarded this request: nothing to report.
+      if (signal.aborted || currentScopeRef.current !== access.key) return
+      throw failure
     } finally {
       if (downloadFlightRef.current?.controller === controller) {
         downloadFlightRef.current = null
@@ -369,140 +443,290 @@ export const ReportsScreen: ComponentType<CabinetModuleScreenProps> = ({
     }
   }
 
+  // No success toast: the browser's own download and print windows are the
+  // confirmation, and a tenant switch mid-flight ends the run without a file.
+  const savePdf = useOperation(() => transfer(false), {
+    errorMessage: (failure) =>
+      `${normalizeApiProblem(failure).message} Натисніть «Завантажити PDF» ще раз.`,
+  })
+  const printPdf = useOperation(() => transfer(true), {
+    errorMessage: (failure) =>
+      failure instanceof PrintWindowBlockedError
+        ? 'Браузер заблокував вікно друку. Дозвольте спливні вікна для цього сайту та натисніть «Друкувати» ще раз.'
+        : `${normalizeApiProblem(failure).message} Натисніть «Друкувати» ще раз.`,
+  })
+  const { reset: resetSave } = savePdf
+  const { reset: resetPrint } = printPdf
+
+  useEffect(() => {
+    // A failure belongs to the tenant it happened in, and to no other.
+    resetSave()
+    resetPrint()
+  }, [resetPrint, resetSave, scopeKey])
+
+  const problems = rangeProblems(range)
   const rangeIsValid = validRange(range)
+  const transferBusy = savePdf.pending || printPdf.pending
+  const transferError = savePdf.error ?? printPdf.error
 
   return (
-    <PageBody aria-labelledby="reports-title" className="max-w-4xl gap-6">
+    <PageBody aria-labelledby="reports-title" className="gap-5">
       <PageHeader
         eyebrow="Гроші"
         title={<span id="reports-title">Звіти</span>}
       />
-      <p className="text-app-muted text-sm">
-        Формуйте PDF-звіти з продажів за обраний період.
+      <p className="text-app-muted max-w-[60ch] text-sm">
+        Звіт про продажі за обраний період: сервер формує PDF у фоні, а список
+        нижче показує, на якому він етапі.
       </p>
 
       {canManage ? (
         <form
+          aria-busy={isCreating}
           aria-label="Створення звіту"
-          className="border-app-line rounded-panel bg-app-raised grid gap-4 border p-5"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault()
             void createReport()
           }}
         >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label
-              className="text-app-muted grid gap-2 text-[12.5px]"
-              htmlFor="report-from"
-            >
-              Початок періоду
-              <input
-                className="bg-app-input border-app-line-2 rounded-control text-app-ink min-h-11 border px-3 text-sm"
-                id="report-from"
-                max={range.to}
-                onChange={(event) =>
-                  setRange((current) => ({
-                    ...current,
-                    from: event.target.value,
-                  }))
-                }
-                required
-                type="date"
-                value={range.from}
-              />
-            </label>
-            <label
-              className="text-app-muted grid gap-2 text-[12.5px]"
-              htmlFor="report-to"
-            >
-              Кінець періоду
-              <input
-                className="bg-app-input border-app-line-2 rounded-control text-app-ink min-h-11 border px-3 text-sm"
-                id="report-to"
-                min={range.from}
-                onChange={(event) =>
-                  setRange((current) => ({
-                    ...current,
-                    to: event.target.value,
-                  }))
-                }
-                required
-                type="date"
-                value={range.to}
-              />
-            </label>
-          </div>
-          <Button
-            className="justify-self-start"
-            disabled={isCreating || !rangeIsValid}
-            type="submit"
-            variant="primary"
+          <SectionPanel
+            description="У звіт потраплять продажі за ці дні включно."
+            footer={
+              <Button
+                aria-busy={isCreating}
+                disabled={isCreating || !rangeIsValid}
+                type="submit"
+                variant="primary"
+              >
+                {isCreating ? 'Створюємо звіт…' : 'Створити звіт'}
+              </Button>
+            }
+            title="Новий звіт"
           >
-            {isCreating ? 'Створюємо…' : 'Створити звіт'}
-          </Button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field
+                error={problems.from}
+                hint="Перший день у звіті"
+                label="Початок періоду"
+                required
+              >
+                <TextInput
+                  onChange={(event) =>
+                    setRange((current) => ({
+                      ...current,
+                      from: event.target.value,
+                    }))
+                  }
+                  required
+                  type="date"
+                  value={range.from}
+                />
+              </Field>
+              <Field
+                error={problems.to}
+                hint="Останній день у звіті"
+                label="Кінець періоду"
+                required
+              >
+                <TextInput
+                  onChange={(event) =>
+                    setRange((current) => ({
+                      ...current,
+                      to: event.target.value,
+                    }))
+                  }
+                  required
+                  type="date"
+                  value={range.to}
+                />
+              </Field>
+            </div>
+          </SectionPanel>
         </form>
-      ) : null}
+      ) : (
+        <Notice tone="info">
+          Звіти можна переглядати та завантажувати. Щоб створювати нові,
+          попросіть власника кабінету відкрити доступ до звітів.
+        </Notice>
+      )}
 
       {visibleError ? <Notice tone="danger">{visibleError}</Notice> : null}
-      {isLoading ? <SkeletonRows label="Завантажуємо звіти…" rows={3} /> : null}
-      {!isLoading && visibleReports.length === 0 ? (
-        <EmptyState
-          description="Оберіть період і сформуйте перший звіт — він з’явиться у цьому списку."
-          title="Ще немає звітів"
-        />
-      ) : null}
+      {transferError ? <Notice tone="danger">{transferError}</Notice> : null}
 
-      <div aria-label="Список звітів" className="grid gap-3">
-        {visibleReports.map((report) => {
-          const status = statusOf(report)
-          return (
-            <article
-              className="border-app-line rounded-panel bg-app-raised border p-4"
-              key={report.id}
-            >
-              <h2 className="text-lg text-white">{statusLabel[status]}</h2>
-              {isPollingStatus(status) ? (
-                <p aria-live="polite" role="status">
-                  {status === 'processing'
-                    ? `Оброблено ${report.progress}%`
-                    : 'Очікуємо на обробку'}
-                </p>
-              ) : null}
-              {status === 'failed' && report.errorMessage ? (
-                <p>{report.errorMessage}</p>
-              ) : null}
-              {status === 'completed' ? (
-                <div className="mt-3 flex flex-wrap gap-3">
-                  <Button
-                    disabled={currentDownloading !== null}
-                    onClick={() => void download(report, false)}
-                    variant="primary"
-                  >
-                    Завантажити PDF
-                  </Button>
-                  <Button
-                    disabled={currentDownloading !== null}
-                    onClick={() => void download(report, true)}
-                  >
-                    Друкувати
-                  </Button>
-                </div>
-              ) : null}
-              {canManage && (status === 'failed' || status === 'expired') ? (
-                <Button
-                  className="mt-3"
-                  disabled={isCreating || !rangeIsValid}
-                  onClick={() => void createReport()}
-                >
-                  {status === 'failed'
-                    ? 'Створити заміну'
-                    : 'Створити новий звіт'}
-                </Button>
-              ) : null}
-            </article>
-          )
-        })}
-      </div>
+      {isLoading ? (
+        <SkeletonRows label="Завантажуємо звіти…" rows={3} />
+      ) : (
+        <DataTable
+          caption="Список звітів"
+          columns={[
+            {
+              key: 'period',
+              label: 'Період',
+              variant: 'primary',
+              cell: (report) => {
+                const known = periods[report.id]
+                const period = known?.key === scopeKey ? known.range : undefined
+                if (period === undefined) {
+                  return (
+                    <>
+                      <span aria-hidden className="text-app-dim">
+                        —
+                      </span>
+                      <span className="sr-only">Період невідомий</span>
+                    </>
+                  )
+                }
+                return (
+                  <span className="inline-flex flex-wrap items-baseline gap-1">
+                    <DateValue value={period.from} withTime={false} />
+                    <span aria-hidden>—</span>
+                    <DateValue value={period.to} withTime={false} />
+                  </span>
+                )
+              },
+            },
+            {
+              key: 'requested',
+              label: 'Створено',
+              cell: (report) => <DateValue value={report.requestedAt} />,
+            },
+            {
+              key: 'status',
+              label: 'Стан',
+              cell: (report) => {
+                const status = statusOf(report)
+                const pill = statusPill[status]
+                const percent = percentOf(report)
+                return (
+                  <span className="grid min-w-0 justify-items-end gap-1.5 md:justify-items-start">
+                    <StatusPill tone={pill.tone}>{pill.label}</StatusPill>
+                    {isPollingStatus(status) ? (
+                      <span
+                        aria-live="polite"
+                        className="grid w-full justify-items-end gap-1 md:justify-items-start"
+                        role="status"
+                      >
+                        <span className="text-app-muted text-[11.5px]">
+                          {progressText(report, status)}
+                        </span>
+                        {percent === null ? null : (
+                          <span
+                            aria-hidden
+                            className="block h-1 w-24 overflow-hidden rounded-full bg-white/10"
+                          >
+                            <span
+                              className="bg-brand block h-full transition-all duration-500"
+                              style={{ width: `${String(percent)}%` }}
+                            />
+                          </span>
+                        )}
+                      </span>
+                    ) : null}
+                    {status === 'failed' ? (
+                      <span className="text-app-muted text-[11.5px]">
+                        {report.errorMessage
+                          ? `Причина: ${report.errorMessage}.`
+                          : 'Сервер не назвав причини.'}{' '}
+                        {canManage
+                          ? 'Створіть заміну — вона візьме період із форми вгорі.'
+                          : 'Попросіть власника кабінету сформувати звіт ще раз.'}
+                      </span>
+                    ) : null}
+                    {status === 'expired' ? (
+                      <span className="text-app-muted text-[11.5px]">
+                        Строк зберігання минув{' '}
+                        <DateValue value={report.expiresAt} withTime={false} />,
+                        файл видалено.{' '}
+                        {canManage
+                          ? 'Створіть новий звіт — він візьме період із форми вгорі.'
+                          : 'Попросіть власника кабінету сформувати звіт ще раз.'}
+                      </span>
+                    ) : null}
+                    {status === 'completed' ? (
+                      <span className="text-app-dim text-[11.5px]">
+                        PDF
+                        {report.fileSizeBytes === null
+                          ? ''
+                          : ` · ${formatFileSize(report.fileSizeBytes)}`}{' '}
+                        · доступний до{' '}
+                        <DateValue value={report.expiresAt} withTime={false} />
+                      </span>
+                    ) : null}
+                  </span>
+                )
+              },
+            },
+            {
+              key: 'actions',
+              label: 'Дії',
+              align: 'end',
+              headerHidden: true,
+              cell: (report) => {
+                const status = statusOf(report)
+                if (status === 'completed') {
+                  const active = currentDownloading === report.id
+                  return (
+                    <span className="flex w-full flex-wrap justify-end gap-2">
+                      <Button
+                        aria-busy={savePdf.pending && active}
+                        disabled={transferBusy}
+                        onClick={() => {
+                          transferRef.current = report
+                          savePdf.run()
+                        }}
+                        variant="primary"
+                      >
+                        <Download aria-hidden />
+                        Завантажити PDF
+                      </Button>
+                      <Button
+                        aria-busy={printPdf.pending && active}
+                        disabled={transferBusy}
+                        onClick={() => {
+                          transferRef.current = report
+                          printPdf.run()
+                        }}
+                      >
+                        <Printer aria-hidden />
+                        Друкувати
+                      </Button>
+                    </span>
+                  )
+                }
+                if (
+                  canManage &&
+                  (status === 'failed' || status === 'expired')
+                ) {
+                  return (
+                    <span className="flex w-full justify-end">
+                      <Button
+                        disabled={isCreating || !rangeIsValid}
+                        onClick={() => void createReport()}
+                      >
+                        <RefreshCw aria-hidden />
+                        {status === 'failed'
+                          ? 'Створити заміну'
+                          : 'Створити новий звіт'}
+                      </Button>
+                    </span>
+                  )
+                }
+                return null
+              },
+            },
+          ]}
+          empty={
+            <EmptyState
+              description="Оберіть період і створіть перший звіт — він з’явиться у цьому списку."
+              label="Список звітів"
+              title="Звітів ще немає"
+            />
+          }
+          rowKey={(report) => report.id}
+          rows={visibleReports}
+        />
+      )}
     </PageBody>
   )
 }

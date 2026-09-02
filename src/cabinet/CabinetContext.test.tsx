@@ -261,7 +261,10 @@ it('renders no A children after switching begins and commits B atomically', asyn
   await userEventApi.click(screen.getByRole('button', { name: 'Розбірка B' }))
 
   expect(screen.queryByText('tenant:a access:a')).not.toBeInTheDocument()
-  expect(screen.getByText('Перемикаємо розбірку…')).toBeVisible()
+  expect(
+    screen.getByRole('status', { name: 'Перемикання розбірки' }),
+  ).toBeVisible()
+  expect(screen.getByText('Відкриваємо «Розбірка B»…')).toBeVisible()
 
   await act(async () => {
     accessB.resolve(access('b'))
@@ -344,8 +347,11 @@ it('shows an honest retry state for an access network failure', async () => {
 
   renderCabinet('/app/b/dashboard')
 
+  expect(
+    await screen.findByRole('alert', { name: 'Помилка завантаження розбірки' }),
+  ).toBeVisible()
   await userEventApi.click(
-    await screen.findByRole('button', { name: 'Спробувати ще раз' }),
+    screen.getByRole('button', { name: 'Спробувати ще раз' }),
   )
 
   expect(await screen.findByText('tenant:b access:b')).toBeVisible()
@@ -355,6 +361,7 @@ it('does not fall back to another tenant for an unknown URL slug', async () => {
   renderCabinet('/app/missing/dashboard')
 
   expect(await screen.findByText('Розбірку не знайдено')).toBeVisible()
+  expect(screen.getByRole('alert', { name: 'Невідома розбірка' })).toBeVisible()
   expect(
     screen.getByRole('link', { name: 'До активної розбірки' }),
   ).toHaveAttribute('href', '/app/a/dashboard')
@@ -366,6 +373,9 @@ it('does not load tenant access for an inactive tenant', async () => {
   renderCabinet('/app/inactive/dashboard')
 
   expect(await screen.findByText('Розбірка неактивна')).toBeVisible()
+  expect(
+    screen.getByRole('alert', { name: 'Неактивна розбірка' }),
+  ).toBeVisible()
   expect(
     screen.getByRole('link', { name: 'До активної розбірки' }),
   ).toHaveAttribute('href', '/app/a/dashboard')
@@ -475,7 +485,10 @@ it('supersedes a pending selection when same-tenant browser history changes', as
 
   await userEventApi.click(screen.getByRole('button', { name: 'Розбірка B' }))
   await waitFor(() => expect(accessBSignal).toBeDefined())
-  expect(screen.getByText('Перемикаємо розбірку…')).toBeVisible()
+  expect(
+    screen.getByRole('status', { name: 'Перемикання розбірки' }),
+  ).toBeVisible()
+  expect(screen.getByText('Відкриваємо «Розбірка B»…')).toBeVisible()
 
   await userEventApi.click(screen.getByRole('button', { name: 'history back' }))
 
@@ -734,7 +747,9 @@ it('keeps an already-ready tenant mounted without starting a transition', async 
   await userEventApi.click(screen.getByRole('button', { name: 'Розбірка A' }))
 
   expect(screen.getByText('tenant:a access:a')).toBeVisible()
-  expect(screen.queryByText('Перемикаємо розбірку…')).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('status', { name: 'Перемикання розбірки' }),
+  ).not.toBeInTheDocument()
   expect(accessApi.get).toHaveBeenCalledOnce()
   expect(sharedSignal.aborted).toBe(false)
   expect(screen.getByText('route:/app/a/dashboard')).toBeVisible()
@@ -758,6 +773,9 @@ it('fails closed with a safe restart when departed cleanup rejects', async () =>
     await screen.findByText(
       'Не вдалося безпечно очистити дані попередньої розбірки.',
     ),
+  ).toBeVisible()
+  expect(
+    screen.getByRole('alert', { name: 'Помилка очищення даних розбірки' }),
   ).toBeVisible()
   expect(
     screen.getByRole('button', { name: 'Перезапустити застосунок' }),
