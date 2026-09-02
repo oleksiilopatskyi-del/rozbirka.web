@@ -51,3 +51,5 @@ export {
   type OperationStatus,
 } from './use-operation'
 export { Amount, DateValue, Fact, FactList, Quantity } from './value'
+export { RecordIdentity } from './identity'
+export { Meter, type MeterTone } from './meter'

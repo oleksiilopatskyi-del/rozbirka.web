@@ -845,7 +845,15 @@ it('loads URL-backed car search and displays the server profitability unchanged'
   expect(
     await screen.findByRole('heading', { name: 'Автомобілі' }),
   ).toBeVisible()
-  expect(screen.getByText(/5\s000 \(42%\)/)).toBeVisible()
+  // Recouped now reads against what was invested: the figure, the share, and a
+  // bar that carries the same number for anyone scanning the column.
+  expect(screen.getByText(/5\s000/)).toBeVisible()
+  expect(screen.getByText('42%')).toBeVisible()
+  const meter = screen.getByRole('progressbar', {
+    name: /Повернено від вкладеного/,
+  })
+  expect(meter).toHaveAttribute('aria-valuenow', '42')
+  expect(meter).toHaveAttribute('aria-valuetext', '42%')
   expect(carsApi.list).toHaveBeenCalledWith(
     { search: 'BMW', status: 'active', page: 2, pageSize: 25 },
     expect.anything(),

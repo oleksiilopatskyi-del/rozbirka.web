@@ -24,9 +24,11 @@ import {
 } from 'lucide-react'
 import {
   Button,
-  Fact,
-  SectionPanel,
   ConfirmDialog,
+  Fact,
+  Meter,
+  RecordIdentity,
+  SectionPanel,
   DataTable,
   EmptyState,
   ErrorState,
@@ -37,7 +39,7 @@ import {
   Pagination,
   Panel,
   SearchInput,
-  SelectInput,
+  Segmented,
   SkeletonRows,
   StatCard,
   StatStrip,
@@ -269,29 +271,35 @@ function CarsList({ base }: { base: string }) {
               value={query}
             />
           </Field>
-          <Field className="min-w-40" label="Статус">
-            <SelectInput
-              onChange={(event) =>
-                change({ status: event.target.value || undefined, page: '1' })
+          <Field className="min-w-56" label="Статус">
+            <Segmented
+              as="toggle"
+              label="Статус автомобілів"
+              name="car-status"
+              onChange={(next) =>
+                change({ status: next || undefined, page: '1' })
               }
+              options={[
+                { value: '', label: 'Усі' },
+                { value: 'active', label: 'Активні' },
+                { value: 'archived', label: 'Архів' },
+              ]}
               value={selected.status ?? ''}
-            >
-              <option value="">Усі</option>
-              <option value="active">Активні</option>
-              <option value="archived">Архів</option>
-            </SelectInput>
+            />
           </Field>
-          <Field className="min-w-40" label="Розмір сторінки">
-            <SelectInput
-              onChange={(event) =>
-                change({ pageSize: event.target.value, page: '1' })
-              }
+          <Field className="min-w-52" label="На сторінці">
+            <Segmented
+              as="toggle"
+              label="Кількість автомобілів на сторінці"
+              name="car-page-size"
+              onChange={(next) => change({ pageSize: next, page: '1' })}
+              options={[
+                { value: '20', label: '20' },
+                { value: '50', label: '50' },
+                { value: '100', label: '100' },
+              ]}
               value={String(selected.pageSize)}
-            >
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </SelectInput>
+            />
           </Field>
           <Button type="submit" variant="primary">
             Шукати
@@ -309,7 +317,11 @@ function CarsList({ base }: { base: string }) {
             variant: 'primary',
             cell: (car) => (
               <Link className="hover:text-brand block" to={`${base}/${car.id}`}>
-                {car.code} · {car.brand} {car.model} ({car.year})
+                <RecordIdentity
+                  photoUrl={car.coverPhotoUrl}
+                  subtitle={`${car.brand} ${car.model} (${String(car.year)})`}
+                  title={car.code}
+                />
               </Link>
             ),
           },
@@ -334,10 +346,30 @@ function CarsList({ base }: { base: string }) {
                   key: 'recouped',
                   label: 'Повернено',
                   align: 'end' as const,
-                  cell: (car: CarListItem) =>
-                    car.profitability
-                      ? `${money(car.profitability.recouped)} (${String(car.profitability.recoupedPercent ?? '—')}%)`
-                      : '—',
+                  cell: (car: CarListItem) => (
+                    <Meter
+                      emptyLabel="немає продажів"
+                      label={`Повернено від вкладеного в ${car.code}`}
+                      max={car.profitability?.invested ?? null}
+                      tone={
+                        (car.profitability?.recoupedPercent ?? 0) >= 100
+                          ? 'ok'
+                          : 'brand'
+                      }
+                      value={car.profitability?.recouped ?? null}
+                      valueLabel={
+                        car.profitability
+                          ? money(car.profitability.recouped)
+                          : '—'
+                      }
+                      {...(car.profitability?.recoupedPercent === null ||
+                      car.profitability?.recoupedPercent === undefined
+                        ? {}
+                        : {
+                            hint: `${String(car.profitability.recoupedPercent)}%`,
+                          })}
+                    />
+                  ),
                 },
               ]
             : []),
