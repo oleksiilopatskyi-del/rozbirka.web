@@ -79,9 +79,6 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - if: inputs.run_build
-        run: npx playwright install --with-deps chromium firefox webkit
-
-      - if: inputs.run_build
         name: Lint, typecheck, parity, and dependency gates
         run: npm run check:static
 
@@ -110,25 +107,56 @@ jobs:
         name: Auth and tenant integration gate
         run: npm run test:integration
 
-      - if: inputs.run_build
-        name: Browser E2E gate
-        run: npm run test:e2e
+  e2e:
+    name: Browser E2E ${{ inputs.project_name }} ${{ matrix.shard }}/${{ strategy.job-total }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # The e2e stub server keeps global state, so a shard still runs on a single
+    # worker; parallelism comes from splitting the suite across runners. Five
+    # shards split the suite evenly (65 tests each), because Playwright divides
+    # it along the five browser projects.
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm install --global npm@11.16.0
+
+      - run: npm ci
 
       - if: inputs.run_build
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - if: inputs.run_build
+        name: Browser E2E gate
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+
+      - if: inputs.run_build && matrix.shard == 1
         name: Authenticated Chromium smoke gate
         run: npm run test:smoke
 
       - if: failure() && inputs.run_build
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-failure
+          name: playwright-failure-shard-${{ matrix.shard }}
           path: |
             test-results
             e2e/**/*-snapshots/*-linux-*.png
           if-no-files-found: warn
 
   build:
-    needs: quality
+    needs: [quality, e2e]
     name: Build release artifact ${{ inputs.project_name }}
     runs-on: ubuntu-latest
     permissions:
