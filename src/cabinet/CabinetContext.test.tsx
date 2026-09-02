@@ -720,8 +720,12 @@ it.each([
 
   renderCabinet(path)
 
+  // The message is derived during render; the abort happens in the effect that
+  // follows it, so waiting for the text does not mean the scope has rotated yet.
   expect(await screen.findByText(message)).toBeVisible()
-  expect(sharedSignal.aborted).toBe(true)
+  await waitFor(() => {
+    expect(sharedSignal.aborted).toBe(true)
+  })
 })
 
 it('rotates the shared scope between distinct invalid route boundaries', async () => {
