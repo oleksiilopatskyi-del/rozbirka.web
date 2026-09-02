@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
@@ -46,11 +46,8 @@ export function PageBody({
   children,
   width = 'wide',
   className,
-}: {
-  children: ReactNode
-  width?: 'wide' | 'narrow'
-  className?: string
-}) {
+  ...props
+}: ComponentProps<'section'> & { width?: 'wide' | 'narrow' }) {
   return (
     <section
       className={cn(
@@ -58,6 +55,7 @@ export function PageBody({
         width === 'wide' ? 'max-w-6xl' : 'max-w-3xl',
         className,
       )}
+      {...props}
     >
       {children}
     </section>

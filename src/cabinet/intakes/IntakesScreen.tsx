@@ -6,18 +6,23 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router'
-import { Plus } from 'lucide-react'
+import { ChevronLeft, Plus } from 'lucide-react'
 import {
   Button,
+  ConfirmDialog,
   DataTable,
   EmptyState,
+  ErrorState,
   Field,
   Notice,
   PageBody,
   PageHeader,
   Pagination,
+  Panel,
   SearchInput,
   SelectInput,
+  SkeletonRows,
+  StatCard,
   StatStrip,
   Toolbar,
 } from '@/components/app'
@@ -363,6 +368,7 @@ function IntakeDetail({ base, intakeId }: { base: string; intakeId: string }) {
   const [intake, setIntake] = useState<Intake | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const { requireLatestMutation } = useLatestMutationGuard(
     cabinetModules.intakes,
   )
@@ -377,7 +383,8 @@ function IntakeDetail({ base, intakeId }: { base: string; intakeId: string }) {
     return () => controller.abort()
   }, [intakeId])
   const remove = async () => {
-    if (busy || !window.confirm('Видалити приймання?')) return
+    if (busy) return
+    setConfirmDelete(false)
     setBusy(true)
     try {
       const scope = requireLatestMutation({ quota: false })
@@ -390,39 +397,97 @@ function IntakeDetail({ base, intakeId }: { base: string; intakeId: string }) {
   }
   if (!intake && problem)
     return (
-      <section role="alert">
-        <p>{problem}</p>
-        <Link to={base}>До списку</Link>
-      </section>
+      <PageBody width="narrow">
+        <ErrorState
+          actions={
+            <Button asChild>
+              <Link to={base}>До списку</Link>
+            </Button>
+          }
+          description={problem}
+          title="Не вдалося завантажити приймання"
+        />
+      </PageBody>
     )
-  if (!intake) return <p role="status">Завантажуємо приймання…</p>
+  if (!intake)
+    return (
+      <PageBody width="narrow">
+        <SkeletonRows label="Завантажуємо приймання…" rows={3} />
+      </PageBody>
+    )
   return (
-    <section
-      aria-busy={busy}
-      className="mx-auto grid w-full max-w-4xl gap-4"
-      role="main"
-    >
-      <Link to={base}>← До приймань</Link>
-      <h1>{intake.name ?? 'Приймання без назви'}</h1>
-      <p>Постачальник: {intake.supplier ?? 'не вказано'}</p>
-      <p>Дата придбання: {intake.purchasedAt ?? 'не вказано'}</p>
-      {financeView ? (
-        <p>
-          Вартість:{' '}
-          {intake.totalCost === null ? 'не вказано' : money(intake.totalCost)}
-        </p>
-      ) : null}
-      <p>{intake.notes ?? 'Нотаток немає'}</p>
-      <p>Створив: {intake.createdBy.displayName}</p>
+    <PageBody aria-busy={busy} className="max-w-4xl" role="main">
+      <Button asChild className="justify-self-start" variant="quiet">
+        <Link to={base}>
+          <ChevronLeft aria-hidden />
+          До приймань
+        </Link>
+      </Button>
+      <PageHeader
+        actions={
+          manage ? (
+            <>
+              <Button asChild variant="primary">
+                <Link to={`${base}/${intake.id}/edit`}>Редагувати</Link>
+              </Button>
+              {partCreateDecision.kind === 'allowed' ? (
+                <Button asChild>
+                  <Link to={`${base}/${intake.id}/parts/new`}>
+                    Додати запчастину
+                  </Link>
+                </Button>
+              ) : null}
+              <Button
+                disabled={busy}
+                onClick={() => setConfirmDelete(true)}
+                variant="danger"
+              >
+                Видалити
+              </Button>
+            </>
+          ) : undefined
+        }
+        eyebrow="Склад · Приймання"
+        title={intake.name ?? 'Приймання без назви'}
+      />
+      {problem ? <Notice tone="danger">{problem}</Notice> : null}
+      <Panel>
+        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <IntakeFact
+            label="Постачальник"
+            value={intake.supplier ?? 'не вказано'}
+          />
+          <IntakeFact
+            label="Дата придбання"
+            value={intake.purchasedAt ?? 'не вказано'}
+          />
+          {financeView ? (
+            <IntakeFact
+              label="Вартість"
+              value={
+                intake.totalCost === null
+                  ? 'не вказано'
+                  : money(intake.totalCost)
+              }
+            />
+          ) : null}
+          <IntakeFact label="Створив" value={intake.createdBy.displayName} />
+          <IntakeFact label="Нотатки" value={intake.notes ?? 'Нотаток немає'} />
+        </dl>
+      </Panel>
       {intake.photos.length > 0 ? (
-        <section aria-label="Фото приймання">
-          <h2>Фото</h2>
-          <ul>
+        <section aria-label="Фото приймання" className="grid gap-2">
+          <h2 className="text-base font-semibold text-white">Фото</h2>
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {intake.photos.map((photo, index) => (
               <li key={photo.url}>
-                <a href={photo.url}>
+                <a
+                  className="rounded-panel border-app-line block overflow-hidden border"
+                  href={photo.url}
+                >
                   <img
                     alt={`Фото приймання ${index + 1}`}
+                    className="aspect-4/3 w-full object-cover"
                     src={photo.thumbnailUrl || photo.url}
                   />
                 </a>
@@ -431,39 +496,80 @@ function IntakeDetail({ base, intakeId }: { base: string; intakeId: string }) {
           </ul>
         </section>
       ) : null}
-      {manage ? (
-        <div className="flex gap-3">
-          <Link to={`${base}/${intake.id}/edit`}>Редагувати</Link>
-          {partCreateDecision.kind === 'allowed' ? (
-            <Link to={`${base}/${intake.id}/parts/new`}>Додати запчастину</Link>
-          ) : null}
-          <button disabled={busy} onClick={() => void remove()} type="button">
-            Видалити
-          </button>
-        </div>
-      ) : null}
       {financeView && intake.profitability ? (
-        <section aria-label="Прибутковість">
-          <h2>Прибутковість</h2>
-          <p>Інвестовано: {money(intake.profitability.invested)}</p>
-          <p>Повернено: {money(intake.profitability.recouped)}</p>
-          <p>Повернення: {intake.profitability.recoupedPercent ?? '—'}%</p>
+        <section aria-label="Прибутковість" className="grid gap-2">
+          <h2 className="text-base font-semibold text-white">Прибутковість</h2>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatCard
+              accent
+              label="Інвестовано"
+              value={money(intake.profitability.invested)}
+            />
+            <StatCard
+              label="Повернено"
+              value={money(intake.profitability.recouped)}
+            />
+            <StatCard
+              label="Повернення"
+              value={`${String(intake.profitability.recoupedPercent ?? '—')}%`}
+            />
+          </div>
         </section>
       ) : null}
       {partsView ? (
-        <section>
-          <h2>Запчастини</h2>
-          <ul>
-            {intake.parts.map((part) => (
-              <li key={part.id}>
-                {part.name} · {part.quantity} {part.unit} · {part.status}
-              </li>
-            ))}
-          </ul>
+        <section className="grid gap-2">
+          <h2 className="text-base font-semibold text-white">Запчастини</h2>
+          <DataTable
+            caption="Запчастини приймання"
+            columns={[
+              {
+                key: 'name',
+                label: 'Деталь',
+                variant: 'primary',
+                cell: (part) => part.name,
+              },
+              {
+                key: 'quantity',
+                label: 'Кількість',
+                align: 'end',
+                cell: (part) => `${String(part.quantity)} ${part.unit}`,
+              },
+              {
+                key: 'status',
+                label: 'Стан',
+                cell: (part) => part.status,
+              },
+            ]}
+            empty={
+              <EmptyState
+                description="Додайте запчастину, щоб оприбуткувати вміст цього приймання."
+                title="У прийманні ще немає запчастин"
+              />
+            }
+            rowKey={(part) => part.id}
+            rows={intake.parts}
+          />
         </section>
       ) : null}
-      {problem ? <p role="alert">{problem}</p> : null}
-    </section>
+      <ConfirmDialog
+        confirmLabel="Видалити"
+        consequence="Приймання та його звʼязок із оприбуткованими деталями зникнуть назавжди."
+        onConfirm={() => void remove()}
+        onOpenChange={setConfirmDelete}
+        open={confirmDelete}
+        pending={busy}
+        title="Видалити приймання?"
+      />
+    </PageBody>
+  )
+}
+
+function IntakeFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1">
+      <dt className="text-app-dim text-[12.5px]">{label}</dt>
+      <dd className="text-sm text-white">{value}</dd>
+    </div>
   )
 }
 

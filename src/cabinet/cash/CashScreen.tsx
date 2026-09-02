@@ -12,10 +12,17 @@ import {
   Button,
   DataTable,
   EmptyState,
+  ErrorState,
   Notice,
   PageBody,
   PageHeader,
+  Pagination,
   Panel,
+  SelectInput,
+  SkeletonRows,
+  StatusPill,
+  TextInput,
+  Toolbar,
 } from '@/components/app'
 import { normalizeApiProblem } from '@/api/errors'
 import {
@@ -450,8 +457,18 @@ function CashRegisterDetail({
       setTransferBusy(false)
     }
   }
-  if (error && !register) return <p role="alert">{error}</p>
-  if (!register) return <p role="status">Завантажуємо касу…</p>
+  if (error && !register)
+    return (
+      <PageBody width="narrow">
+        <ErrorState description={error} title="Не вдалося завантажити касу" />
+      </PageBody>
+    )
+  if (!register)
+    return (
+      <PageBody width="narrow">
+        <SkeletonRows label="Завантажуємо касу…" rows={3} />
+      </PageBody>
+    )
   const transferDestinations = transferRegisters.filter(
     (candidate) => candidate.id !== registerId && candidate.isActive,
   )
@@ -459,20 +476,36 @@ function CashRegisterDetail({
     (candidate) => candidate.id === toRegisterId,
   )
   return (
-    <section className="grid gap-6">
-      <header>
-        <h1 className="text-3xl text-white">{register.name}</h1>
-        {mutationsAllowed && <Link to="edit">Редагувати</Link>}
-      </header>
-      {error && <p role="alert">{error}</p>}
-      <dl>
-        {Object.entries(register.balances).map(([code, balance]) => (
-          <div key={code}>
-            <dt>{code}</dt>
-            <dd>{balance}</dd>
+    <PageBody>
+      <PageHeader
+        actions={
+          <>
+            <StatusPill tone={register.isActive ? 'ok' : 'neutral'}>
+              {register.isActive ? 'Активна' : 'Неактивна'}
+            </StatusPill>
             {mutationsAllowed && (
-              <button
-                type="button"
+              <Button asChild variant="primary">
+                <Link to="edit">Редагувати</Link>
+              </Button>
+            )}
+          </>
+        }
+        eyebrow="Гроші · Каси"
+        title={register.name}
+      />
+      {error && <Notice tone="danger">{error}</Notice>}
+      <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {Object.entries(register.balances).map(([code, balance]) => (
+          <div
+            className="border-app-line rounded-panel bg-app-raised grid gap-1.5 border p-4"
+            key={code}
+          >
+            <dt className="text-app-dim text-[12.5px]">{code}</dt>
+            <dd className="text-[25px] leading-tight font-light tabular-nums text-white">
+              {balance}
+            </dd>
+            {mutationsAllowed && (
+              <Button
                 disabled={busy}
                 onClick={() =>
                   void mutateRegister(
@@ -482,22 +515,21 @@ function CashRegisterDetail({
                 }
               >
                 Видалити {code}
-              </button>
+              </Button>
             )}
           </div>
         ))}
       </dl>
       {mutationsAllowed && (
         <div className="grid gap-3">
-          <label>
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             Нова валюта
-            <input
+            <TextInput
               value={newCurrency}
               onChange={(event) => setNewCurrency(event.target.value)}
             />
           </label>
-          <button
-            type="button"
+          <Button
             disabled={busy || !newCurrency.trim()}
             onClick={() =>
               void mutateRegister(async () => {
@@ -507,9 +539,8 @@ function CashRegisterDetail({
             }
           >
             Додати валюту
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             disabled={busy}
             onClick={() =>
               void mutateRegister(() =>
@@ -520,14 +551,10 @@ function CashRegisterDetail({
             }
           >
             {register.isActive ? 'Деактивувати касу' : 'Активувати касу'}
-          </button>
-          <button
-            ref={triggerRef}
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-          >
+          </Button>
+          <Button ref={triggerRef} onClick={() => setConfirmDelete(true)}>
             Видалити касу
-          </button>
+          </Button>
         </div>
       )}
       {confirmDelete && (
@@ -537,38 +564,46 @@ function CashRegisterDetail({
           aria-modal="true"
           aria-labelledby="cash-delete-title"
           aria-describedby="cash-delete-description"
+          className="bg-app-overlay border-app-line-2 rounded-sheet grid gap-3 border p-5"
           onKeyDown={containFocus}
         >
-          <h2 id="cash-delete-title">Підтвердити видалення каси</h2>
-          <p id="cash-delete-description">Видалити касу?</p>
-          <button
-            type="button"
+          <h2
+            className="text-lg font-semibold text-white"
+            id="cash-delete-title"
+          >
+            Підтвердити видалення каси
+          </h2>
+          <p className="text-app-muted text-sm" id="cash-delete-description">
+            Каса та її журнал операцій зникнуть назавжди.
+          </p>
+          <Button
             disabled={busy}
             onClick={() => void removeRegister()}
             autoFocus
           >
             Підтвердити видалення
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => setConfirmDelete(false)}
-          >
+          </Button>
+          <Button disabled={busy} onClick={() => setConfirmDelete(false)}>
             Скасувати
-          </button>
+          </Button>
         </div>
       )}
       {transferAllowed && register.isActive && (
         <section className="grid gap-3">
-          <h2>Переказ між касами</h2>
+          <h2 className="text-base font-semibold text-white">
+            Переказ між касами
+          </h2>
           {transferDestinations.length === 0 ? (
             <p role="status">Немає іншої активної каси для переказу.</p>
           ) : (
-            <form onSubmit={(event) => void saveTransfer(event)}>
+            <form
+              className="border-app-line rounded-panel bg-app-raised grid gap-3 border p-4"
+              onSubmit={(event) => void saveTransfer(event)}
+            >
               <p>Каса-відправник: {register.name}</p>
-              <label>
+              <label className="text-app-muted grid gap-1.5 text-[12.5px]">
                 Каса-отримувач
-                <select
+                <SelectInput
                   value={toRegisterId}
                   onChange={(event) => {
                     setToRegisterId(event.target.value)
@@ -582,11 +617,11 @@ function CashRegisterDetail({
                       {destination.name}
                     </option>
                   ))}
-                </select>
+                </SelectInput>
               </label>
-              <label>
+              <label className="text-app-muted grid gap-1.5 text-[12.5px]">
                 Валюта списання
-                <select
+                <SelectInput
                   value={fromCurrency}
                   onChange={(event) => setFromCurrency(event.target.value)}
                   required
@@ -597,20 +632,20 @@ function CashRegisterDetail({
                       {code}
                     </option>
                   ))}
-                </select>
+                </SelectInput>
               </label>
-              <label>
+              <label className="text-app-muted grid gap-1.5 text-[12.5px]">
                 Сума списання
-                <input
+                <TextInput
                   value={amountOut}
                   onChange={(event) => setAmountOut(event.target.value)}
                   inputMode="decimal"
                   required
                 />
               </label>
-              <label>
+              <label className="text-app-muted grid gap-1.5 text-[12.5px]">
                 Валюта зарахування
-                <select
+                <SelectInput
                   value={toCurrency}
                   onChange={(event) => setToCurrency(event.target.value)}
                   disabled={!transferDestination}
@@ -624,20 +659,20 @@ function CashRegisterDetail({
                       </option>
                     ),
                   )}
-                </select>
+                </SelectInput>
               </label>
-              <label>
+              <label className="text-app-muted grid gap-1.5 text-[12.5px]">
                 Сума зарахування
-                <input
+                <TextInput
                   value={amountIn}
                   onChange={(event) => setAmountIn(event.target.value)}
                   inputMode="decimal"
                   required
                 />
               </label>
-              <label>
+              <label className="text-app-muted grid gap-1.5 text-[12.5px]">
                 Нотатка переказу
-                <input
+                <TextInput
                   value={transferNote}
                   onChange={(event) => setTransferNote(event.target.value)}
                 />
@@ -648,10 +683,11 @@ function CashRegisterDetail({
                   {transferDestination.balances[toCurrency] ?? '—'} {toCurrency}
                 </p>
               )}
-              {transferError && <p role="alert">{transferError}</p>}
-              {transferStatus && <p role="status">{transferStatus}</p>}
-              <button
+              {transferError && <Notice tone="danger">{transferError}</Notice>}
+              {transferStatus && <Notice tone="ok">{transferStatus}</Notice>}
+              <Button
                 type="submit"
+                variant="primary"
                 aria-busy={transferBusy}
                 disabled={
                   transferBusy ||
@@ -663,7 +699,7 @@ function CashRegisterDetail({
                 }
               >
                 {transferBusy ? 'Переказуємо…' : 'Переказати кошти'}
-              </button>
+              </Button>
             </form>
           )}
         </section>
@@ -671,12 +707,12 @@ function CashRegisterDetail({
       {mutationsAllowed && (
         <form
           onSubmit={(event) => void saveMovement(event)}
-          className="grid gap-3"
+          className="border-app-line rounded-panel bg-app-raised grid gap-3 border p-4"
         >
-          <h2>Ручна операція</h2>
-          <label>
+          <h2 className="text-base font-semibold text-white">Ручна операція</h2>
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             Тип
-            <select
+            <SelectInput
               value={type}
               onChange={(event) =>
                 setType(event.target.value as 'manual_in' | 'manual_out')
@@ -684,41 +720,41 @@ function CashRegisterDetail({
             >
               <option value="manual_in">Надходження</option>
               <option value="manual_out">Витрата</option>
-            </select>
+            </SelectInput>
           </label>
-          <label>
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             Сума
-            <input
+            <TextInput
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               inputMode="decimal"
             />
           </label>
-          <label>
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             Валюта
-            <input
+            <TextInput
               value={currency}
               onChange={(event) => setCurrency(event.target.value)}
             />
           </label>
-          <label>
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             Нотатка
-            <input
+            <TextInput
               value={note}
               onChange={(event) => setNote(event.target.value)}
             />
           </label>
-          <button type="submit" disabled={busy || !amount}>
+          <Button type="submit" variant="primary" disabled={busy || !amount}>
             {busy ? 'Зберігаємо…' : 'Записати операцію'}
-          </button>
+          </Button>
         </form>
       )}
-      <section>
-        <h2>Журнал</h2>
-        <div className="flex gap-2">
-          <label>
+      <section className="grid gap-3">
+        <h2 className="text-base font-semibold text-white">Журнал</h2>
+        <Toolbar>
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             Валюта журналу
-            <input
+            <TextInput
               value={params.get('currency') ?? ''}
               onChange={(event) => {
                 const next = new URLSearchParams(params)
@@ -729,9 +765,9 @@ function CashRegisterDetail({
               }}
             />
           </label>
-          <label>
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             Від
-            <input
+            <TextInput
               type="date"
               value={params.get('from') ?? ''}
               onChange={(event) => {
@@ -743,9 +779,9 @@ function CashRegisterDetail({
               }}
             />
           </label>
-          <label>
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             До
-            <input
+            <TextInput
               type="date"
               value={params.get('to') ?? ''}
               onChange={(event) => {
@@ -757,44 +793,51 @@ function CashRegisterDetail({
               }}
             />
           </label>
-        </div>
-        <ul>
-          {ledger.map((entry) => (
-            <li key={entry.id}>
-              {entry.direction} · {entry.amount} {entry.currency} ·{' '}
-              {entry.createdByName}
-            </li>
-          ))}
-        </ul>
-        <nav aria-label="Сторінки журналу" className="flex gap-3">
-          <button
-            type="button"
-            disabled={ledgerPage <= 1}
-            onClick={() => {
-              const next = new URLSearchParams(params)
-              next.set('page', String(ledgerPage - 1))
-              setParams(next)
-            }}
-          >
-            Попередня сторінка
-          </button>
-          <span>
-            Сторінка {ledgerPage} з {Math.max(ledgerTotalPages, 1)}
-          </span>
-          <button
-            type="button"
-            disabled={ledgerTotalPages === 0 || ledgerPage >= ledgerTotalPages}
-            onClick={() => {
-              const next = new URLSearchParams(params)
-              next.set('page', String(ledgerPage + 1))
-              setParams(next)
-            }}
-          >
-            Наступна сторінка
-          </button>
-        </nav>
+        </Toolbar>
+        <DataTable
+          caption="Журнал операцій каси"
+          columns={[
+            {
+              key: 'direction',
+              label: 'Операція',
+              variant: 'primary',
+              cell: (entry) => entry.direction,
+            },
+            {
+              key: 'amount',
+              label: 'Сума',
+              align: 'end',
+              cell: (entry) => `${String(entry.amount)} ${entry.currency}`,
+            },
+            {
+              key: 'user',
+              label: 'Хто',
+              cell: (entry) => entry.createdByName,
+            },
+          ]}
+          empty={
+            <EmptyState
+              description="Операції зʼявляться тут після першого надходження або витрати."
+              title="Журнал порожній"
+            />
+          }
+          footer={
+            <Pagination
+              label="Сторінки журналу"
+              onPage={(nextPage) => {
+                const next = new URLSearchParams(params)
+                next.set('page', String(nextPage))
+                setParams(next)
+              }}
+              page={ledgerPage}
+              totalPages={Math.max(ledgerTotalPages, 1)}
+            />
+          }
+          rowKey={(entry) => entry.id}
+          rows={ledger}
+        />
       </section>
-    </section>
+    </PageBody>
   )
 }
 

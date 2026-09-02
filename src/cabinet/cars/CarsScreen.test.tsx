@@ -322,7 +322,7 @@ it('refetches authoritative detail after an expense mutation and disables duplic
   expect(carsApi.createExpense).toHaveBeenCalledTimes(1)
   resolveExpense(refreshed.expenses[0]!)
   await waitFor(() => expect(carsApi.get).toHaveBeenCalledTimes(2))
-  expect(await screen.findByText(/Залишок: 7\s500/)).toBeVisible()
+  expect(await screen.findByText(/7\s500/)).toBeVisible()
 })
 
 it('rechecks cars.view before dispatching an expense mutation', async () => {

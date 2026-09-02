@@ -6,18 +6,23 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
-import { Plus } from 'lucide-react'
+import { Copy, MessageSquare, Phone, Plus } from 'lucide-react'
 import {
   Button,
   DataTable,
+  DeniedState,
   EmptyState,
+  ErrorState,
   Field,
   Notice,
   PageBody,
   PageHeader,
   Pagination,
+  Panel,
   SearchInput,
+  SkeletonRows,
   StatStrip,
+  StatusPill,
   Toolbar,
 } from '@/components/app'
 import {
@@ -289,16 +294,42 @@ function CustomerDetailScreen({
     }
   }
   if (!ordersViewAllowed)
-    return <p role="alert">Потрібен доступ до замовлень.</p>
-  if (error) return <p role="alert">{error}</p>
-  if (!customer) return <p role="status">Завантажуємо клієнта…</p>
+    return (
+      <PageBody width="narrow">
+        <DeniedState
+          description="Картка клієнта показує його замовлення, тож потрібен доступ до розділу «Замовлення»."
+          role="alert"
+          title="Потрібен доступ до замовлень."
+        />
+      </PageBody>
+    )
+  if (error)
+    return (
+      <PageBody width="narrow">
+        <ErrorState
+          description={error}
+          title="Не вдалося завантажити клієнта"
+        />
+      </PageBody>
+    )
+  if (!customer)
+    return (
+      <PageBody width="narrow">
+        <SkeletonRows label="Завантажуємо клієнта…" rows={3} />
+      </PageBody>
+    )
   const orderPath = `/app/${cabinet.targetTenant?.slug ?? ''}/orders/new?customerId=${encodeURIComponent(customer.id)}`
   return (
-    <section className="grid gap-6">
-      <header>
-        <p className="text-xs text-neutral-500">Клієнт</p>
-        <h1 className="text-3xl text-white">{customer.name}</h1>
-      </header>
+    <PageBody>
+      <PageHeader
+        actions={
+          <StatusPill tone={customer.isActive ? 'ok' : 'neutral'}>
+            {customer.isActive ? 'Активний' : 'Неактивний'}
+          </StatusPill>
+        }
+        eyebrow="Продажі · Клієнти"
+        title={customer.name}
+      />
       <dl className="grid gap-3 sm:grid-cols-3">
         <Metric
           label="Замовлень"
@@ -319,52 +350,60 @@ function CustomerDetailScreen({
           </>
         )}
       </dl>
-      <div className="flex flex-wrap gap-3">
+      <Panel className="flex flex-wrap items-center gap-2">
         {customer.phone && (
           <>
-            <span>{customer.phone}</span>
-            <a href={`tel:${customer.phone}`} aria-label="Зателефонувати">
-              Зателефонувати
-            </a>
-            <a href={`sms:${customer.phone}`} aria-label="SMS">
-              SMS
-            </a>
-            <button
-              type="button"
+            <span className="text-app-muted mr-1 font-mono text-sm">
+              {customer.phone}
+            </span>
+            <Button asChild>
+              <a href={`tel:${customer.phone}`} aria-label="Зателефонувати">
+                <Phone aria-hidden />
+                Зателефонувати
+              </a>
+            </Button>
+            <Button asChild>
+              <a href={`sms:${customer.phone}`} aria-label="SMS">
+                <MessageSquare aria-hidden />
+                SMS
+              </a>
+            </Button>
+            <Button
               onClick={() =>
                 void navigator.clipboard.writeText(customer.phone!)
               }
             >
+              <Copy aria-hidden />
               Копіювати телефон
-            </button>
+            </Button>
           </>
         )}
         {orderCreateAllowed && customer.isActive && (
-          <Link to={orderPath}>Створити замовлення</Link>
+          <Button asChild variant="primary">
+            <Link to={orderPath}>Створити замовлення</Link>
+          </Button>
         )}
         {mutationsAllowed && (
           <>
-            <Link to="edit">Редагувати</Link>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void updateLifecycle()}
-            >
+            <Button asChild>
+              <Link to="edit">Редагувати</Link>
+            </Button>
+            <Button disabled={busy} onClick={() => void updateLifecycle()}>
               {customer.isActive ? 'Деактивувати' : 'Активувати'}
-            </button>
+            </Button>
             {customer.ordersCount === 0 && (
-              <button
-                ref={triggerRef}
-                type="button"
+              <Button
                 disabled={busy}
                 onClick={() => setConfirmDelete(true)}
+                ref={triggerRef}
+                variant="danger"
               >
                 Видалити
-              </button>
+              </Button>
             )}
           </>
         )}
-      </div>
+      </Panel>
       {confirmDelete && (
         <div
           ref={dialogRef}
@@ -372,43 +411,81 @@ function CustomerDetailScreen({
           aria-modal="true"
           aria-labelledby="customer-delete-title"
           aria-describedby="customer-delete-description"
+          className="bg-app-overlay border-app-line-2 rounded-sheet grid gap-3 border p-5"
           onKeyDown={containFocus}
         >
-          <h2 id="customer-delete-title">Підтвердити видалення</h2>
-          <p id="customer-delete-description">Видалити клієнта?</p>
-          <button
-            type="button"
-            onClick={() => void remove()}
-            disabled={busy}
-            autoFocus
+          <h2
+            className="text-lg font-semibold text-white"
+            id="customer-delete-title"
           >
-            Підтвердити
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(false)}
-            disabled={busy}
+            Підтвердити видалення
+          </h2>
+          <p
+            className="text-app-muted text-sm"
+            id="customer-delete-description"
           >
-            Скасувати
-          </button>
+            Картка клієнта та його контакти зникнуть назавжди. Замовлень у нього
+            немає, тож історія продажів не постраждає.
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              onClick={() => void remove()}
+              disabled={busy}
+              autoFocus
+              variant="danger"
+            >
+              Підтвердити
+            </Button>
+            <Button onClick={() => setConfirmDelete(false)} disabled={busy}>
+              Скасувати
+            </Button>
+          </div>
         </div>
       )}
-      <section>
-        <h2 className="text-xl text-white">Історія замовлень</h2>
-        <ul>
-          {customer.orders.map((order) => (
-            <li key={order.id}>
-              <Link
-                to={`/app/${cabinet.targetTenant?.slug ?? ''}/orders/${order.id}`}
-              >
-                #{order.number} · {order.status} · {order.totalAmount ?? '—'}{' '}
-                {order.currency ?? ''}
-              </Link>
-            </li>
-          ))}
-        </ul>
+      <section className="grid gap-2">
+        <h2 className="text-base font-semibold text-white">
+          Історія замовлень
+        </h2>
+        <DataTable
+          caption="Історія замовлень клієнта"
+          columns={[
+            {
+              key: 'number',
+              label: 'Замовлення',
+              variant: 'primary',
+              cell: (order) => (
+                <Link
+                  className="hover:text-brand block"
+                  to={`/app/${cabinet.targetTenant?.slug ?? ''}/orders/${order.id}`}
+                >
+                  #{order.number}
+                </Link>
+              ),
+            },
+            {
+              key: 'status',
+              label: 'Статус',
+              cell: (order) => order.status,
+            },
+            {
+              key: 'total',
+              label: 'Сума',
+              align: 'end',
+              cell: (order) =>
+                `${String(order.totalAmount ?? '—')} ${order.currency ?? ''}`.trim(),
+            },
+          ]}
+          empty={
+            <EmptyState
+              description="Щойно клієнт зробить перше замовлення, воно зʼявиться тут."
+              title="Замовлень ще не було"
+            />
+          }
+          rowKey={(order) => order.id}
+          rows={customer.orders}
+        />
       </section>
-    </section>
+    </PageBody>
   )
 }
 

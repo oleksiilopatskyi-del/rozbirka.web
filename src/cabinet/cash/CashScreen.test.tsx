@@ -373,7 +373,7 @@ it('submits one idempotent transfer and reloads authoritative balances and ledge
 
   expect(await screen.findByText('75')).toBeVisible()
   expect(screen.getByText('Баланс каси-отримувача: 25 USD')).toBeVisible()
-  expect(screen.getByText(/out · 30 UAH/)).toBeVisible()
+  expect(screen.getByText(/30 UAH/)).toBeVisible()
   expect(cashMocks.getById).toHaveBeenCalledTimes(2)
   expect(cashMocks.list).toHaveBeenCalledTimes(2)
   expect(cashMocks.transactions).toHaveBeenCalledTimes(2)

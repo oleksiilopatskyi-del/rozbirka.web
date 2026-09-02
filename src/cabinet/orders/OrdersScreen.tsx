@@ -4,15 +4,20 @@ import { Plus } from 'lucide-react'
 import {
   Button,
   DataTable,
+  ErrorState,
   EmptyState,
   Field,
   Notice,
   PageBody,
   PageHeader,
   Pagination,
+  Panel,
   SearchInput,
   SelectInput,
+  SkeletonRows,
   StatusPill,
+  TextArea,
+  TextInput,
   Toolbar,
   type StatusTone,
 } from '@/components/app'
@@ -740,29 +745,64 @@ function OrderDetailScreen({
       setBusy(false)
     }
   }
-  if (error && !order) return <p role="alert">{error}</p>
-  if (!order) return <p role="status">Завантажуємо замовлення…</p>
+  if (error && !order)
+    return (
+      <PageBody width="narrow">
+        <ErrorState
+          description={error}
+          onRetry={() => void reload()}
+          title="Не вдалося завантажити замовлення"
+        />
+      </PageBody>
+    )
+  if (!order)
+    return (
+      <PageBody width="narrow">
+        <SkeletonRows label="Завантажуємо замовлення…" rows={4} />
+      </PageBody>
+    )
+  const status = orderStatusPresentation(order.status)
   return (
-    <section className="grid gap-5">
-      <h1 className="text-3xl text-white">Замовлення #{order.number}</h1>
-      {error && <p role="alert">{error}</p>}
-      <p>Статус: {order.status}</p>
-      <p>Клієнт: {order.customerName ?? 'Без клієнта'}</p>
-      <p>
-        Разом: {order.totalAmount ?? '—'} {order.paymentCurrency ?? ''}
-      </p>
-      <p>
-        Сплачено: {order.totalPaid ?? '—'} {order.paymentCurrency ?? ''}
-      </p>
+    <PageBody>
+      <PageHeader
+        actions={<StatusPill tone={status.tone}>{status.label}</StatusPill>}
+        eyebrow="Продажі · Замовлення"
+        title={`Замовлення #${String(order.number)}`}
+      />
+      {error && <Notice tone="danger">{error}</Notice>}
+      <Panel>
+        <dl className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-1">
+            <dt className="text-app-dim text-[12.5px]">Клієнт</dt>
+            <dd className="text-sm text-white">
+              {order.customerName ?? 'Без клієнта'}
+            </dd>
+          </div>
+          <div className="grid gap-1">
+            <dt className="text-app-dim text-[12.5px]">Разом</dt>
+            <dd className="text-sm tabular-nums text-white">
+              {order.totalAmount ?? '—'} {order.paymentCurrency ?? ''}
+            </dd>
+          </div>
+          <div className="grid gap-1">
+            <dt className="text-app-dim text-[12.5px]">Сплачено</dt>
+            <dd className="text-sm tabular-nums text-white">
+              {order.totalPaid ?? '—'} {order.paymentCurrency ?? ''}
+            </dd>
+          </div>
+        </dl>
+      </Panel>
       <ul className="grid gap-3">
         {itemDrafts.map((item, index) => (
           <li key={item.id}>
             {mutationsAllowed && order.status === 'pending' ? (
-              <fieldset className="grid gap-2">
-                <legend>{item.partName}</legend>
-                <label>
+              <fieldset className="border-app-line rounded-panel bg-app-raised grid gap-2 border p-4">
+                <legend className="text-app-ink text-sm font-medium">
+                  {item.partName}
+                </legend>
+                <label className="text-app-muted grid gap-1.5 text-[12.5px]">
                   Кількість {item.partName}
-                  <input
+                  <TextInput
                     value={item.quantity}
                     inputMode="numeric"
                     onChange={(event) =>
@@ -776,9 +816,9 @@ function OrderDetailScreen({
                     }
                   />
                 </label>
-                <label>
+                <label className="text-app-muted grid gap-1.5 text-[12.5px]">
                   Ціна {item.partName}
-                  <input
+                  <TextInput
                     value={item.unitPrice}
                     inputMode="decimal"
                     onChange={(event) =>
@@ -795,8 +835,7 @@ function OrderDetailScreen({
                     }
                   />
                 </label>
-                <button
-                  type="button"
+                <Button
                   disabled={busy}
                   onClick={() =>
                     void transition(() =>
@@ -816,7 +855,7 @@ function OrderDetailScreen({
                   }
                 >
                   Видалити {item.partName}
-                </button>
+                </Button>
               </fieldset>
             ) : (
               <>
@@ -827,8 +866,7 @@ function OrderDetailScreen({
         ))}
       </ul>
       {mutationsAllowed && order.status === 'pending' && (
-        <button
-          type="button"
+        <Button
           disabled={busy}
           onClick={() =>
             void transition(() =>
@@ -844,38 +882,36 @@ function OrderDetailScreen({
           }
         >
           Зберегти позиції
-        </button>
+        </Button>
       )}
       {mutationsAllowed && order.status === 'pending' && (
         <Link to={`${location.pathname}/items/new`}>Додати позицію</Link>
       )}
       {mutationsAllowed && order.status === 'pending' && (
         <div className="grid gap-3">
-          <label>
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             Нотатки замовлення
-            <textarea
+            <TextArea
               value={draftNotes}
               onChange={(event) => setDraftNotes(event.target.value)}
             />
           </label>
-          <button
-            type="button"
+          <Button
             disabled={busy}
             onClick={() =>
               void transition(() => ordersApi.updateNotes(order.id, draftNotes))
             }
           >
             Зберегти нотатки
-          </button>
-          <label>
+          </Button>
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             ID клієнта замовлення
-            <input
+            <TextInput
               value={draftCustomerId}
               onChange={(event) => setDraftCustomerId(event.target.value)}
             />
           </label>
-          <button
-            type="button"
+          <Button
             disabled={busy}
             onClick={() =>
               void transition(() =>
@@ -884,7 +920,7 @@ function OrderDetailScreen({
             }
           >
             Зберегти клієнта
-          </button>
+          </Button>
         </div>
       )}
       {financeAllowed && order.status === 'pending' && (
@@ -902,19 +938,21 @@ function OrderDetailScreen({
               )
             return (
               <fieldset key={index} className="grid gap-3">
-                <legend>Платіж {index + 1}</legend>
-                <label>
+                <legend className="text-app-dim text-[12.5px]">
+                  Платіж {index + 1}
+                </legend>
+                <label className="text-app-muted grid gap-1.5 text-[12.5px]">
                   ID рахунку{suffix}
-                  <input
+                  <TextInput
                     value={payment.accountId}
                     onChange={(event) =>
                       updatePayment('accountId', event.target.value)
                     }
                   />
                 </label>
-                <label>
+                <label className="text-app-muted grid gap-1.5 text-[12.5px]">
                   Сума платежу{suffix}
-                  <input
+                  <TextInput
                     value={payment.amount}
                     onChange={(event) =>
                       updatePayment('amount', event.target.value)
@@ -922,9 +960,9 @@ function OrderDetailScreen({
                     inputMode="decimal"
                   />
                 </label>
-                <label>
+                <label className="text-app-muted grid gap-1.5 text-[12.5px]">
                   Валюта платежу{suffix}
-                  <input
+                  <TextInput
                     value={payment.currency}
                     onChange={(event) =>
                       updatePayment('currency', event.target.value)
@@ -934,8 +972,7 @@ function OrderDetailScreen({
               </fieldset>
             )
           })}
-          <button
-            type="button"
+          <Button
             onClick={() =>
               setPaymentDrafts((current) => [
                 ...current,
@@ -944,9 +981,8 @@ function OrderDetailScreen({
             }
           >
             Додати платіж
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             disabled={
               busy ||
               paymentDrafts.some(
@@ -976,17 +1012,16 @@ function OrderDetailScreen({
             }}
           >
             Підтвердити
-          </button>
+          </Button>
         </div>
       )}
       {mutationsAllowed && order.status === 'pending' && (
-        <button
-          type="button"
+        <Button
           disabled={busy}
           onClick={() => void transition(() => ordersApi.cancel(order.id))}
         >
           Скасувати замовлення
-        </button>
+        </Button>
       )}
       {financeAllowed && order.status === 'confirmed' && (
         <form
@@ -1006,21 +1041,25 @@ function OrderDetailScreen({
             )
           }}
         >
-          <label>
+          <label className="text-app-muted grid gap-1.5 text-[12.5px]">
             Причина повернення
-            <input
+            <TextInput
               value={refundReason}
               onChange={(event) => setRefundReason(event.target.value)}
             />
           </label>
-          <button type="submit" disabled={busy || !refundReason}>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={busy || !refundReason}
+          >
             Повернути кошти
-          </button>
+          </Button>
         </form>
       )}
-      <section>
-        <h2>Платежі</h2>
-        <ul>
+      <section className="grid gap-2">
+        <h2 className="text-base font-semibold text-white">Платежі</h2>
+        <ul className="border-app-line rounded-panel bg-app-raised text-app-muted grid gap-2 border p-4 text-sm">
           {order.payments.map((payment) => (
             <li key={payment.id}>
               {payment.accountName} · {payment.amount} {payment.currency}
@@ -1028,9 +1067,9 @@ function OrderDetailScreen({
           ))}
         </ul>
       </section>
-      <section>
-        <h2>Аудит</h2>
-        <ul>
+      <section className="grid gap-2">
+        <h2 className="text-base font-semibold text-white">Аудит</h2>
+        <ul className="border-app-line rounded-panel bg-app-raised text-app-muted grid gap-2 border p-4 text-sm">
           {order.history.map((item, index) => (
             <li
               key={`${item.createdAt}-${item.eventType}-${item.userName}-${index}`}
@@ -1039,11 +1078,13 @@ function OrderDetailScreen({
                 {item.eventType} · {item.userName} ·{' '}
                 <time dateTime={item.createdAt}>{item.createdAt}</time>
               </span>
-              {item.data !== null && <p>{item.data}</p>}
+              {item.data !== null && (
+                <p className="text-app-dim">{item.data}</p>
+              )}
             </li>
           ))}
         </ul>
       </section>
-    </section>
+    </PageBody>
   )
 }

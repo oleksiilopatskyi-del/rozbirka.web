@@ -131,12 +131,14 @@ export function DeniedState({
   title,
   description,
   actions,
-}: Pick<StateScreenProps, 'title' | 'description' | 'actions'>) {
+  role,
+}: Pick<StateScreenProps, 'title' | 'description' | 'actions' | 'role'>) {
   return (
     <StateScreen
       actions={actions}
       description={description}
       icon={<Lock aria-hidden />}
+      role={role ?? 'status'}
       title={title}
       tone="neutral"
     />

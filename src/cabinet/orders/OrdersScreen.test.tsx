@@ -1053,8 +1053,14 @@ it('shows authoritative detail and lets orders.manage edit pending fields and ca
   )
 
   await screen.findByRole('heading', { name: 'Замовлення #1' })
-  expect(screen.getByText('Разом: 250 UAH')).toBeVisible()
-  expect(screen.getByText('Сплачено: 100 UAH')).toBeVisible()
+  const summaryTerms = screen.getAllByRole('term').map((t) => t.textContent)
+  expect(summaryTerms).toEqual(
+    expect.arrayContaining(['Клієнт', 'Разом', 'Сплачено']),
+  )
+  const summaryValues = screen
+    .getAllByRole('definition')
+    .map((d) => d.textContent?.replace(/\s+/g, ' ').trim())
+  expect(summaryValues).toEqual(expect.arrayContaining(['250 UAH', '100 UAH']))
   expect(screen.getByText('Основна каса · 100 UAH')).toBeVisible()
   expect(screen.getByText(/created · Олена/)).toBeVisible()
   expect(screen.getByRole('link', { name: 'Додати позицію' })).toHaveAttribute(

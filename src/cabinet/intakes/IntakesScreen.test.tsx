@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -308,7 +308,6 @@ it('applies intake quota only to create while allowing edit at the limit', async
 
 it('keeps intake detail visible and reports a normalized delete failure after pending state', async () => {
   const user = userEvent.setup()
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
   vi.mocked(useCabinet).mockReturnValue(
     cabinet(['intakes.view', 'intakes.manage']),
   )
@@ -334,6 +333,11 @@ it('keeps intake detail visible and reports a normalized delete failure after pe
   ).toBeVisible()
   const remove = screen.getByRole('button', { name: 'Видалити' })
   await user.click(remove)
+  await user.click(
+    within(screen.getByRole('dialog')).getByRole('button', {
+      name: 'Видалити',
+    }),
+  )
   expect(remove).toBeDisabled()
   expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'true')
   rejectRemove({ kind: 'conflict', message: 'Приймання містить запчастини.' })
@@ -359,7 +363,8 @@ it('shows photos and creator but gates linked parts and warehouse actions with p
     </MemoryRouter>,
   )
 
-  expect(await screen.findByText('Створив: Олена')).toBeVisible()
+  expect(await screen.findByText('Створив')).toBeVisible()
+  expect(screen.getByText('Олена')).toBeVisible()
   expect(screen.getByRole('img', { name: 'Фото приймання 1' })).toBeVisible()
   expect(screen.queryByText(/Вартість:/)).not.toBeInTheDocument()
   expect(screen.queryByText(/5\s000/)).not.toBeInTheDocument()
@@ -382,7 +387,10 @@ it('renders every linked intake part for parts.view without requiring parts.mana
     </MemoryRouter>,
   )
 
-  expect(await screen.findByText(/Бампер · 2 шт · available/)).toBeVisible()
+  const partRow = await screen.findByRole('cell', { name: 'Бампер' })
+  expect(partRow).toBeVisible()
+  expect(screen.getByRole('cell', { name: '2 шт' })).toBeVisible()
+  expect(screen.getByRole('cell', { name: 'available' })).toBeVisible()
   expect(
     screen.queryByRole('link', { name: 'Додати запчастину' }),
   ).not.toBeInTheDocument()

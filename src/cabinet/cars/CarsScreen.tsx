@@ -6,18 +6,23 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router'
-import { Plus } from 'lucide-react'
+import { ChevronLeft, Copy, Plus } from 'lucide-react'
 import {
   Button,
+  ConfirmDialog,
   DataTable,
   EmptyState,
+  ErrorState,
   Field,
   Notice,
   PageBody,
   PageHeader,
   Pagination,
+  Panel,
   SearchInput,
   SelectInput,
+  SkeletonRows,
+  StatCard,
   StatStrip,
   StatusPill,
   Toolbar,
@@ -324,6 +329,9 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
   const [problem, setProblem] = useState<string | null>(null)
   const [copyStatus, setCopyStatus] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [pendingAction, setPendingAction] = useState<
+    'archive' | 'delete' | null
+  >(null)
   const { requireLatestMutation } = useLatestMutationGuard(cabinetModules.cars)
   const load = async () => {
     try {
@@ -347,15 +355,8 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
     return () => controller.abort()
   }, [carId])
   const lifecycle = async (action: 'archive' | 'delete') => {
-    if (
-      busy ||
-      !window.confirm(
-        action === 'archive'
-          ? 'Архівувати автомобіль?'
-          : 'Видалити автомобіль?',
-      )
-    )
-      return
+    if (busy) return
+    setPendingAction(null)
     setBusy(true)
     try {
       const scope = requireLatestMutation({ quota: false })
@@ -380,61 +381,103 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
   }
   if (!car)
     return problem ? (
-      <section role="alert">
-        <p>{problem}</p>
-        <button onClick={() => void load()} type="button">
-          Спробувати ще раз
-        </button>
-      </section>
+      <PageBody width="narrow">
+        <ErrorState
+          description={problem}
+          onRetry={() => void load()}
+          title="Не вдалося завантажити автомобіль"
+        />
+      </PageBody>
     ) : (
-      <p role="status">Завантажуємо автомобіль…</p>
+      <PageBody width="narrow">
+        <SkeletonRows label="Завантажуємо автомобіль…" rows={4} />
+      </PageBody>
     )
   return (
-    <section>
-      <Link to={base}>← До автомобілів</Link>
-      <h1>
-        {car.code} · {car.brand} {car.model}
-      </h1>
-      <dl>
-        <dt>VIN</dt>
-        <dd>
-          {car.vin ?? 'не вказано'}{' '}
-          {car.vin ? (
-            <button
-              onClick={() => {
-                void copyVin(car.vin ?? '')
-              }}
-              type="button"
-            >
-              Копіювати VIN
-            </button>
-          ) : null}
-        </dd>
-        <dt>Рік</dt>
-        <dd>{car.year}</dd>
-        <dt>Колір</dt>
-        <dd>{car.color ?? 'не вказано'}</dd>
-        <dt>Дата придбання</dt>
-        <dd>{car.acquiredAt}</dd>
-        {financeView ? (
+    <PageBody>
+      <Button asChild className="justify-self-start" variant="quiet">
+        <Link to={base}>
+          <ChevronLeft aria-hidden />
+          До автомобілів
+        </Link>
+      </Button>
+      <PageHeader
+        actions={
           <>
-            <dt>Ціна придбання</dt>
-            <dd>{money(car.purchasePrice)}</dd>
+            {partsView ? (
+              <Button asChild>
+                <Link to={`${base}/${car.id}/warehouse`}>Склад автомобіля</Link>
+              </Button>
+            ) : null}
+            {manage ? (
+              <>
+                <Button asChild variant="primary">
+                  <Link to={`${base}/${car.id}/edit`}>
+                    Редагувати автомобіль
+                  </Link>
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={() => setPendingAction('archive')}
+                >
+                  Архівувати
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={() => setPendingAction('delete')}
+                  variant="danger"
+                >
+                  Видалити
+                </Button>
+              </>
+            ) : null}
           </>
-        ) : null}
-        <dt>Нотатки</dt>
-        <dd>{car.notes ?? 'немає'}</dd>
-      </dl>
-      {copyStatus ? <p role="status">{copyStatus}</p> : null}
+        }
+        eyebrow="Склад · Автомобілі"
+        title={`${car.code} · ${car.brand} ${car.model}`}
+      />
+      {problem ? <Notice tone="danger">{problem}</Notice> : null}
+      {copyStatus ? <Notice tone="ok">{copyStatus}</Notice> : null}
+      <Panel>
+        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-1">
+            <dt className="text-app-dim text-[12.5px]">VIN</dt>
+            <dd className="flex flex-wrap items-center gap-2 text-sm text-white">
+              <span className="font-mono">{car.vin ?? 'не вказано'}</span>
+              {car.vin ? (
+                <Button
+                  onClick={() => {
+                    void copyVin(car.vin ?? '')
+                  }}
+                >
+                  <Copy aria-hidden />
+                  Копіювати VIN
+                </Button>
+              ) : null}
+            </dd>
+          </div>
+          <CarFact label="Рік" value={String(car.year)} />
+          <CarFact label="Колір" value={car.color ?? 'не вказано'} />
+          <CarFact label="Дата придбання" value={car.acquiredAt} />
+          {financeView ? (
+            <CarFact label="Ціна придбання" value={money(car.purchasePrice)} />
+          ) : null}
+          <CarFact label="Нотатки" value={car.notes ?? 'немає'} />
+        </dl>
+      </Panel>
       {car.photos.length > 0 ? (
-        <section aria-label="Фото автомобіля">
-          <h2>Фото</h2>
-          <ul>
+        <section aria-label="Фото автомобіля" className="grid gap-2">
+          <h2 className="text-base font-semibold text-white">Фото</h2>
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {car.photos.map((photo, index) => (
               <li key={photo.id}>
-                <a href={photo.url}>
+                <a
+                  className="rounded-panel border-app-line block overflow-hidden border"
+                  href={photo.url}
+                >
                   <img
                     alt={`Фото автомобіля ${index + 1}`}
+                    className="aspect-4/3 w-full object-cover"
                     src={photo.thumbnailUrl || photo.url}
                   />
                 </a>
@@ -443,34 +486,24 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
           </ul>
         </section>
       ) : null}
-      {partsView ? (
-        <Link to={`${base}/${car.id}/warehouse`}>Склад автомобіля</Link>
-      ) : null}
-      {manage ? (
-        <p>
-          <Link to={`${base}/${car.id}/edit`}>Редагувати автомобіль</Link>
-          <button
-            disabled={busy}
-            onClick={() => void lifecycle('archive')}
-            type="button"
-          >
-            Архівувати
-          </button>
-          <button
-            disabled={busy}
-            onClick={() => void lifecycle('delete')}
-            type="button"
-          >
-            Видалити
-          </button>
-        </p>
-      ) : null}
       {financeView && car.profitability ? (
-        <section aria-label="Прибутковість">
-          <h2>Прибутковість</h2>
-          <p>Інвестовано: {money(car.profitability.invested)}</p>
-          <p>Повернено: {money(car.profitability.recouped)}</p>
-          <p>Залишок: {money(car.profitability.remaining)}</p>
+        <section aria-label="Прибутковість" className="grid gap-2">
+          <h2 className="text-base font-semibold text-white">Прибутковість</h2>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatCard
+              accent
+              label="Інвестовано"
+              value={money(car.profitability.invested)}
+            />
+            <StatCard
+              label="Повернено"
+              value={money(car.profitability.recouped)}
+            />
+            <StatCard
+              label="Залишок"
+              value={money(car.profitability.remaining)}
+            />
+          </div>
         </section>
       ) : null}
       {financeView ? (
@@ -481,8 +514,34 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
           onProblem={setProblem}
         />
       ) : null}
-      {problem ? <p role="alert">{problem}</p> : null}
-    </section>
+      <ConfirmDialog
+        confirmLabel={pendingAction === 'archive' ? 'Архівувати' : 'Видалити'}
+        consequence={
+          pendingAction === 'archive'
+            ? 'Автомобіль зникне з активного списку. Його деталі лишаться на складі.'
+            : 'Автомобіль, його витрати та звʼязок із деталями зникнуть назавжди.'
+        }
+        destructive={pendingAction === 'delete'}
+        onConfirm={() => void lifecycle(pendingAction ?? 'archive')}
+        onOpenChange={(open) => setPendingAction(open ? pendingAction : null)}
+        open={pendingAction !== null}
+        pending={busy}
+        title={
+          pendingAction === 'archive'
+            ? 'Архівувати автомобіль?'
+            : 'Видалити автомобіль?'
+        }
+      />
+    </PageBody>
+  )
+}
+
+function CarFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1">
+      <dt className="text-app-dim text-[12.5px]">{label}</dt>
+      <dd className="text-sm text-white">{value}</dd>
+    </div>
   )
 }
 
