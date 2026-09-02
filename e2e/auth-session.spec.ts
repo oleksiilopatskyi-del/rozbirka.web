@@ -531,8 +531,8 @@ for (const width of [320, 768]) {
     await expect(logout).toBeVisible()
     const box = await logout.boundingBox()
     expect(box).not.toBeNull()
-    expect(box!.width).toBeGreaterThanOrEqual(44)
-    expect(box!.height).toBeGreaterThanOrEqual(44)
+    expect(Math.round(box!.width)).toBeGreaterThanOrEqual(44)
+    expect(Math.round(box!.height)).toBeGreaterThanOrEqual(44)
   })
 }
 

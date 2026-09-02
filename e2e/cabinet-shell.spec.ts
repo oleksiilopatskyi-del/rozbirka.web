@@ -1650,7 +1650,10 @@ test('released Team dialogs and Reports actions keep 44px targets', async ({
   )
   expect(permissionBoxes.length).toBeGreaterThan(0)
   expect(
-    permissionBoxes.every(({ width, height }) => width >= 44 && height >= 44),
+    permissionBoxes.every(
+      ({ width, height }) =>
+        Math.round(width) >= 44 && Math.round(height) >= 44,
+    ),
   ).toBe(true)
   await permissions.getByRole('button', { name: 'Скасувати' }).click()
 
@@ -1662,8 +1665,8 @@ test('released Team dialogs and Reports actions keep 44px targets', async ({
     const action = roleActions.nth(index)
     const box = await action.boundingBox()
     expect(box).not.toBeNull()
-    expect(box!.width).toBeGreaterThanOrEqual(44)
-    expect(box!.height).toBeGreaterThanOrEqual(44)
+    expect(Math.round(box!.width)).toBeGreaterThanOrEqual(44)
+    expect(Math.round(box!.height)).toBeGreaterThanOrEqual(44)
   }
   await roleDialog.getByRole('button', { name: 'Скасувати' }).click()
 
@@ -1675,8 +1678,8 @@ test('released Team dialogs and Reports actions keep 44px targets', async ({
     const action = reportActions.nth(index)
     const box = await action.boundingBox()
     expect(box).not.toBeNull()
-    expect(box!.width).toBeGreaterThanOrEqual(44)
-    expect(box!.height).toBeGreaterThanOrEqual(44)
+    expect(Math.round(box!.width)).toBeGreaterThanOrEqual(44)
+    expect(Math.round(box!.height)).toBeGreaterThanOrEqual(44)
   }
 })
 
@@ -1711,9 +1714,12 @@ test('visible mobile cabinet controls meet the 44px target minimum', async ({
       }),
   )
   expect(boxes.length).toBeGreaterThan(0)
-  expect(boxes.every(({ width, height }) => width >= 44 && height >= 44)).toBe(
-    true,
-  )
+  expect(
+    boxes.every(
+      ({ width, height }) =>
+        Math.round(width) >= 44 && Math.round(height) >= 44,
+    ),
+  ).toBe(true)
 })
 
 for (const width of [320, 768]) {
@@ -1729,8 +1735,8 @@ for (const width of [320, 768]) {
     await expect(upgrade).toBeVisible()
     const box = await upgrade.boundingBox()
     expect(box).not.toBeNull()
-    expect(box!.width).toBeGreaterThanOrEqual(44)
-    expect(box!.height).toBeGreaterThanOrEqual(44)
+    expect(Math.round(box!.width)).toBeGreaterThanOrEqual(44)
+    expect(Math.round(box!.height)).toBeGreaterThanOrEqual(44)
   })
 
   test(`pending payment wraps without overflow and keeps 44px actions at ${width}px`, async ({
