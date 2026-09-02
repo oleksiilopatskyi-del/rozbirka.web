@@ -386,7 +386,9 @@ it('edits an expense with PUT, retains the form while pending, and refetches det
   const transportRow = within(expensesTable).getByRole('row', {
     name: /Транспорт/,
   })
-  expect(within(transportRow).getByRole('cell', { name: '500' })).toBeVisible()
+  expect(
+    within(transportRow).getByRole('cell', { name: /500,00\s?\$/ }),
+  ).toBeVisible()
   await user.click(
     screen.getByRole('button', { name: 'Редагувати витрату Транспорт' }),
   )
@@ -412,7 +414,9 @@ it('edits an expense with PUT, retains the form while pending, and refetches det
   resolveUpdate(expense)
   await waitFor(() => expect(carsApi.get).toHaveBeenCalledTimes(2))
   const deliveryRow = await screen.findByRole('row', { name: /Доставка/ })
-  expect(within(deliveryRow).getByRole('cell', { name: '750' })).toBeVisible()
+  expect(
+    within(deliveryRow).getByRole('cell', { name: /750,00\s?\$/ }),
+  ).toBeVisible()
   expect(screen.getByText('Разом 1 витрата')).toBeVisible()
 })
 
@@ -449,12 +453,10 @@ it('renders car identity, gallery, VIN copy, and gates warehouse access with par
   expect(await screen.findByText('Рік')).toBeVisible()
   expect(screen.getByText('2020')).toBeVisible()
   expect(
-    screen.getByRole('img', { name: /Передня частина — фото автомобіля/ }),
+    screen.getByAltText(/Передня частина — фото автомобіля/),
   ).toHaveAttribute('src', 'https://cdn.example/car-thumb.jpg')
   expect(
-    screen
-      .getByRole('img', { name: /Передня частина — фото автомобіля/ })
-      .closest('a'),
+    screen.getByAltText(/Передня частина — фото автомобіля/).closest('a'),
   ).toHaveAttribute('href', 'https://cdn.example/car.jpg')
   expect(screen.getByRole('link', { name: 'Склад автомобіля' })).toBeVisible()
   await user.click(screen.getByRole('button', { name: 'Копіювати VIN' }))
@@ -920,7 +922,7 @@ it('reads a paid-off car as profit rather than a negative remainder', async () =
   )
 
   expect(await screen.findByText('Прибуток')).toBeVisible()
-  expect(screen.getByText(/1\s157\s₴/)).toBeVisible()
+  expect(screen.getByText(/1\s157\s\$/)).toBeVisible()
   expect(screen.queryByText('Лишилось повернути')).not.toBeInTheDocument()
   expect(
     screen.getByRole('progressbar', { name: /Окупність/ }),

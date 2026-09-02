@@ -95,8 +95,21 @@ const CAR_SHOTS = [
   'Табличка VIN',
 ] as const
 
+/**
+ * Car economics are quoted in dollars: the dashboard contract names the same
+ * figures `revenueUsd`, while only the till (`totalBalanceUah`) is hryvnia.
+ * The car endpoints send bare numbers, so the currency lives here until the
+ * contract carries one.
+ */
+const CAR_CURRENCY = 'USD'
+
 const money = (value: number) =>
-  new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 }).format(value)
+  new Intl.NumberFormat('uk-UA', {
+    style: 'currency',
+    currency: 'USD',
+    currencyDisplay: 'narrowSymbol',
+    maximumFractionDigits: 2,
+  }).format(value)
 /** Dates arrive as ISO strings; anything unparsable is shown as it came. */
 const day = (value: string) => {
   const parsed = new Date(value)
@@ -564,7 +577,12 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
                   ? [
                       {
                         label: 'Ціна придбання',
-                        value: <Amount value={car.purchasePrice} />,
+                        value: (
+                          <Amount
+                            currency={CAR_CURRENCY}
+                            value={car.purchasePrice}
+                          />
+                        ),
                       },
                     ]
                   : []),
@@ -641,13 +659,13 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
                 <div className="grid gap-0.5">
                   <dt className="text-app-dim text-[12.5px]">Інвестовано</dt>
                   <dd className="text-[28px] leading-none font-light tracking-[-0.02em] text-white">
-                    <Amount value={profit.invested} />
+                    <Amount currency={CAR_CURRENCY} value={profit.invested} />
                   </dd>
                 </div>
                 <div className="grid gap-0.5">
                   <dt className="text-app-dim text-[12.5px]">Повернено</dt>
                   <dd className="text-[28px] leading-none font-light tracking-[-0.02em] text-white">
-                    <Amount value={profit.recouped} />
+                    <Amount currency={CAR_CURRENCY} value={profit.recouped} />
                   </dd>
                 </div>
                 <div className="grid gap-0.5">
@@ -661,6 +679,7 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
                     )}
                   >
                     <Amount
+                      currency={CAR_CURRENCY}
                       value={paidOff ? -profit.remaining : profit.remaining}
                     />
                   </dd>

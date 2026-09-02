@@ -1,14 +1,21 @@
 import { EmptyState } from '@/components/app'
+/**
+ * Parts trade in dollars — the analytics contract names the same figure
+ * `revenueUsd`; only the till (`totalBalanceUah`) is hryvnia.
+ */
+const CAR_CURRENCY = 'USD'
+
 import { cn } from '@/lib/utils'
 import type { DashboardData, LastActivity } from '@/api/dashboard-contract'
 
 const numberFormatter = new Intl.NumberFormat('uk-UA')
-const currencyFormatter = new Intl.NumberFormat('uk-UA', {
-  style: 'currency',
-  currency: 'UAH',
-  currencyDisplay: 'narrowSymbol',
-  maximumFractionDigits: 0,
-})
+const currencyFormatter = (currency: string) =>
+  new Intl.NumberFormat('uk-UA', {
+    style: 'currency',
+    currency,
+    currencyDisplay: 'narrowSymbol',
+    maximumFractionDigits: 0,
+  })
 const dateFormatter = new Intl.DateTimeFormat('uk-UA', {
   day: '2-digit',
   month: '2-digit',
@@ -37,10 +44,10 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
     item('Активних авто', data.activeCarsCount),
     item('Немає в наявності', data.outOfStockPartsCount),
     item('Клієнтів', data.customersCount),
-    hryvniaItem('Баланс', data.totalBalanceUah),
+    moneyItem('Баланс каси', data.totalBalanceUah, 'UAH'),
     item('Учасників команди', data.teamMembersCount),
-    hryvniaItem('Інвестовано', data.totalInvested),
-    hryvniaItem('Повернуто', data.totalRecouped),
+    moneyItem('Інвестовано', data.totalInvested, CAR_CURRENCY),
+    moneyItem('Повернуто', data.totalRecouped, CAR_CURRENCY),
   ])
   const workItems = compact([
     item('Авто в роботі', data.carsInWork),
@@ -120,17 +127,25 @@ function item(label: string, value: number | null): SummaryItem | null {
   return value === null ? null : { label, value: numberFormatter.format(value) }
 }
 
-function hryvniaItem(label: string, value: number | null): SummaryItem | null {
+function moneyItem(
+  label: string,
+  value: number | null,
+  currency: string,
+): SummaryItem | null {
   return value === null
     ? null
-    : { label, value: currencyFormatter.format(value) }
+    : { label, value: currencyFormatter(currency).format(value) }
 }
 
+/**
+ * The server tags today's revenue with its own currency, so take what it sent
+ * rather than looking for one code: a yard trading in dollars used to see this
+ * figure disappear entirely.
+ */
 function revenueItem(data: DashboardData): SummaryItem | null {
-  const amount = data.revenue?.today.find(
-    (entry) => entry.currency === 'UAH',
-  )?.amount
-  return amount === undefined ? null : hryvniaItem('Виручка сьогодні', amount)
+  const entry = data.revenue?.today[0]
+  if (entry === undefined) return null
+  return moneyItem('Виручка сьогодні', entry.amount, entry.currency)
 }
 
 function compact(items: readonly (SummaryItem | null)[]): SummaryItem[] {

@@ -47,7 +47,7 @@ it('formats money, quantities and time for reading in a column', () => {
   render(
     <FactList>
       <Fact label="Ціна">
-        <Amount value={8400} />
+        <Amount currency="UAH" value={8400} />
       </Fact>
       <Fact label="Кількість">
         <Quantity unit="шт" value={3} />
@@ -56,7 +56,7 @@ it('formats money, quantities and time for reading in a column', () => {
         <DateValue value="2026-08-28T13:45:00Z" />
       </Fact>
       <Fact label="Порожнє">
-        <Amount value={null} />
+        <Amount currency="UAH" value={null} />
       </Fact>
     </FactList>,
   )

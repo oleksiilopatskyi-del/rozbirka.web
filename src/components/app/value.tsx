@@ -29,12 +29,16 @@ const currencyLabel: Record<string, string> = {
  */
 export function Amount({
   value,
-  currency = 'UAH',
+  currency,
   className,
   fallback = '—',
 }: {
   value: number | string | null | undefined
-  currency?: string | null
+  /**
+   * Required on purpose: a figure whose currency is guessed is worse than one
+   * with no symbol at all. Pass `null` when the context already states it.
+   */
+  currency: string | null
   className?: string
   fallback?: string
 }) {
