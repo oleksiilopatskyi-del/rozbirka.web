@@ -53,3 +53,5 @@ export {
 export { Amount, DateValue, Fact, FactList, Quantity } from './value'
 export { RecordIdentity } from './identity'
 export { Meter, type MeterTone } from './meter'
+export { ActionMenu, type MenuAction } from './action-menu'
+export { FactRows, type FactRow } from './fact-rows'
