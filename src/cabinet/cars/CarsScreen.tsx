@@ -24,7 +24,9 @@ import {
 } from 'lucide-react'
 import {
   Button,
+  Amount,
   ConfirmDialog,
+  DateValue,
   Fact,
   Meter,
   RecordIdentity,
@@ -532,9 +534,13 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
           </div>
           <Fact label="Рік">{String(car.year)}</Fact>
           <Fact label="Колір">{car.color ?? 'не вказано'}</Fact>
-          <Fact label="Дата придбання">{car.acquiredAt}</Fact>
+          <Fact label="Дата придбання">
+            <DateValue value={car.acquiredAt} withTime={false} />
+          </Fact>
           {financeView ? (
-            <Fact label="Ціна придбання">{money(car.purchasePrice)}</Fact>
+            <Fact label="Ціна придбання">
+              <Amount value={car.purchasePrice} />
+            </Fact>
           ) : null}
           <Fact label="Нотатки">{car.notes ?? 'немає'}</Fact>
         </dl>
@@ -567,17 +573,41 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
             <StatCard
               accent
               label="Інвестовано"
-              value={money(car.profitability.invested)}
+              value={<Amount value={car.profitability.invested} />}
             />
             <StatCard
               label="Повернено"
-              value={money(car.profitability.recouped)}
+              value={<Amount value={car.profitability.recouped} />}
             />
-            <StatCard
-              label="Залишок"
-              value={money(car.profitability.remaining)}
-            />
+            {car.profitability.remaining > 0 ? (
+              <StatCard
+                delta="ще не окупилось"
+                label="Лишилось повернути"
+                value={<Amount value={car.profitability.remaining} />}
+              />
+            ) : (
+              <StatCard
+                delta="авто окупилось"
+                label="Прибуток"
+                tone="up"
+                value={<Amount value={-car.profitability.remaining} />}
+              />
+            )}
           </div>
+          <Meter
+            className="justify-items-start"
+            label={`Окупність ${car.code}`}
+            max={car.profitability.invested}
+            tone={
+              (car.profitability.recoupedPercent ?? 0) >= 100 ? 'ok' : 'brand'
+            }
+            value={car.profitability.recouped}
+            valueLabel="Окупність"
+            {...(car.profitability.recoupedPercent === null ||
+            car.profitability.recoupedPercent === undefined
+              ? {}
+              : { hint: `${String(car.profitability.recoupedPercent)}%` })}
+          />
         </section>
       ) : null}
       {financeView ? (

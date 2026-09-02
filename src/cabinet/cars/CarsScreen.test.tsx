@@ -897,3 +897,31 @@ it('writes a changed search to the URL before requesting the server list', async
     ),
   )
 })
+
+it('reads a paid-off car as profit rather than a negative remainder', async () => {
+  vi.mocked(carsApi.get).mockResolvedValue({
+    ...detail,
+    profitability: {
+      ...detail.profitability,
+      invested: 10380,
+      recouped: 11537,
+      remaining: -1157,
+      recoupedPercent: 111,
+    },
+  })
+  render(
+    <MemoryRouter initialEntries={['/app/demo/cars/car-1']}>
+      <Routes>
+        <Route path="/app/:tenant/cars/:carId" element={<CarsScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  expect(await screen.findByText('Прибуток')).toBeVisible()
+  expect(screen.getByText('авто окупилось')).toBeVisible()
+  expect(screen.getByText(/1\s157\s₴/)).toBeVisible()
+  expect(screen.queryByText('Лишилось повернути')).not.toBeInTheDocument()
+  expect(
+    screen.getByRole('progressbar', { name: /Окупність/ }),
+  ).toHaveAttribute('aria-valuenow', '111')
+})
