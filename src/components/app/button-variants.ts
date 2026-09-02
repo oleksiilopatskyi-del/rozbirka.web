@@ -22,6 +22,8 @@ export const appButtonVariants = cva(
         md: '',
         icon: 'min-w-11 px-0',
         wide: 'w-full',
+        /** Warehouse floor: a gloved thumb needs more than the 44px office floor. */
+        touch: 'min-h-14 px-5 text-[15px]',
       },
     },
     defaultVariants: { variant: 'ghost', size: 'md' },

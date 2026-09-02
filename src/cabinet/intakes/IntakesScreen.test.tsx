@@ -387,7 +387,7 @@ it('renders every linked intake part for parts.view without requiring parts.mana
     </MemoryRouter>,
   )
 
-  const partRow = await screen.findByRole('cell', { name: 'Бампер' })
+  const partRow = await screen.findByRole('rowheader', { name: 'Бампер' })
   expect(partRow).toBeVisible()
   expect(screen.getByRole('cell', { name: '2 шт' })).toBeVisible()
   expect(screen.getByRole('cell', { name: 'available' })).toBeVisible()

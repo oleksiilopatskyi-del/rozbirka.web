@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { ToastProvider } from '@/components/app'
 import { useCabinet } from '../CabinetContext'
 import { CustomersScreen } from './CustomersScreen'
 
@@ -54,6 +55,16 @@ const cabinet = (
     error: null,
   }) as unknown as ReturnType<typeof useCabinet>
 
+/** The cabinet shell owns the toast outlet, so screen tests mount one too. */
+const renderScreen = (path: string) =>
+  render(
+    <ToastProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <CustomersScreen definition={definition} />
+      </MemoryRouter>
+    </ToastProvider>,
+  )
+
 afterEach(() => {
   vi.clearAllMocks()
 })
@@ -79,11 +90,7 @@ it('renders the server-returned directory result instead of deriving customer st
     totalPages: 2,
   })
 
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers?q=Ірина&page=1']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers?q=Ірина&page=1')
 
   expect(await screen.findByText('Ірина')).toBeVisible()
   expect(screen.getByText('знайдено')).toBeVisible()
@@ -101,11 +108,7 @@ it('renders the server-returned directory result instead of deriving customer st
 })
 
 it('treats the new-customer route as a form rather than a customer identifier', () => {
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers/new']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers/new')
 
   expect(screen.getByRole('heading', { name: 'Новий клієнт' })).toBeVisible()
   expect(customerMocks.getById).not.toHaveBeenCalled()
@@ -139,11 +142,7 @@ it('uses browser-native contact links and carries only the customer id to a new 
     lastOrderAt: null,
   })
 
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers/customer-1']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers/customer-1')
 
   expect(await screen.findByText('9')).toBeVisible()
   expect(screen.getByRole('link', { name: 'Зателефонувати' })).toHaveAttribute(
@@ -183,15 +182,11 @@ it('offers reuse and reactivation for the documented duplicate-phone conflict', 
   })
   customerMocks.activate.mockResolvedValue({ id: 'customer-existing' })
   const user = userEvent.setup()
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers/new']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers/new')
 
   await user.type(screen.getByLabelText('Ім’я'), 'Нова Ірина')
   await user.type(screen.getByLabelText('Телефон'), '+380501112233')
-  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+  await user.click(screen.getByRole('button', { name: 'Створити клієнта' }))
 
   expect(
     await screen.findByRole('link', { name: 'Використати клієнта Ірина' }),
@@ -237,14 +232,10 @@ it('rechecks orders.view before reactivating a duplicate from customer edit', as
     },
   })
   const user = userEvent.setup()
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers/customer-1/edit']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers/customer-1/edit')
 
   await screen.findByDisplayValue('Ірина')
-  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+  await user.click(screen.getByRole('button', { name: 'Зберегти зміни' }))
   const reactivate = await screen.findByRole('button', {
     name: 'Активувати Олена',
   })
@@ -271,27 +262,21 @@ it('blocks create and edit mutations when the customer module decision denies th
     lastOrderAt: null,
   })
   const user = userEvent.setup()
-  const { unmount } = render(
-    <MemoryRouter initialEntries={['/app/garage/customers/new']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  const { unmount } = renderScreen('/app/garage/customers/new')
 
   await user.type(screen.getByLabelText('Ім’я'), 'Нова Ірина')
-  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled()
+  expect(
+    screen.getByRole('button', { name: 'Створити клієнта' }),
+  ).toBeDisabled()
   expect(customerMocks.create).not.toHaveBeenCalled()
   unmount()
 
   vi.mocked(useCabinet).mockReturnValue(
     cabinet(['customers.view', 'orders.view']),
   )
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers/customer-1/edit']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers/customer-1/edit')
   await screen.findByDisplayValue('Ірина')
-  expect(screen.getByRole('button', { name: 'Зберегти' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Зберегти зміни' })).toBeDisabled()
   expect(customerMocks.update).not.toHaveBeenCalled()
 })
 
@@ -299,16 +284,12 @@ it('rechecks the latest customer permission before dispatching create', async ()
   const currentCabinet = cabinet()
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers/new']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers/new')
 
   await user.type(screen.getByLabelText('Ім’я'), 'Нова Ірина')
   const permissions = currentCabinet.snapshot?.permissions as Set<string>
   permissions.delete('customers.manage')
-  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+  await user.click(screen.getByRole('button', { name: 'Створити клієнта' }))
 
   expect(customerMocks.create).not.toHaveBeenCalled()
 })
@@ -330,14 +311,10 @@ it('passes the guarded tenant signal to customer create', async () => {
     lastOrderAt: null,
   })
   const user = userEvent.setup()
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers/new']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers/new')
 
   await user.type(screen.getByLabelText('Ім’я'), 'Нова Ірина')
-  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+  await user.click(screen.getByRole('button', { name: 'Створити клієнта' }))
 
   expect(customerMocks.create).toHaveBeenCalledWith(
     expect.objectContaining({ name: 'Нова Ірина' }),
@@ -347,15 +324,64 @@ it('passes the guarded tenant signal to customer create', async () => {
   )
 })
 
+it('stops an empty name and an unusable phone at their own fields', async () => {
+  const user = userEvent.setup()
+  renderScreen('/app/garage/customers/new')
+
+  await user.click(screen.getByRole('button', { name: 'Створити клієнта' }))
+  // Heading and field can share a name here, so the control is queried by role.
+  const nameField = screen.getByRole('textbox', { name: 'Ім’я' })
+  expect(nameField).toHaveAttribute('aria-invalid', 'true')
+  expect(nameField).toHaveAccessibleDescription(/Введіть ім’я клієнта/)
+  expect(nameField).toHaveFocus()
+
+  await user.type(nameField, 'Нова Ірина')
+  const phoneField = screen.getByRole('textbox', { name: 'Телефон' })
+  await user.type(phoneField, '050-11')
+  await user.click(screen.getByRole('button', { name: 'Створити клієнта' }))
+
+  expect(phoneField).toHaveAttribute('aria-invalid', 'true')
+  expect(phoneField).toHaveAccessibleDescription(/замало цифр/)
+  expect(phoneField).toHaveFocus()
+  expect(customerMocks.create).not.toHaveBeenCalled()
+})
+
+it('keeps a failed save on screen with its reason and lets it be retried', async () => {
+  customerMocks.create
+    .mockRejectedValueOnce(new Error('boom'))
+    .mockResolvedValueOnce({ customer: { id: 'customer-1' } })
+  customerMocks.getById.mockResolvedValue({
+    id: 'customer-1',
+    name: 'Нова Ірина',
+    phone: null,
+    notes: null,
+    isActive: true,
+    createdAt: '2026-08-28T00:00:00Z',
+    orders: [],
+    ordersCount: 0,
+    totalAmount: null,
+    averageAmount: null,
+    firstOrderAt: null,
+    lastOrderAt: null,
+  })
+  const user = userEvent.setup()
+  renderScreen('/app/garage/customers/new')
+
+  await user.type(screen.getByLabelText('Ім’я'), 'Нова Ірина')
+  await user.click(screen.getByRole('button', { name: 'Створити клієнта' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Сталася непередбачена помилка',
+  )
+  await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
+  await waitFor(() => expect(customerMocks.create).toHaveBeenCalledTimes(2))
+})
+
 it('does not fetch bundled detail for an edit route without orders.view', async () => {
   vi.mocked(useCabinet).mockReturnValue(
     cabinet(['customers.view', 'customers.manage']),
   )
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers/customer-1/edit']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers/customer-1/edit')
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Потрібен доступ до замовлень',
@@ -367,11 +393,7 @@ it('does not fetch or render bundled order and finance detail without orders.vie
   vi.mocked(useCabinet).mockReturnValue(
     cabinet(['customers.view', 'customers.manage', 'finance.view']),
   )
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers/customer-1']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers/customer-1')
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Потрібен доступ до замовлень',
@@ -408,11 +430,7 @@ it('uses access decisions and customer eligibility for order, lifecycle, and del
       'finance.view',
     ]),
   )
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers/customer-1']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers/customer-1')
 
   await screen.findByRole('heading', { name: 'Ірина' })
   expect(
@@ -443,11 +461,7 @@ it('hides finance metrics without finance.view and preserves a nullable order co
     firstOrderAt: null,
     lastOrderAt: null,
   })
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers/customer-1']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers/customer-1')
 
   await screen.findByRole('heading', { name: 'Ірина' })
   expect(screen.getByText('—')).toBeVisible()
@@ -474,11 +488,7 @@ it('contains delete-dialog focus and restores it to the trigger on close', async
     lastOrderAt: null,
   })
   const user = userEvent.setup()
-  render(
-    <MemoryRouter initialEntries={['/app/garage/customers/customer-1']}>
-      <CustomersScreen definition={definition} />
-    </MemoryRouter>,
-  )
+  renderScreen('/app/garage/customers/customer-1')
 
   const trigger = await screen.findByRole('button', { name: 'Видалити' })
   await user.click(trigger)

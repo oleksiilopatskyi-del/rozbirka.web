@@ -10,6 +10,8 @@ export interface SectionPanelProps {
   children: ReactNode
   /** Actions for this section, pinned to the bottom of the panel. */
   footer?: ReactNode
+  /** Drop to 3 when this section sits inside another one. */
+  headingLevel?: 2 | 3
   className?: string
 }
 
@@ -23,9 +25,11 @@ export function SectionPanel({
   aside,
   children,
   footer,
+  headingLevel = 2,
   className,
 }: SectionPanelProps) {
   const titleId = useId()
+  const Heading = headingLevel === 3 ? 'h3' : 'h2'
 
   return (
     <section
@@ -36,9 +40,9 @@ export function SectionPanel({
       )}
     >
       <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 pt-4">
-        <h2 className="text-base font-semibold text-white" id={titleId}>
+        <Heading className="text-base font-semibold text-white" id={titleId}>
           {title}
-        </h2>
+        </Heading>
         {aside === undefined ? null : (
           <div className="text-app-muted text-[12.5px]">{aside}</div>
         )}
@@ -59,17 +63,21 @@ export function SectionPanel({
 export function PanelFooter({
   children,
   leading,
+  standalone = false,
   className,
 }: {
   children: ReactNode
   /** Context that belongs with the actions: a total, a draft timestamp. */
   leading?: ReactNode
+  /** Use under a form rather than inside a panel: gains its own surface. */
+  standalone?: boolean
   className?: string
 }) {
   return (
     <div
       className={cn(
         'border-app-line flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3',
+        standalone && 'rounded-panel bg-app-raised border',
         className,
       )}
     >

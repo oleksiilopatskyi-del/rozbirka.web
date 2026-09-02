@@ -1,5 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
+import {
+  Amount,
+  Button,
+  ErrorState,
+  Notice,
+  PageBody,
+  PageHeader,
+  Quantity,
+  SkeletonRows,
+  StatusPill,
+  useOperation,
+} from '@/components/app'
 import {
   billingApi,
   resolveProviderManagement,
@@ -12,10 +24,12 @@ import { cn } from '@/lib/utils'
 import { ModuleAccessDeniedError } from '../policy'
 import { tenantRequestScope } from '../tenant-request-scope'
 import {
-  BillingHeader,
+  BILLING_EYEBROW,
+  BILLING_MANAGEMENT_UNAVAILABLE,
+  BillingManagementUnavailableError,
   BillingMutationGate,
+  BillingUnavailableNotice,
   EmptyBillingPanel,
-  formatBillingAmount,
   useBillingMutation,
 } from './billing-layout'
 
@@ -35,10 +49,8 @@ type PlansState =
       message: string
     }
 
-type CheckoutState =
-  | { kind: 'idle' }
-  | { kind: 'pending'; generation: number }
-  | { kind: 'mutation-error'; generation: number; message: string }
+/** A result that arrived for a tenant we have already left changes nothing. */
+type MutationOutcome = 'applied' | 'stale'
 
 export function PlansScreen() {
   const [searchParams] = useSearchParams()
@@ -50,11 +62,9 @@ export function PlansScreen() {
     generation,
     attempt: 0,
   })
-  const [checkoutState, setCheckoutState] = useState<CheckoutState>({
-    kind: 'idle',
-  })
   const [loadAttempt, setLoadAttempt] = useState(0)
   const latestSnapshotRef = useRef(cabinet.snapshot)
+  const planCodeRef = useRef<string | null>(null)
   const selectedPlanCode = readPlanCode(`?${searchParams.toString()}`)
 
   useEffect(() => {
@@ -93,57 +103,71 @@ export function PlansScreen() {
     }
   }, [generation, loadAttempt])
 
+  const checkout = useOperation<MutationOutcome>(
+    async () => {
+      const planCode = planCodeRef.current
+      const scope = requireLatestMutation()
+      if (
+        planCode === null ||
+        !hasMonoManagement(latestSnapshotRef.current?.subscription)
+      ) {
+        throw new BillingManagementUnavailableError()
+      }
+      let checkoutUrl: string
+      try {
+        ;({ checkoutUrl } = await billingApi.subscribe(
+          { planCode },
+          { signal: scope.signal },
+        ))
+      } catch (error) {
+        if (!isCurrentScope(scope, latestSnapshotRef.current)) return 'stale'
+        throw error
+      }
+      if (!isCurrentScope(scope, latestSnapshotRef.current)) return 'stale'
+      window.location.assign(checkoutUrl)
+      return 'applied'
+    },
+    // No success toast: a checkout leaves the app for the Mono pay page.
+    { errorMessage: checkoutFailureMessage },
+  )
+
+  const resetCheckout = checkout.reset
+  useEffect(() => {
+    // A failure describes one snapshot of access. When that snapshot is
+    // replaced, so is the message.
+    resetCheckout()
+  }, [generation, resetCheckout])
+
   const currentPlansState =
     plansState.generation === generation && plansState.attempt === loadAttempt
       ? plansState
       : ({ kind: 'loading', generation, attempt: loadAttempt } as const)
 
-  const subscribe = async (planCode: string) => {
-    let scope: ReturnType<typeof requireLatestMutation> | null = null
-    try {
-      scope = requireLatestMutation()
-      if (!hasMonoManagement(latestSnapshotRef.current?.subscription)) {
-        setCheckoutState({
-          kind: 'mutation-error',
-          generation: scope.generation,
-          message: 'Керування підпискою недоступне.',
-        })
-        return
-      }
-      setCheckoutState({ kind: 'pending', generation: scope.generation })
-      const { checkoutUrl } = await billingApi.subscribe(
-        { planCode },
-        { signal: scope.signal },
-      )
-      if (isCurrentScope(scope, latestSnapshotRef.current)) {
-        window.location.assign(checkoutUrl)
-      }
-    } catch (error) {
-      if (scope && !isCurrentScope(scope, latestSnapshotRef.current)) return
-      setCheckoutState({
-        kind: 'mutation-error',
-        generation: scope?.generation ?? generation ?? -1,
-        message: checkoutFailureMessage(error),
-      })
-    }
-  }
-
   if (currentPlansState.kind === 'loading') {
     return (
-      <p role="status" className="text-[14px] text-neutral-400">
-        Завантаження…
-      </p>
+      <PlansFrame>
+        <SkeletonRows columns={3} label="Завантажуємо тарифи…" rows={3} />
+      </PlansFrame>
     )
   }
   if (currentPlansState.kind === 'error') {
     return (
-      <BillingLoadError
-        message={currentPlansState.message}
-        onRetry={() => setLoadAttempt((attempt) => attempt + 1)}
-      />
+      <PlansFrame>
+        <ErrorState
+          description={currentPlansState.message}
+          onRetry={() => setLoadAttempt((attempt) => attempt + 1)}
+          title="Тарифи не завантажилися"
+        />
+      </PlansFrame>
     )
   }
-  if (currentPlansState.kind === 'empty') return <EmptyBillingPanel />
+  if (currentPlansState.kind === 'empty') {
+    return (
+      <PlansFrame>
+        <EmptyBillingPanel />
+      </PlansFrame>
+    )
+  }
 
   const currentCode = cabinet.snapshot?.subscription?.planCode
   const providerSubscription = cabinet.snapshot
@@ -152,134 +176,102 @@ export function PlansScreen() {
     ? resolveProviderManagement(providerSubscription)
     : { kind: 'unavailable' as const }
   const recommendedCode = 'pro_monthly'
-  const checkoutForGeneration =
-    checkoutState.kind !== 'idle' && checkoutState.generation === generation
-      ? checkoutState
-      : { kind: 'idle' as const }
-  const busy = checkoutForGeneration.kind === 'pending'
 
   return (
-    <div className="flex flex-col gap-8">
-      <BillingHeader
-        title="Тарифи"
-        subtitle="Обери план, що підходить твоєму бізнесу"
-      />
-      {checkoutForGeneration.kind === 'mutation-error' && (
-        <p
-          role="alert"
-          className="rounded-2xl border border-red-500/30 bg-red-500/[0.06] px-5 py-4 text-[14px] text-red-200"
-        >
-          {checkoutForGeneration.message}
-        </p>
+    <PlansFrame>
+      {checkout.error === null ? null : (
+        <Notice tone="danger">{checkout.error}</Notice>
       )}
       {management.kind === 'provider' && (
-        <p className="rounded-2xl border border-white/[0.1] px-5 py-4 text-[14px] text-neutral-300">
+        <Notice tone="info">
           Цією підпискою керує {management.label}. Змінюйте або скасовуйте її в
           налаштуваннях магазину.
-        </p>
+        </Notice>
       )}
-      {management.kind === 'unavailable' && (
-        <p className="rounded-2xl border border-white/[0.1] px-5 py-4 text-[14px] text-neutral-300">
-          Керування підпискою недоступне. Оновіть сторінку або зверніться до
-          підтримки.
-        </p>
-      )}
-      <ul role="list" className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      {management.kind === 'unavailable' && <BillingUnavailableNotice />}
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" role="list">
         {currentPlansState.plans.map((plan) => {
           const isCurrent = plan.code === currentCode
           const isSelected = plan.code === selectedPlanCode
-          const isRecommended = plan.code === recommendedCode
           return (
             <li
-              key={plan.code}
               className={cn(
-                'rounded-(--radius-card) flex flex-col gap-6 p-6 lg:p-8',
-                isRecommended
-                  ? 'bg-brand text-brand-foreground'
-                  : 'bg-surface-1 text-white ring-1 ring-white/[0.05]',
-                isSelected && 'ring-2 ring-brand',
+                'border-app-line rounded-panel bg-app-raised flex min-w-0 flex-col gap-3 border p-4',
+                plan.code === recommendedCode && 'border-brand/30',
+                isSelected && 'ring-brand ring-1',
               )}
+              key={plan.code}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span
-                  className={cn(
-                    'inline-flex w-fit items-center rounded-full px-3 py-1.5 text-[11px] font-medium tracking-[0.05em] uppercase',
-                    isRecommended ? 'bg-black/15' : 'bg-white/[0.06]',
-                  )}
-                >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-base font-semibold text-white">
                   {plan.name}
-                </span>
+                </h2>
                 {isSelected ? (
-                  <span className="text-[11px] uppercase tracking-[0.05em] opacity-70">
-                    Обрано
-                  </span>
+                  <StatusPill tone="info">Обрано</StatusPill>
                 ) : isCurrent ? (
-                  <span className="text-[11px] uppercase tracking-[0.05em] opacity-70">
-                    Поточний
-                  </span>
+                  <StatusPill tone="ok">Поточний тариф</StatusPill>
                 ) : null}
               </div>
-              <p className="flex items-baseline gap-1 text-[44px] leading-[0.9] font-light tracking-[-0.03em]">
-                <span>{formatBillingAmount(plan.amount, plan.currency)}</span>
-                <span className="text-[13px] font-normal opacity-70">/міс</span>
+              <p className="flex flex-wrap items-baseline gap-x-1.5">
+                <Amount
+                  className="text-[25px] leading-tight font-light tracking-[-0.02em] text-white"
+                  currency={plan.currency}
+                  value={plan.amount}
+                />
+                <span className="text-app-dim text-[12.5px]">/ місяць</span>
               </p>
-              <ul role="list" className="flex flex-col gap-2 text-[13px]">
+              <dl className="border-app-line grid gap-1.5 border-t pt-3">
                 <PlanLimit label="Авто" value={plan.limits.cars} />
                 <PlanLimit label="Партії" value={plan.limits.intakes} />
                 <PlanLimit label="Запчастини" value={plan.limits.parts} />
                 <PlanLimit label="Команда" value={plan.limits.users} />
                 <PlanLimit label="Каси" value={plan.limits.cashRegisters} />
-              </ul>
-              {isCurrent ? (
-                <button
-                  type="button"
-                  disabled
-                  className="mt-auto inline-flex h-12 items-center justify-center rounded-full bg-white/[0.06] text-[14px] text-neutral-400 opacity-50"
-                >
-                  Поточний тариф
-                </button>
-              ) : management.kind === 'mono' ? (
-                <BillingMutationGate decision={controlDecision}>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void subscribe(plan.code)}
-                    className={cn(
-                      'mt-auto inline-flex h-12 w-full items-center justify-center rounded-full text-[14px] transition-colors disabled:opacity-50',
-                      isRecommended
-                        ? 'bg-black text-white hover:bg-black/80'
-                        : 'bg-white text-black hover:bg-white/90',
-                    )}
-                  >
-                    Обрати
-                  </button>
-                </BillingMutationGate>
-              ) : null}
+              </dl>
+              <div className="mt-auto pt-1">
+                {isCurrent ? (
+                  <p className="text-app-dim text-[12.5px]">
+                    Цей тариф уже діє.
+                  </p>
+                ) : management.kind === 'mono' ? (
+                  <BillingMutationGate decision={controlDecision}>
+                    <Button
+                      onClick={() => {
+                        planCodeRef.current = plan.code
+                        checkout.run()
+                      }}
+                      size="wide"
+                      variant="primary"
+                      {...checkout.triggerProps}
+                    >
+                      Обрати
+                    </Button>
+                  </BillingMutationGate>
+                ) : null}
+              </div>
             </li>
           )
         })}
       </ul>
-    </div>
+    </PlansFrame>
   )
 }
 
-function BillingLoadError({
-  message,
-  onRetry,
-}: {
-  message: string
-  onRetry: () => void
-}) {
+function PlansFrame({ children }: { children: ReactNode }) {
   return (
-    <div role="alert" className="flex flex-col items-start gap-4">
-      <p className="text-[14px] text-red-200">{message}</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="bg-brand text-brand-foreground inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-5 text-[14px]"
-      >
-        Спробувати ще раз
-      </button>
+    <PageBody>
+      <PageHeader eyebrow={BILLING_EYEBROW} title="Тарифи" />
+      {children}
+    </PageBody>
+  )
+}
+
+function PlanLimit({ label, value }: { label: string; value: number | null }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <dt className="text-app-dim text-[12.5px]">{label}</dt>
+      <dd className="text-app-muted text-[12.5px]">
+        <Quantity fallback="∞" value={value} />
+      </dd>
     </div>
   )
 }
@@ -300,27 +292,30 @@ function hasMonoManagement(subscription: unknown) {
 function plansFailureMessage(error: unknown): string {
   const problem = normalizeApiProblem(error)
   if (problem.kind === 'network' || problem.kind === 'timeout') {
-    return 'Не вдалося завантажити тарифи: немає з’єднання з мережею.'
+    return 'Не вдалося завантажити тарифи: немає з’єднання з мережею. Перевірте інтернет і спробуйте ще раз.'
   }
   if (problem.kind === 'forbidden') {
-    return 'У вас немає доступу до тарифів цієї розбірки.'
+    return 'У вас немає доступу до тарифів цієї розбірки. Попросіть власника надати доступ до білінгу.'
   }
   return 'Не вдалося завантажити тарифи. Спробуйте ще раз.'
 }
 
 function checkoutFailureMessage(error: unknown): string {
+  if (error instanceof BillingManagementUnavailableError) {
+    return BILLING_MANAGEMENT_UNAVAILABLE
+  }
   if (error instanceof ModuleAccessDeniedError) {
-    return 'Дія більше недоступна: права або стан підписки змінилися.'
+    return 'Дія більше недоступна: права або стан підписки змінилися. Оновіть сторінку.'
   }
   const problem = normalizeApiProblem(error)
   if (problem.kind === 'forbidden') {
-    return 'У вас більше немає права змінювати підписку.'
+    return 'У вас більше немає права змінювати підписку. Попросіть власника розбірки надати доступ до білінгу.'
   }
   if (problem.kind === 'conflict') {
     return 'Підписка вже змінилася. Оновіть сторінку та спробуйте ще раз.'
   }
   if (problem.kind === 'network' || problem.kind === 'timeout') {
-    return 'Не вдалося розпочати оплату: немає з’єднання з мережею.'
+    return 'Не вдалося розпочати оплату: немає з’єднання з мережею. Перевірте інтернет і спробуйте ще раз.'
   }
   return 'Не вдалося розпочати оплату. Спробуйте ще раз.'
 }
@@ -335,14 +330,5 @@ function isCurrentScope(
     !scope.signal.aborted &&
     snapshot?.tenantId === scope.tenantId &&
     snapshot.generation === scope.generation
-  )
-}
-
-function PlanLimit({ label, value }: { label: string; value: number | null }) {
-  return (
-    <li className="flex justify-between gap-2 opacity-80">
-      <span>{label}</span>
-      <span className="tabular-nums">{value ?? '∞'}</span>
-    </li>
   )
 }

@@ -21,6 +21,8 @@ export interface StateScreenProps {
   /** Shown in mono under the actions: what support needs to find the request. */
   meta?: ReactNode
   role?: 'status' | 'alert'
+  /** Names the live region, so a screen can hold more than one. */
+  label?: string
   className?: string
 }
 
@@ -33,10 +35,12 @@ export function StateScreen({
   actions,
   meta,
   role = 'status',
+  label,
   className,
 }: StateScreenProps) {
   return (
     <section
+      aria-label={label}
       className={cn(
         'border-app-line-2 rounded-panel bg-app-raised grid justify-items-center gap-2.5 border border-dashed px-6 py-12 text-center',
         className,
@@ -77,12 +81,16 @@ export function EmptyState({
   actions,
   icon,
   tone = 'brand',
-}: Omit<StateScreenProps, 'role'>) {
+  role = 'status',
+  label,
+}: StateScreenProps) {
   return (
     <StateScreen
       actions={actions}
       description={description}
       icon={icon ?? <Inbox aria-hidden />}
+      {...(label === undefined ? {} : { label })}
+      role={role}
       title={title}
       tone={tone}
     />
@@ -96,6 +104,7 @@ export function ErrorState({
   retryLabel = 'Спробувати ще раз',
   correlationId,
   actions,
+  label,
 }: {
   title?: ReactNode
   description?: ReactNode
@@ -103,6 +112,7 @@ export function ErrorState({
   retryLabel?: string
   correlationId?: string
   actions?: ReactNode
+  label?: string
 }) {
   return (
     <StateScreen
@@ -117,6 +127,7 @@ export function ErrorState({
       }
       description={description}
       icon={<AlertTriangle aria-hidden />}
+      {...(label === undefined ? {} : { label })}
       meta={
         correlationId === undefined ? undefined : `звернення ${correlationId}`
       }
@@ -132,12 +143,17 @@ export function DeniedState({
   description,
   actions,
   role,
-}: Pick<StateScreenProps, 'title' | 'description' | 'actions' | 'role'>) {
+  label,
+}: Pick<
+  StateScreenProps,
+  'title' | 'description' | 'actions' | 'role' | 'label'
+>) {
   return (
     <StateScreen
       actions={actions}
       description={description}
       icon={<Lock aria-hidden />}
+      {...(label === undefined ? {} : { label })}
       role={role ?? 'status'}
       title={title}
       tone="neutral"

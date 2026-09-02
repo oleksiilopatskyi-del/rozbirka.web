@@ -8,8 +8,8 @@ import {
   within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 import { beforeEach, expect, it, vi } from 'vitest'
+import { ToastProvider } from '@/components/app'
 import {
   teamApi,
   type InvitationDto,
@@ -111,7 +111,13 @@ const cabinet = (permissions = ['team.view', 'team.manage']) =>
     switchTenant: vi.fn(),
   }) satisfies CabinetContextValue
 
-const renderScreen = (screenToRender: ReactNode) => render(screenToRender)
+/** `useOperation` reports through the toast api the cabinet shell provides. */
+const teamScreen = () => (
+  <ToastProvider>
+    <TeamScreen definition={cabinetModules.team} />
+  </ToastProvider>
+)
+const renderScreen = () => render(teamScreen())
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -155,7 +161,7 @@ beforeEach(() => {
 })
 
 it('loads the member, role, and invitation lifecycle with tenant cancellation', async () => {
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   expect(
     await screen.findByRole('heading', { name: 'Команда' }),
@@ -186,7 +192,7 @@ it('marks invitation lifecycle states and only allows revoking active invitation
     invitation({ id: 'expired', isExpired: true }),
   ])
 
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   expect(await screen.findByText('Використано')).toBeInTheDocument()
   expect(screen.getByText('Відкликано')).toBeInTheDocument()
@@ -195,7 +201,7 @@ it('marks invitation lifecycle states and only allows revoking active invitation
 })
 
 it('protects system roles while allowing custom roles to be managed', async () => {
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   expect(await screen.findByText('Системна роль')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Видалити Власник' })).toBeNull()
@@ -207,7 +213,7 @@ it('protects system roles while allowing custom roles to be managed', async () =
 it('hides every mutation control without team.manage', async () => {
   vi.mocked(useCabinet).mockReturnValue(cabinet(['team.view']))
 
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   expect(await screen.findByText('Олена')).toBeInTheDocument()
   expect(
@@ -223,7 +229,7 @@ it('revalidates team.manage immediately before member, role, permission, and inv
   const currentCabinet = cabinet()
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await screen.findByText('Олена')
   const changeRole = screen.getByLabelText('Роль для Олена')
@@ -257,7 +263,7 @@ it('confirms and completes member, role, permission, and invitation mutations', 
   const currentCabinet = cabinet()
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await screen.findByText('Олена')
   await user.selectOptions(
@@ -293,7 +299,7 @@ it('confirms and completes member, role, permission, and invitation mutations', 
 it('does not load or render team data without team.view', async () => {
   vi.mocked(useCabinet).mockReturnValue(cabinet(['parts.view']))
 
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Недостатньо прав для перегляду команди.',
@@ -317,7 +323,7 @@ it('clears old tenant data, aborts stale work, and starts a new load on tenant g
   vi.mocked(teamApi.listInvitations)
     .mockResolvedValueOnce([invitation()])
     .mockResolvedValueOnce([invitation({ id: 'invite-2' })])
-  const view = renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  const view = renderScreen()
 
   expect(await screen.findByText('Олена')).toBeInTheDocument()
   const previousSignal = vi.mocked(teamApi.listMembers).mock.calls[0]?.[0]
@@ -332,7 +338,7 @@ it('clears old tenant data, aborts stale work, and starts a new load on tenant g
     generation: 2,
   }
   tenantRequestScope.rotate()
-  view.rerender(<TeamScreen definition={cabinetModules.team} />)
+  view.rerender(teamScreen())
 
   expect(previousSignal?.signal?.aborted).toBe(true)
   expect(screen.queryByText('Олена')).toBeNull()
@@ -344,7 +350,7 @@ it('refreshes authoritative cabinet access after an access-changing direct mutat
   const currentCabinet = cabinet()
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await user.selectOptions(
     await screen.findByLabelText('Роль для Олена'),
@@ -363,7 +369,7 @@ it('blocks a second mutation while the authoritative access retry is unresolved'
   currentCabinet.retry = vi.fn(() => accessRetry.promise)
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await user.click(
     await screen.findByRole('button', { name: 'Редагувати Механік' }),
@@ -394,7 +400,7 @@ it('does not read team data before an access-changing mutation retry settles', a
   currentCabinet.retry = vi.fn(() => accessRetry.promise)
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await user.selectOptions(
     await screen.findByLabelText('Роль для Олена'),
@@ -430,7 +436,7 @@ it('reloads only the current cabinet identity after a retry changes generation',
         : currentIdentityReload.promise,
     )
   const user = userEvent.setup()
-  const view = renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  const view = renderScreen()
   currentCabinet.retry = vi.fn(() => {
     currentCabinet.targetTenant = {
       ...currentCabinet.targetTenant,
@@ -443,7 +449,7 @@ it('reloads only the current cabinet identity after a retry changes generation',
       generation: 2,
     }
     tenantRequestScope.rotate()
-    view.rerender(<TeamScreen definition={cabinetModules.team} />)
+    view.rerender(teamScreen())
     return accessRetry.promise
   })
 
@@ -490,7 +496,7 @@ it('keeps mutation controls fail-closed when authoritative access retry fails', 
   currentCabinet.retry = vi.fn(() => accessRetry.promise)
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await user.selectOptions(
     await screen.findByLabelText('Роль для Олена'),
@@ -522,7 +528,7 @@ it('refreshes access before the access-warning retry starts any team reads', asy
     .mockImplementationOnce(() => successfulAccessRetry.promise)
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await user.selectOptions(
     await screen.findByLabelText('Роль для Олена'),
@@ -563,7 +569,7 @@ it('denies a confirmation when team.manage is revoked after the dialog opens', a
   const currentCabinet = cabinet()
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await user.click(
     await screen.findByRole('button', { name: 'Вимкнути Олена' }),
@@ -583,7 +589,7 @@ it('denies direct permission edits when team.manage is revoked after the editor 
   const currentCabinet = cabinet()
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await user.click(await screen.findByRole('button', { name: 'Права Олена' }))
   await screen.findByRole('dialog', { name: 'Права: Олена' })
@@ -601,7 +607,7 @@ it('creates and edits roles with arbitrary permissions and refreshes cabinet acc
   const currentCabinet = cabinet()
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await screen.findByText('Олена')
   await user.clear(screen.getByLabelText('Назва нової ролі'))
@@ -637,7 +643,7 @@ it('refreshes access after member, role, and invitation confirmation mutations',
   const currentCabinet = cabinet()
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await user.click(
     await screen.findByRole('button', { name: 'Вимкнути Олена' }),
@@ -668,7 +674,7 @@ it('refreshes access after activating a member', async () => {
     { ...member, isActive: false },
   ])
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await user.click(
     await screen.findByRole('button', { name: 'Активувати Олена' }),
@@ -682,7 +688,7 @@ it('refreshes access after activating a member', async () => {
 
 it('supports Escape dismissal and restores focus to the confirmation trigger', async () => {
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   const trigger = await screen.findByRole('button', {
     name: 'Відкликати INVITE-1',
@@ -704,7 +710,7 @@ it('creates an invitation and refreshes the visible invitation lifecycle', async
     .mockResolvedValueOnce([invitation()])
     .mockResolvedValueOnce([invitation(), createdInvitation])
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await user.selectOptions(
     await screen.findByLabelText('Роль для запрошення'),
@@ -729,7 +735,7 @@ it('refreshes visible member data after a successful member mutation', async () 
     .mockResolvedValueOnce([member])
     .mockResolvedValueOnce([{ ...member, isActive: false }])
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await user.click(
     await screen.findByRole('button', { name: 'Вимкнути Олена' }),
@@ -746,7 +752,7 @@ it('keeps mutation success without calling it a failure when authoritative acces
   currentCabinet.retry = vi.fn(() => accessRetry.promise)
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
   const user = userEvent.setup()
-  renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  renderScreen()
 
   await user.click(
     await screen.findByRole('button', { name: 'Вимкнути Олена' }),
@@ -782,7 +788,7 @@ it('keeps old data hidden across a retry generation switch until the current ide
         : newReload.promise,
     )
   const user = userEvent.setup()
-  const view = renderScreen(<TeamScreen definition={cabinetModules.team} />)
+  const view = renderScreen()
   currentCabinet.retry = vi.fn(() => {
     currentCabinet.targetTenant = {
       ...currentCabinet.targetTenant,
@@ -795,7 +801,7 @@ it('keeps old data hidden across a retry generation switch until the current ide
       generation: 2,
     }
     tenantRequestScope.rotate()
-    view.rerender(<TeamScreen definition={cabinetModules.team} />)
+    view.rerender(teamScreen())
     return accessRetry.promise
   })
 
@@ -804,7 +810,7 @@ it('keeps old data hidden across a retry generation switch until the current ide
   )
   await user.click(screen.getByRole('button', { name: 'Підтвердити' }))
   await waitFor(() => expect(currentCabinet.retry).toHaveBeenCalledOnce())
-  expect(screen.queryByRole('rowheader', { name: /Олена/ })).toBeNull()
+  expect(screen.queryByText('+380501112233')).toBeNull()
 
   accessRetry.resolve(undefined)
   await waitFor(() =>

@@ -1,11 +1,13 @@
 import { useCallback, useRef, useState } from 'react'
-import { useToast } from './toast-context'
+import { useOptionalToast } from './toast-context'
 
 export type OperationStatus = 'idle' | 'pending' | 'done' | 'failed'
 
 export interface OperationApi<Result> {
   status: OperationStatus
   pending: boolean
+  /** True after a successful run, until the next attempt or a reset. */
+  succeeded: boolean
   /** Message from the last failure, cleared when the next attempt starts. */
   error: string | null
   result: Result | null
@@ -43,7 +45,7 @@ export function useOperation<Result>(
   options: OperationOptions<Result> = {},
 ): OperationApi<Result> {
   const { successMessage, errorMessage, onSuccess, onError } = options
-  const toast = useToast()
+  const toast = useOptionalToast()
   const [status, setStatus] = useState<OperationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<Result | null>(null)
@@ -60,7 +62,7 @@ export function useOperation<Result>(
         setResult(value)
         setStatus('done')
         if (successMessage !== undefined) {
-          toast.show({ message: successMessage, tone: 'ok' })
+          toast?.show({ message: successMessage, tone: 'ok' })
         }
         onSuccess?.(value)
       })
@@ -85,6 +87,7 @@ export function useOperation<Result>(
   return {
     status,
     pending,
+    succeeded: status === 'done',
     error,
     result,
     run,

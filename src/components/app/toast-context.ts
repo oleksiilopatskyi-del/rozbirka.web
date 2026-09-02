@@ -29,3 +29,11 @@ export function useToast(): ToastApi {
   }
   return api
 }
+
+/**
+ * Toasts where they exist, silence where they do not — for shared logic that
+ * must also run in a tree without the provider.
+ */
+export function useOptionalToast(): ToastApi | null {
+  return useContext(ToastContext)
+}

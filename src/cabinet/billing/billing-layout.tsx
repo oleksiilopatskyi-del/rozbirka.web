@@ -1,4 +1,5 @@
-import { EmptyState } from '@/components/app'
+import { useId, type ReactNode } from 'react'
+import { EmptyState, Notice } from '@/components/app'
 import { useCabinet } from '../CabinetContext'
 import { AccessGate } from '../AccessGate'
 import { cabinetModules, type CabinetModuleKey } from '../module-registry'
@@ -10,24 +11,58 @@ import {
 import { tenantRequestScope } from '../tenant-request-scope'
 import type { TenantAccessState } from '../access-types'
 
-export function BillingHeader({
+/** Eyebrow every billing screen wears, so the three read as one section. */
+export const BILLING_EYEBROW = 'Налаштування · Білінг'
+
+/**
+ * One sentence for "we cannot tell which store owns this subscription", used
+ * both as a standing notice and as the failure of an action that discovered it
+ * mid-flight. It says what to do next, because "недоступне" alone is a dead end.
+ */
+export const BILLING_MANAGEMENT_UNAVAILABLE =
+  'Керування підпискою недоступне. Оновіть сторінку — можливо, підписку перенесли в App Store або Google Play.'
+
+/** Thrown when a mutation is dispatched against a non-Mono subscription. */
+// eslint-disable-next-line react-refresh/only-export-components -- failure type shared by the three billing screens.
+export class BillingManagementUnavailableError extends Error {
+  constructor() {
+    super(BILLING_MANAGEMENT_UNAVAILABLE)
+    this.name = 'BillingManagementUnavailableError'
+  }
+}
+
+/**
+ * A second-level block of a billing screen. Unlike `SectionPanel` it draws no
+ * surface of its own, so a `DataTable` inside it keeps a single border.
+ */
+export function BillingSection({
   title,
-  subtitle,
-  level = 1,
+  description,
+  children,
 }: {
   title: string
-  subtitle?: string
-  level?: 1 | 2
+  description?: string
+  children: ReactNode
 }) {
-  const Heading = level === 1 ? 'h1' : 'h2'
+  const titleId = useId()
+
   return (
-    <header className="mb-8 flex flex-col gap-1.5">
-      <Heading className="text-2xl font-semibold tracking-[-0.02em] text-white">
-        {title}
-      </Heading>
-      {subtitle && <p className="text-app-muted text-sm">{subtitle}</p>}
-    </header>
+    <section aria-labelledby={titleId} className="grid gap-3">
+      <div className="grid gap-1">
+        <h2 className="text-base font-semibold text-white" id={titleId}>
+          {title}
+        </h2>
+        {description === undefined ? null : (
+          <p className="text-app-dim text-[12.5px]">{description}</p>
+        )}
+      </div>
+      {children}
+    </section>
   )
+}
+
+export function BillingUnavailableNotice() {
+  return <Notice tone="warn">{BILLING_MANAGEMENT_UNAVAILABLE}</Notice>
 }
 
 export function EmptyBillingPanel() {
@@ -103,34 +138,4 @@ function cabinetAccess(
     : cabinet.status === 'error'
       ? { status: 'error', snapshot: null, error: cabinet.error }
       : { status: 'loading', snapshot: null, error: null }
-}
-
-// eslint-disable-next-line react-refresh/only-export-components -- presentation formatter shared by billing screens.
-export function formatBillingDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('uk-UA', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  } catch {
-    return iso
-  }
-}
-
-// eslint-disable-next-line react-refresh/only-export-components -- presentation formatter shared by billing screens.
-export function formatBillingAmount(
-  amount: number | null | undefined,
-  currency: string | null | undefined,
-): string {
-  if (typeof amount !== 'number') return '—'
-  const formatted = amount.toLocaleString('uk-UA', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-  const upper = (currency ?? '').toUpperCase()
-  const symbol = upper === 'UAH' ? '₴' : upper === 'USD' ? '$' : upper
-  return upper === 'USD'
-    ? `${symbol}${formatted}`
-    : `${formatted} ${symbol}`.trim()
 }

@@ -95,9 +95,10 @@ it('keeps table semantics and labels every cell for the stacked layout', () => {
   expect(
     screen.getByRole('columnheader', { name: 'Деталь' }),
   ).toBeInTheDocument()
-  expect(
-    screen.getByRole('cell', { name: 'Бампер передній' }),
-  ).not.toHaveAttribute('data-label')
+  // The identifying column is the row's header, not just another cell.
+  const identity = screen.getByRole('rowheader', { name: 'Бампер передній' })
+  expect(identity).toHaveAttribute('scope', 'row')
+  expect(identity).not.toHaveAttribute('data-label')
   expect(screen.getByRole('cell', { name: '8400 ₴' })).toHaveAttribute(
     'data-label',
     'Ціна',

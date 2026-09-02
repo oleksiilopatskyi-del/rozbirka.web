@@ -89,16 +89,31 @@ it('changes the selected period once for pointer and keyboard activation', async
   expect(onPeriodChange).toHaveBeenCalledWith('month')
 })
 
+it('moves focus across the period group with arrow keys without selecting', async () => {
+  const user = userEvent.setup()
+  const onPeriodChange = vi.fn()
+  renderAnalytics({ onPeriodChange })
+
+  screen.getByRole('button', { name: 'День' }).focus()
+  await user.keyboard('{ArrowRight}')
+  expect(screen.getByRole('button', { name: 'Тиждень' })).toHaveFocus()
+
+  await user.keyboard('{ArrowLeft}{ArrowLeft}')
+  expect(screen.getByRole('button', { name: 'Місяць' })).toHaveFocus()
+  expect(onPeriodChange).not.toHaveBeenCalled()
+})
+
 it('renders response currencies, textual trends, authoritative totals, and decorative bars', () => {
   renderAnalytics()
 
-  expect(screen.getByText('UAH')).toBeInTheDocument()
-  expect(screen.getByText('USD')).toBeInTheDocument()
-  expect(screen.getByText('+12,5%')).toBeInTheDocument()
+  expect(screen.getByText('Виручка, UAH')).toBeInTheDocument()
+  expect(screen.getByText('Виручка, USD')).toBeInTheDocument()
+  expect(screen.getByText('+12,5%')).toHaveClass('text-state-ok')
   expect(screen.getByText('24')).toBeInTheDocument()
-  expect(screen.getByText('−3')).toBeInTheDocument()
+  expect(screen.getByText('−3')).toHaveClass('text-state-danger')
   expect(screen.getByText('8')).toBeInTheDocument()
-  expect(screen.getByText('+2')).toBeInTheDocument()
+  expect(screen.getByText('+2')).toHaveClass('text-state-ok')
+  expect(screen.getAllByText(/менше, ніж у попередній період/)).toHaveLength(1)
   expect(screen.getByText('Фара ліва')).toBeInTheDocument()
   const charts = document.querySelectorAll(
     '[aria-label="Декоративна діаграма"]',

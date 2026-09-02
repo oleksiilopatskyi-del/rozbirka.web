@@ -1,5 +1,23 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CreditCard } from 'lucide-react'
+import {
+  Amount,
+  Button,
+  DataTable,
+  DateValue,
+  EmptyState,
+  ErrorState,
+  Notice,
+  PageBody,
+  PageHeader,
+  SectionPanel,
+  SkeletonRows,
+  StatusPill,
+  useOperation,
+  useToast,
+  type DataColumn,
+  type StatusTone,
+} from '@/components/app'
 import {
   billingApi,
   resolveProviderManagement,
@@ -12,14 +30,14 @@ import type {
   PaymentStatus,
   SubscriptionDto,
 } from '@/api/types'
-import { cn } from '@/lib/utils'
 import { ModuleAccessDeniedError } from '../policy'
 import { tenantRequestScope } from '../tenant-request-scope'
 import {
-  BillingHeader,
+  BILLING_EYEBROW,
+  BILLING_MANAGEMENT_UNAVAILABLE,
+  BillingManagementUnavailableError,
   BillingMutationGate,
-  formatBillingAmount,
-  formatBillingDate,
+  BillingSection,
   useBillingMutation,
 } from './billing-layout'
 
@@ -39,10 +57,8 @@ type PaymentsState =
       message: string
     }
 
-type PaymentMutationState =
-  | { kind: 'idle' }
-  | { kind: 'pending'; generation: number; paymentId: string }
-  | { kind: 'mutation-error'; generation: number; message: string }
+/** A result that arrived for a tenant we have already left changes nothing. */
+type MutationOutcome = 'applied' | 'stale'
 
 type PaymentSubscription = Readonly<
   Pick<SubscriptionDto, 'cardBrand' | 'cardLast4'>
@@ -50,6 +66,7 @@ type PaymentSubscription = Readonly<
   Partial<Pick<ProviderAwareSubscriptionDto, 'source' | 'manageVia'>>
 
 export function PaymentsScreen() {
+  const toast = useToast()
   const { cabinet, controlDecision, requireLatestMutation } =
     useBillingMutation('payments')
   const generation = cabinet.snapshot?.generation
@@ -58,11 +75,15 @@ export function PaymentsScreen() {
     generation,
     attempt: 0,
   })
-  const [mutationState, setMutationState] = useState<PaymentMutationState>({
-    kind: 'idle',
-  })
+  const [guardError, setGuardError] = useState<{
+    generation: number | undefined
+    message: string
+  } | null>(null)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [loadAttempt, setLoadAttempt] = useState(0)
   const latestSnapshotRef = useRef(cabinet.snapshot)
+  const paymentIdRef = useRef<string | null>(null)
+  const cancelStageRef = useRef<'cancel' | 'reload'>('cancel')
 
   useEffect(() => {
     latestSnapshotRef.current = cabinet.snapshot
@@ -91,59 +112,63 @@ export function PaymentsScreen() {
     }
   }, [generation, loadAttempt])
 
+  const cancelPayment = useOperation<MutationOutcome>(
+    async () => {
+      cancelStageRef.current = 'cancel'
+      const paymentId = paymentIdRef.current
+      const scope = requireLatestMutation()
+      if (
+        paymentId === null ||
+        !hasMonoManagement(latestSnapshotRef.current?.subscription)
+      ) {
+        throw new BillingManagementUnavailableError()
+      }
+      try {
+        await billingApi.cancelPayment(paymentId, { signal: scope.signal })
+      } catch (error) {
+        if (!isCurrentScope(scope, latestSnapshotRef.current)) return 'stale'
+        throw error
+      }
+      if (!isCurrentScope(scope, latestSnapshotRef.current)) return 'stale'
+      cancelStageRef.current = 'reload'
+      let loaded: PagedResult<PaymentDto>
+      try {
+        loaded = await billingApi.getPayments(1, 10, { signal: scope.signal })
+      } catch (error) {
+        if (!isCurrentScope(scope, latestSnapshotRef.current)) return 'stale'
+        throw error
+      }
+      if (!isCurrentScope(scope, latestSnapshotRef.current)) return 'stale'
+      setPaymentsState(paymentsStateFrom(loaded, generation, loadAttempt))
+      return 'applied'
+    },
+    {
+      errorMessage: (error) =>
+        cancelStageRef.current === 'reload'
+          ? 'Платіж скасовано, але не вдалося оновити список. Оновіть сторінку, щоб побачити актуальні платежі.'
+          : paymentCancellationFailureMessage(error),
+      onSuccess: (outcome) => {
+        setCancellingId(null)
+        if (outcome === 'applied') {
+          toast.show({ message: 'Платіж скасовано.', tone: 'ok' })
+        }
+      },
+      onError: () => setCancellingId(null),
+    },
+  )
+
+  const resetCancel = cancelPayment.reset
+  useEffect(() => {
+    // A failure describes one snapshot of access. When that snapshot is
+    // replaced, so is the message.
+    resetCancel()
+  }, [generation, resetCancel])
+
   const currentPaymentsState =
     paymentsState.generation === generation &&
     paymentsState.attempt === loadAttempt
       ? paymentsState
       : ({ kind: 'loading', generation, attempt: loadAttempt } as const)
-
-  const cancelPayment = async (paymentId: string) => {
-    let scope: ReturnType<typeof requireLatestMutation> | null = null
-    let cancellationCompleted = false
-    try {
-      scope = requireLatestMutation()
-      if (!hasMonoManagement(latestSnapshotRef.current?.subscription)) {
-        setMutationState({
-          kind: 'mutation-error',
-          generation: scope.generation,
-          message: 'Керування підпискою недоступне.',
-        })
-        return
-      }
-      setMutationState({
-        kind: 'pending',
-        generation: scope.generation,
-        paymentId,
-      })
-      await billingApi.cancelPayment(paymentId, { signal: scope.signal })
-      cancellationCompleted = true
-      if (!isCurrentScope(scope, latestSnapshotRef.current)) return
-      const loaded = await billingApi.getPayments(1, 10, {
-        signal: scope.signal,
-      })
-      if (isCurrentScope(scope, latestSnapshotRef.current)) {
-        setPaymentsState(paymentsStateFrom(loaded, generation, loadAttempt))
-        setMutationState({ kind: 'idle' })
-      }
-    } catch (error) {
-      if (scope && !isCurrentScope(scope, latestSnapshotRef.current)) return
-      setMutationState({
-        kind: 'mutation-error',
-        generation: scope?.generation ?? generation ?? -1,
-        message: cancellationCompleted
-          ? 'Платіж скасовано, але не вдалося оновити список. Оновіть сторінку.'
-          : paymentCancellationFailureMessage(error),
-      })
-    }
-  }
-
-  if (currentPaymentsState.kind === 'loading') {
-    return (
-      <p role="status" className="text-[14px] text-neutral-400">
-        Завантаження…
-      </p>
-    )
-  }
 
   const paymentMethod = (
     <PaymentMethod subscription={cabinet.snapshot?.subscription ?? null} />
@@ -151,146 +176,172 @@ export function PaymentsScreen() {
   const canManageMonoPayments = hasMonoManagement(
     cabinet.snapshot?.subscription ?? null,
   )
+  const mutationError =
+    (guardError !== null && guardError.generation === generation
+      ? guardError.message
+      : null) ?? cancelPayment.error
+
+  if (currentPaymentsState.kind === 'loading') {
+    return (
+      <PaymentsFrame>
+        {paymentMethod}
+        <BillingSection description="Історія платежів і чеки" title="Білінг">
+          <SkeletonRows columns={4} label="Завантажуємо платежі…" rows={3} />
+        </BillingSection>
+      </PaymentsFrame>
+    )
+  }
 
   if (currentPaymentsState.kind === 'error') {
     return (
-      <div className="flex flex-col gap-12">
+      <PaymentsFrame>
         {paymentMethod}
-        <section>
-          <BillingHeader
-            title="Білінг"
-            subtitle="Історія платежів і чеки"
-            level={2}
+        <BillingSection description="Історія платежів і чеки" title="Білінг">
+          <ErrorState
+            description={currentPaymentsState.message}
+            onRetry={() => setLoadAttempt((attempt) => attempt + 1)}
+            title="Платежі не завантажилися"
           />
-          <div role="alert" className="flex flex-col items-start gap-4">
-            <p className="text-[14px] text-red-200">
-              {currentPaymentsState.message}
-            </p>
-            <button
-              type="button"
-              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
-              className="bg-brand text-brand-foreground inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-5 text-[14px]"
-            >
-              Спробувати ще раз
-            </button>
-          </div>
-        </section>
-      </div>
+        </BillingSection>
+      </PaymentsFrame>
     )
   }
 
-  if (currentPaymentsState.kind === 'empty') {
-    return (
-      <div className="flex flex-col gap-12">
-        {paymentMethod}
-        <section>
-          <BillingHeader
-            title="Білінг"
-            subtitle="Історія платежів і чеки"
-            level={2}
-          />
-          <p className="text-[14px] text-neutral-400">Платежів ще не було.</p>
-        </section>
-      </div>
-    )
+  const items =
+    currentPaymentsState.kind === 'ready' ? currentPaymentsState.page.items : []
+  const guardCheckout = (event: { preventDefault: () => void }) => {
+    try {
+      requireLatestMutation()
+      if (!hasMonoManagement(latestSnapshotRef.current?.subscription)) {
+        event.preventDefault()
+        resetCancel()
+        setGuardError({ generation, message: BILLING_MANAGEMENT_UNAVAILABLE })
+      }
+    } catch {
+      event.preventDefault()
+    }
   }
+  const startCancel = (paymentId: string) => {
+    setGuardError(null)
+    setCancellingId(paymentId)
+    paymentIdRef.current = paymentId
+    cancelPayment.run()
+  }
+  const actionable = items.some(
+    (item) => canManageMonoPayments && item.status === 'pending',
+  )
 
-  const mutationForGeneration =
-    mutationState.kind !== 'idle' && mutationState.generation === generation
-      ? mutationState
-      : { kind: 'idle' as const }
-  const cancellingId =
-    mutationForGeneration.kind === 'pending'
-      ? mutationForGeneration.paymentId
-      : null
-
-  return (
-    <div className="flex flex-col gap-12">
-      {paymentMethod}
-      <section>
-        <BillingHeader
-          title="Білінг"
-          subtitle="Історія платежів і чеки"
-          level={2}
-        />
-        {mutationForGeneration.kind === 'mutation-error' && (
-          <p
-            role="alert"
-            className="mb-5 rounded-2xl border border-red-500/30 bg-red-500/[0.06] px-5 py-4 text-[14px] text-red-200"
-          >
-            {mutationForGeneration.message}
-          </p>
-        )}
-        <div className="bg-surface-1 rounded-(--radius-card) ring-1 ring-white/[0.04]">
-          <ul role="list" className="divide-y divide-white/[0.04]">
-            {currentPaymentsState.page.items.map((item) => (
-              <li
-                key={item.id}
-                className="flex min-w-0 flex-col items-stretch gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8 lg:py-6"
-              >
-                <div className="flex min-w-0 flex-col gap-1">
-                  <p className="text-[15px] font-medium tabular-nums">
-                    {formatBillingAmount(item.amount, item.currency)}
-                  </p>
-                  <p className="min-w-0 text-[12px] break-words text-neutral-400 tabular-nums">
-                    {formatBillingDate(item.createdAt)} ·{' '}
-                    {paymentTypeLabel(item.type)}
-                  </p>
-                </div>
-                <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
-                  {canManageMonoPayments &&
-                    item.status === 'pending' &&
-                    item.checkoutUrl && (
-                      <BillingMutationGate decision={controlDecision}>
+  const columns: DataColumn<PaymentDto>[] = [
+    {
+      key: 'date',
+      label: 'Дата',
+      variant: 'primary',
+      cell: (item) => (
+        <span className="grid gap-0.5">
+          <DateValue value={item.createdAt} withTime={false} />
+          <span className="text-app-dim text-[11.5px]">
+            {paymentTypeLabel(item.type)}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: 'amount',
+      label: 'Сума',
+      align: 'end',
+      cell: (item) => <Amount currency={item.currency} value={item.amount} />,
+    },
+    {
+      key: 'status',
+      label: 'Статус',
+      cell: (item) => {
+        const status = paymentStatusMeta[item.status]
+        return <StatusPill tone={status.tone}>{status.label}</StatusPill>
+      },
+    },
+    {
+      key: 'receipt',
+      label: 'Чек',
+      cell: (item) =>
+        item.providerInvoiceId ? (
+          <span className="font-mono text-[11.5px] break-all">
+            {item.providerInvoiceId}
+          </span>
+        ) : (
+          '—'
+        ),
+    },
+    ...(actionable
+      ? [
+          {
+            key: 'actions',
+            label: 'Дії',
+            align: 'end' as const,
+            headerHidden: true,
+            cell: (item: PaymentDto) =>
+              canManageMonoPayments && item.status === 'pending' ? (
+                <span className="flex min-w-0 flex-wrap justify-end gap-2">
+                  {item.checkoutUrl && (
+                    <BillingMutationGate decision={controlDecision}>
+                      <Button asChild variant="ghost">
                         <a
                           href={item.checkoutUrl}
-                          target="_blank"
+                          onClick={guardCheckout}
                           rel="noopener noreferrer"
-                          onClick={(event) => {
-                            try {
-                              requireLatestMutation()
-                              if (
-                                !hasMonoManagement(
-                                  latestSnapshotRef.current?.subscription,
-                                )
-                              ) {
-                                event.preventDefault()
-                                setMutationState({
-                                  kind: 'mutation-error',
-                                  generation: generation ?? -1,
-                                  message: 'Керування підпискою недоступне.',
-                                })
-                              }
-                            } catch {
-                              event.preventDefault()
-                            }
-                          }}
-                          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-white/[0.06] px-3 py-2 text-center text-[12px] font-medium text-white ring-1 ring-white/[0.08] transition hover:bg-white/[0.10]"
+                          target="_blank"
                         >
                           Продовжити оплату
                         </a>
-                      </BillingMutationGate>
-                    )}
-                  {canManageMonoPayments && item.status === 'pending' && (
-                    <BillingMutationGate decision={controlDecision}>
-                      <button
-                        type="button"
-                        onClick={() => void cancelPayment(item.id)}
-                        disabled={cancellingId === item.id}
-                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-3 py-2 text-[12px] font-medium text-red-300 ring-1 ring-red-500/30 transition hover:bg-red-500/10 disabled:opacity-50"
-                      >
-                        {cancellingId === item.id ? 'Скасування…' : 'Скасувати'}
-                      </button>
+                      </Button>
                     </BillingMutationGate>
                   )}
-                  <PaymentStatusBadge status={item.status} />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-    </div>
+                  <BillingMutationGate decision={controlDecision}>
+                    <Button
+                      {...cancelPayment.triggerProps}
+                      aria-busy={cancellingId === item.id}
+                      onClick={() => startCancel(item.id)}
+                      variant="danger"
+                    >
+                      Скасувати
+                    </Button>
+                  </BillingMutationGate>
+                </span>
+              ) : null,
+          },
+        ]
+      : []),
+  ]
+
+  return (
+    <PaymentsFrame>
+      {paymentMethod}
+      <BillingSection description="Історія платежів і чеки" title="Білінг">
+        {mutationError === null ? null : (
+          <Notice tone="danger">{mutationError}</Notice>
+        )}
+        <DataTable
+          caption="Історія платежів"
+          columns={columns}
+          empty={
+            <EmptyState
+              description="Платежів ще не було."
+              title="Історія платежів порожня"
+            />
+          }
+          rowKey={(item) => item.id}
+          rows={items}
+        />
+      </BillingSection>
+    </PaymentsFrame>
+  )
+}
+
+function PaymentsFrame({ children }: { children: ReactNode }) {
+  return (
+    <PageBody>
+      <PageHeader eyebrow={BILLING_EYEBROW} title="Оплата" />
+      {children}
+    </PageBody>
   )
 }
 
@@ -307,27 +358,30 @@ function paymentsStateFrom(
 function paymentsFailureMessage(error: unknown): string {
   const problem = normalizeApiProblem(error)
   if (problem.kind === 'network' || problem.kind === 'timeout') {
-    return 'Не вдалося завантажити платежі: немає з’єднання з мережею.'
+    return 'Не вдалося завантажити платежі: немає з’єднання з мережею. Перевірте інтернет і спробуйте ще раз.'
   }
   if (problem.kind === 'forbidden') {
-    return 'У вас немає доступу до платежів цієї розбірки.'
+    return 'У вас немає доступу до платежів цієї розбірки. Попросіть власника надати доступ до білінгу.'
   }
   return 'Не вдалося завантажити платежі. Спробуйте ще раз.'
 }
 
 function paymentCancellationFailureMessage(error: unknown): string {
+  if (error instanceof BillingManagementUnavailableError) {
+    return BILLING_MANAGEMENT_UNAVAILABLE
+  }
   if (error instanceof ModuleAccessDeniedError) {
-    return 'Дія більше недоступна: права або стан підписки змінилися.'
+    return 'Дія більше недоступна: права або стан підписки змінилися. Оновіть сторінку.'
   }
   const problem = normalizeApiProblem(error)
   if (problem.kind === 'forbidden') {
-    return 'У вас більше немає права скасувати цей платіж.'
+    return 'У вас більше немає права скасувати цей платіж. Попросіть власника розбірки надати доступ до білінгу.'
   }
   if (problem.kind === 'conflict') {
     return 'Статус платежу вже змінився. Оновіть список платежів.'
   }
   if (problem.kind === 'network' || problem.kind === 'timeout') {
-    return 'Не вдалося скасувати платіж: немає з’єднання з мережею.'
+    return 'Не вдалося скасувати платіж: немає з’єднання з мережею. Перевірте інтернет і спробуйте ще раз.'
   }
   return 'Не вдалося скасувати платіж. Спробуйте ще раз.'
 }
@@ -359,50 +413,50 @@ function PaymentMethod({
       )
     : { kind: 'unavailable' as const }
   const hasCard = Boolean(subscription?.cardLast4)
+
   return (
-    <section>
-      <BillingHeader
-        title="Оплата"
-        subtitle="Карта, з якої списується підписка"
-      />
-      <div className="bg-surface-1 rounded-(--radius-card) flex flex-col gap-6 p-8 ring-1 ring-white/[0.04] lg:p-10">
-        {management.kind === 'provider' ? (
-          <p className="text-[14px] text-neutral-400">
-            Спосіб оплати керується {management.label}.
-          </p>
-        ) : management.kind === 'unavailable' ? (
-          <p className="text-[14px] text-neutral-400">
-            Інформація про спосіб оплати наразі недоступна.
-          </p>
-        ) : hasCard ? (
-          <div className="flex items-center gap-4">
-            <div className="bg-brand/10 ring-brand/30 grid size-14 place-items-center rounded-2xl ring-1">
-              <CreditCard className="text-brand size-6" aria-hidden />
-            </div>
-            <div className="flex flex-col gap-1">
-              <p className="text-[20px] font-medium tabular-nums">
-                {(subscription?.cardBrand ?? 'Card').toUpperCase()} ••••{' '}
-                {subscription?.cardLast4}
-              </p>
-              <p className="text-[13px] text-neutral-400">
-                Авторизована для регулярних списань
-              </p>
-            </div>
-          </div>
-        ) : (
-          <p className="text-[14px] text-neutral-400">
-            Картка ще не привʼязана. Активуйте підписку — і карту запитає
-            Monobank під час оплати.
-          </p>
-        )}
-      </div>
-    </section>
+    <SectionPanel
+      description="Карта, з якої списується підписка"
+      title="Спосіб оплати"
+    >
+      {management.kind === 'provider' ? (
+        <p className="text-app-muted text-sm">
+          Спосіб оплати керується {management.label}. Змініть картку в
+          налаштуваннях магазину.
+        </p>
+      ) : management.kind === 'unavailable' ? (
+        <p className="text-app-muted text-sm">
+          Інформація про спосіб оплати наразі недоступна. Оновіть сторінку.
+        </p>
+      ) : hasCard ? (
+        <div className="flex items-center gap-3">
+          <span className="bg-brand/[0.12] text-brand grid size-11 shrink-0 place-items-center rounded-xl">
+            <CreditCard aria-hidden className="size-5" />
+          </span>
+          <span className="grid min-w-0 gap-0.5">
+            <span className="text-sm font-medium tabular-nums text-white">
+              {(subscription?.cardBrand ?? 'Card').toUpperCase()} ••••{' '}
+              {subscription?.cardLast4}
+            </span>
+            <span className="text-app-dim text-[12.5px]">
+              Авторизована для регулярних списань
+            </span>
+          </span>
+        </div>
+      ) : (
+        <p className="text-app-muted text-sm">
+          Картка ще не привʼязана. Активуйте підписку — і карту запитає Monobank
+          під час оплати.
+        </p>
+      )}
+    </SectionPanel>
   )
 }
 
 function hasMonoManagement(subscription: unknown) {
   return (
     subscription !== null &&
+    subscription !== undefined &&
     resolveProviderManagement(
       subscription as Pick<
         ProviderAwareSubscriptionDto,
@@ -412,37 +466,15 @@ function hasMonoManagement(subscription: unknown) {
   )
 }
 
-function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
-  const map: Record<PaymentStatus, { label: string; cls: string }> = {
-    success: {
-      label: 'Оплачено',
-      cls: 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/30',
-    },
-    pending: {
-      label: 'Очікує',
-      cls: 'bg-amber-500/10 text-amber-400 ring-amber-500/30',
-    },
-    failed: {
-      label: 'Помилка',
-      cls: 'bg-red-500/10 text-red-400 ring-red-500/30',
-    },
-    reversed: {
-      label: 'Повернено',
-      cls: 'bg-neutral-500/10 text-neutral-400 ring-neutral-500/30',
-    },
-    cancelled: {
-      label: 'Скасовано',
-      cls: 'bg-neutral-500/10 text-neutral-400 ring-neutral-500/30',
-    },
-  }
-  const entry = map[status]
-  return (
-    <span
-      className={cn('rounded-full px-3 py-1 text-[12px] ring-1', entry.cls)}
-    >
-      {entry.label}
-    </span>
-  )
+const paymentStatusMeta: Record<
+  PaymentStatus,
+  { label: string; tone: StatusTone }
+> = {
+  success: { label: 'Оплачено', tone: 'ok' },
+  pending: { label: 'Очікує', tone: 'warn' },
+  failed: { label: 'Помилка', tone: 'danger' },
+  reversed: { label: 'Повернено', tone: 'neutral' },
+  cancelled: { label: 'Скасовано', tone: 'neutral' },
 }
 
 function paymentTypeLabel(type: PaymentDto['type']): string {

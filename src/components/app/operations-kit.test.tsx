@@ -369,3 +369,55 @@ it('lists uploads with their state and a way to retry or drop each', async () =>
   await user.click(screen.getByRole('button', { name: 'Прибрати front.jpg' }))
   expect(onRemove).toHaveBeenCalledOnce()
 })
+
+it('offers a toggle-button group where every option stays Tab-reachable', async () => {
+  const user = userEvent.setup()
+  const onChange = vi.fn()
+  render(
+    <Segmented
+      as="toggle"
+      label="Період"
+      name="period"
+      onChange={onChange}
+      options={[
+        { value: 'day', label: 'День' },
+        { value: 'week', label: 'Тиждень' },
+      ]}
+      value="day"
+    />,
+  )
+
+  const day = screen.getByRole('button', { name: 'День' })
+  const week = screen.getByRole('button', { name: 'Тиждень' })
+  expect(day).toHaveAttribute('aria-pressed', 'true')
+
+  await user.tab()
+  expect(day).toHaveFocus()
+  await user.tab()
+  expect(week).toHaveFocus()
+
+  await user.click(week)
+  expect(onChange).toHaveBeenCalledWith('week')
+})
+
+it('runs an operation without a toast provider and reports success in place', async () => {
+  const user = userEvent.setup()
+
+  function Probe() {
+    const save = useOperation(() => Promise.resolve('saved'))
+    return (
+      <>
+        <Button {...save.triggerProps} onClick={save.run}>
+          Зберегти
+        </Button>
+        {save.succeeded ? <p role="status">Збережено</p> : null}
+      </>
+    )
+  }
+
+  render(<Probe />)
+  await user.click(screen.getByRole('button', { name: 'Зберегти' }))
+  await waitFor(() =>
+    expect(screen.getByRole('status')).toHaveTextContent('Збережено'),
+  )
+})

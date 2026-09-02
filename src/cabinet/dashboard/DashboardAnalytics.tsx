@@ -1,3 +1,14 @@
+import type { KeyboardEvent } from 'react'
+import {
+  Amount,
+  Fact,
+  FactList,
+  Panel,
+  Quantity,
+  SectionPanel,
+  Skeleton,
+} from '@/components/app'
+import { cn } from '@/lib/utils'
 import type {
   DashboardAnalytics as DashboardAnalyticsData,
   DashboardPeriod,
@@ -15,6 +26,9 @@ const numberFormatter = new Intl.NumberFormat('uk-UA', {
   maximumFractionDigits: 1,
 })
 
+const figureClass =
+  'text-[25px] leading-tight font-light tracking-[-0.02em] text-white'
+
 interface DashboardAnalyticsProps {
   loadable: DashboardLoadable<DashboardAnalyticsData>
   period: DashboardPeriod
@@ -31,23 +45,15 @@ export function DashboardAnalytics({
   billingPath = null,
 }: DashboardAnalyticsProps) {
   return (
-    <section aria-label="Аналітика" className="grid gap-5">
-      <div
-        aria-label="Період аналітики"
-        className="flex flex-wrap gap-2"
-        role="group"
-      >
-        {(Object.keys(periodLabels) as DashboardPeriod[]).map((value) => (
-          <button
-            aria-pressed={period === value}
-            className="min-h-11 rounded-full border border-white/[0.12] px-3 text-sm text-white"
-            key={value}
-            onClick={() => onPeriodChange(value)}
-            type="button"
-          >
-            {periodLabels[value]}
-          </button>
-        ))}
+    <section aria-label="Аналітика" className="grid min-w-0 gap-4">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-white">Аналітика</h2>
+          <p className="text-app-dim text-[12.5px]">
+            Продажі та замовлення за обраний період.
+          </p>
+        </div>
+        <PeriodSwitch onPeriodChange={onPeriodChange} period={period} />
       </div>
       {loadable.status === 'ready' ? (
         <AnalyticsContent data={loadable.data} />
@@ -57,7 +63,7 @@ export function DashboardAnalytics({
         <DashboardErrorState
           ariaLabel="Аналітика"
           billingPath={billingPath}
-          genericMessage="Не вдалося завантажити аналітику."
+          genericMessage="Не вдалося завантажити аналітику. Перевірте з’єднання та спробуйте ще раз."
           problem={loadable.error}
           retry={retry}
         />
@@ -66,39 +72,101 @@ export function DashboardAnalytics({
   )
 }
 
-function AnalyticsContent({ data }: { data: DashboardAnalyticsData }) {
+/**
+ * An exclusive choice of period. Kept as toggle buttons rather than the kit
+ * `Segmented` radios because the shell and browser suites pin `aria-pressed`
+ * and Tab reachability of every option; arrow keys move focus here so the
+ * group still behaves like one control.
+ */
+function PeriodSwitch({
+  period,
+  onPeriodChange,
+}: {
+  period: DashboardPeriod
+  onPeriodChange: (period: DashboardPeriod) => void
+}) {
+  const moveFocus = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step =
+      event.key === 'ArrowRight' || event.key === 'ArrowDown'
+        ? 1
+        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+          ? -1
+          : 0
+    if (step === 0) return
+
+    const options = [...event.currentTarget.querySelectorAll('button')]
+    const current = options.indexOf(document.activeElement as HTMLButtonElement)
+    if (current === -1) return
+
+    event.preventDefault()
+    options[(current + step + options.length) % options.length]?.focus()
+  }
+
   return (
-    <div className="grid gap-5">
-      <section className="rounded-2xl border border-white/[0.06] p-4">
-        <h2 className="text-base font-medium text-white">Виручка</h2>
-        <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-          {Object.entries(data.revenue.totals).map(([currency, total]) => (
-            <div key={currency}>
-              <dt className="text-sm text-neutral-400">{currency}</dt>
-              <dd className="mt-1 text-2xl font-light text-white">
-                {numberFormatter.format(total)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-        <Trend
-          label="Зміна виручки"
-          value={data.revenue.trendPercent}
-          suffix="%"
-        />
+    <div
+      aria-label="Період аналітики"
+      className="bg-app-input border-app-line-2 rounded-control flex min-w-0 flex-wrap gap-1 border p-1"
+      onKeyDown={moveFocus}
+      role="group"
+    >
+      {(Object.keys(periodLabels) as DashboardPeriod[]).map((value) => (
+        <button
+          aria-pressed={period === value}
+          className={cn(
+            'rounded-control flex min-h-11 flex-1 items-center justify-center px-3 text-[12.5px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/40',
+            period === value
+              ? 'bg-white/[0.09] font-medium text-white'
+              : 'text-app-muted hover:bg-white/[0.04]',
+          )}
+          key={value}
+          onClick={() => onPeriodChange(value)}
+          type="button"
+        >
+          {periodLabels[value]}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function AnalyticsContent({ data }: { data: DashboardAnalyticsData }) {
+  const totals = Object.entries(data.revenue.totals)
+
+  return (
+    <div className="grid min-w-0 gap-4">
+      <SectionPanel
+        description="Скільки отримано з продажів за обраний період."
+        title="Виручка"
+      >
+        {totals.length === 0 ? (
+          <p className="text-app-muted text-sm">
+            За обраний період продажів не було.
+          </p>
+        ) : (
+          <FactList columns={2}>
+            {totals.map(([currency, total]) => (
+              <Fact key={currency} label={`Виручка, ${currency}`}>
+                <Amount className={figureClass} currency={null} value={total} />
+              </Fact>
+            ))}
+          </FactList>
+        )}
+        <Delta suffix="%" value={data.revenue.trendPercent} />
         <MiniChart series={data.revenue.series} />
-      </section>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <CounterCard
+      </SectionPanel>
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+        <CounterPanel
           delta={data.partsSold.delta}
-          label="Продано запчастин"
+          description="Скільки запчастин продано за обраний період."
           series={data.partsSold.series}
+          title="Продано запчастин"
           total={data.partsSold.total}
         />
-        <CounterCard
+        <CounterPanel
           delta={data.activeOrders.delta}
-          label="Активних замовлень"
+          description="Скільки замовлень зараз у роботі."
           series={data.activeOrders.series}
+          title="Активні замовлення"
           total={data.activeOrders.total}
         />
       </div>
@@ -107,26 +175,27 @@ function AnalyticsContent({ data }: { data: DashboardAnalyticsData }) {
   )
 }
 
-function CounterCard({
+function CounterPanel({
   delta,
-  label,
+  description,
   series,
+  title,
   total,
 }: {
   delta: number
-  label: string
+  description: string
   series: number[]
+  title: string
   total: number
 }) {
   return (
-    <section className="rounded-2xl border border-white/[0.06] p-4">
-      <h2 className="text-base font-medium text-white">{label}</h2>
-      <p className="mt-3 text-2xl font-light text-white">
-        {numberFormatter.format(total)}
+    <SectionPanel description={description} title={title}>
+      <p className={figureClass}>
+        <Amount currency={null} value={total} />
       </p>
-      <Trend label="Зміна" value={delta} />
+      <Delta value={delta} />
       <MiniChart series={series} />
-    </section>
+    </SectionPanel>
   )
 }
 
@@ -136,42 +205,51 @@ function TopPart({
   data: NonNullable<DashboardAnalyticsData['topPart']>
 }) {
   return (
-    <section className="rounded-2xl border border-white/[0.06] p-4">
-      <h2 className="text-base font-medium text-white">Найкраща запчастина</h2>
-      <p className="mt-2 text-lg text-white">{data.name}</p>
-      <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-        <div>
-          <dt className="text-sm text-neutral-400">Продажів</dt>
-          <dd className="mt-1 text-xl font-light text-white">
-            {numberFormatter.format(data.salesCount)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-sm text-neutral-400">Виручка USD</dt>
-          <dd className="mt-1 text-xl font-light text-white">
-            {numberFormatter.format(data.revenueUsd)}
-          </dd>
-        </div>
-      </dl>
+    <SectionPanel
+      description="Запчастина з найбільшою виручкою за обраний період."
+      title="Найкраща запчастина"
+    >
+      <p className="text-base break-words text-white">{data.name}</p>
+      <FactList columns={2}>
+        <Fact label="Продано за період">
+          <Quantity unit="шт." value={data.salesCount} />
+        </Fact>
+        <Fact label="Виручка за період">
+          <Amount currency="USD" value={data.revenueUsd} />
+        </Fact>
+      </FactList>
       <MiniChart series={data.salesSeries} />
-    </section>
+    </SectionPanel>
   )
 }
 
-function Trend({
-  label,
-  value,
-  suffix = '',
-}: {
-  label: string
-  value: number
-  suffix?: string
-}) {
+/**
+ * A change against the previous period. Direction is carried by the sign and
+ * by the sentence, so the colour is confirmation and never the only cue.
+ */
+function Delta({ value, suffix = '' }: { value: number; suffix?: string }) {
   const sign = value > 0 ? '+' : value < 0 ? '−' : ''
+  const figure = `${sign}${numberFormatter.format(Math.abs(value))}${suffix}`
+  const wording =
+    value > 0
+      ? 'більше, ніж у попередній період'
+      : value < 0
+        ? 'менше, ніж у попередній період'
+        : '— без змін проти попереднього періоду'
+
   return (
-    <p className="mt-2 text-sm text-neutral-400">
-      {label}:{' '}
-      <span className="text-white">{`${sign}${numberFormatter.format(Math.abs(value))}${suffix}`}</span>
+    <p className="text-app-dim text-[12.5px]">
+      <span
+        className={cn(
+          'font-medium tabular-nums',
+          value > 0 && 'text-state-ok',
+          value < 0 && 'text-state-danger',
+          value === 0 && 'text-app-muted',
+        )}
+      >
+        {figure}
+      </span>{' '}
+      {wording}
     </p>
   )
 }
@@ -182,7 +260,7 @@ function MiniChart({ series }: { series: number[] }) {
     <div
       aria-hidden="true"
       aria-label="Декоративна діаграма"
-      className="mt-4 flex h-20 items-end gap-1"
+      className="mt-1 flex h-20 min-w-0 items-end gap-1"
     >
       {series.map((value, index) => (
         <span
@@ -200,16 +278,10 @@ function MiniChart({ series }: { series: number[] }) {
 
 function AnalyticsLoading() {
   return (
-    <section
-      aria-label="Аналітика"
-      className="rounded-2xl border border-white/[0.06] p-4"
-      role="status"
-    >
-      <p className="text-sm text-neutral-400">Завантажуємо аналітику…</p>
-      <span
-        aria-hidden="true"
-        className="mt-3 block h-20 animate-pulse rounded bg-white/[0.08]"
-      />
-    </section>
+    <Panel aria-label="Аналітика" role="status">
+      <p className="text-app-muted text-sm">Завантажуємо аналітику…</p>
+      <Skeleton className="mt-3 h-6 w-32" />
+      <Skeleton className="mt-2 h-20" />
+    </Panel>
   )
 }

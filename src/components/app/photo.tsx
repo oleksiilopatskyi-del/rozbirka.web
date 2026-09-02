@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { ImageOff, X } from 'lucide-react'
-import { Dialog } from 'radix-ui'
+import { Dialog, Slot } from 'radix-ui'
 import { cn } from '@/lib/utils'
 import { Button } from './button'
 
@@ -179,6 +179,8 @@ export function RecordCard({
   footer,
   href,
   onOpen,
+  asChild = false,
+  children,
   className,
 }: {
   title: ReactNode
@@ -189,6 +191,9 @@ export function RecordCard({
   footer?: ReactNode
   href?: string
   onOpen?: () => void
+  /** Render the card as the given element — a router link, for instance. */
+  asChild?: boolean
+  children?: ReactNode
   className?: string
 }) {
   const body = (
@@ -229,6 +234,16 @@ export function RecordCard({
     ) : (
       <Thumbnail alt="" className="mb-1" photo={photo} ratio="wide" />
     )
+
+  if (asChild) {
+    return (
+      <Slot.Root className={shell}>
+        {children}
+        {media}
+        {body}
+      </Slot.Root>
+    )
+  }
 
   if (href !== undefined) {
     return (

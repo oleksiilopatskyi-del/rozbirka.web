@@ -7,6 +7,7 @@ import type * as BillingModule from '@/api/billing'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { billingApi, type ProviderAwareSubscriptionDto } from '@/api/billing'
 import type { PublicPlanDto } from '@/api/types'
+import { ToastProvider } from '@/components/app'
 import { useCabinet, type CabinetContextValue } from '../CabinetContext'
 import { tenantRequestScope } from '../tenant-request-scope'
 import { PaymentsScreen } from './payments-screen'
@@ -165,8 +166,17 @@ const cabinet = (
     switchTenant: vi.fn(),
   }) satisfies CabinetContextValue
 
+// Billing mutations run through `useOperation`, which confirms success through
+// the cabinet toaster — the screens need its provider the way the shell gives
+// it to them.
+const inShell = (screenToRender: ReactNode) => (
+  <MemoryRouter>
+    <ToastProvider>{screenToRender}</ToastProvider>
+  </MemoryRouter>
+)
+
 const renderScreen = (screenToRender: ReactNode) =>
-  render(<MemoryRouter>{screenToRender}</MemoryRouter>)
+  render(inShell(screenToRender))
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -212,7 +222,9 @@ it('routes native subscriptions to their provider without Mono controls', () => 
   expect(
     screen.getByRole('link', { name: 'Керувати в App Store' }),
   ).toHaveAttribute('href', 'https://apps.apple.com/account/subscriptions')
-  expect(screen.queryByRole('button', { name: 'Скасувати' })).toBeNull()
+  expect(
+    screen.queryByRole('button', { name: 'Скасувати підписку' }),
+  ).toBeNull()
   expect(screen.queryByRole('button', { name: 'Поновити підписку' })).toBeNull()
 })
 
@@ -252,7 +264,9 @@ it.each([
 
     renderScreen(<SubscriptionScreen />)
 
-    expect(screen.queryByRole('button', { name: 'Скасувати' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Скасувати підписку' }),
+    ).toBeNull()
     expect(
       screen.queryByRole('button', { name: 'Поновити підписку' }),
     ).toBeNull()
@@ -290,7 +304,6 @@ it('revalidates the latest provider before dispatching Mono reactivation', async
 it('revalidates the latest provider before dispatching Mono cancellation', async () => {
   const currentCabinet = cabinet(undefined, cancellableSubscription)
   vi.mocked(useCabinet).mockReturnValue(currentCabinet)
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
   const user = userEvent.setup()
   renderScreen(<SubscriptionScreen />)
 
@@ -301,12 +314,59 @@ it('revalidates the latest provider before dispatching Mono cancellation', async
     source: 'google_play',
     manageVia: 'google',
   }
-  await user.click(screen.getByRole('button', { name: 'Скасувати' }))
+  await user.click(screen.getByRole('button', { name: 'Скасувати підписку' }))
+  await user.click(
+    await screen.findByRole('button', { name: 'Так, скасувати підписку' }),
+  )
 
   expect(billingApi.cancel).not.toHaveBeenCalled()
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Керування підпискою недоступне.',
   )
+})
+
+it('states the consequence before cancelling and does nothing until confirmed', async () => {
+  vi.mocked(useCabinet).mockReturnValue(
+    cabinet(undefined, cancellableSubscription),
+  )
+  const user = userEvent.setup()
+  renderScreen(<SubscriptionScreen />)
+
+  await user.click(screen.getByRole('button', { name: 'Скасувати підписку' }))
+
+  expect(
+    screen.getByRole('dialog', { name: 'Скасувати підписку?' }),
+  ).toHaveAccessibleDescription(/до кінця сплаченого періоду/)
+
+  await user.click(screen.getByRole('button', { name: 'Залишити підписку' }))
+
+  expect(billingApi.cancel).not.toHaveBeenCalled()
+})
+
+it('confirms a completed cancellation with the refreshed subscription state', async () => {
+  vi.mocked(useCabinet).mockReturnValue(
+    cabinet(undefined, cancellableSubscription),
+  )
+  vi.mocked(billingApi.cancel).mockResolvedValue(undefined)
+  vi.mocked(billingApi.getSubscription).mockResolvedValue({
+    ...cancellableSubscription,
+    state: 'cancelled',
+    canCancel: false,
+    canReactivate: true,
+  })
+  const user = userEvent.setup()
+  renderScreen(<SubscriptionScreen />)
+
+  await user.click(screen.getByRole('button', { name: 'Скасувати підписку' }))
+  await user.click(
+    screen.getByRole('button', { name: 'Так, скасувати підписку' }),
+  )
+
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'Підписку скасовано.',
+  )
+  expect(screen.getByText('Скасована')).toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
 
 it('uses source-appropriate payment copy for native subscriptions', async () => {
@@ -574,23 +634,26 @@ it('settles a rejected subscription cancellation with truthful feedback', async 
   vi.mocked(billingApi.cancel).mockRejectedValue(
     new AxiosError('offline', 'ERR_NETWORK'),
   )
-  const confirmCancellation = vi.spyOn(window, 'confirm').mockReturnValue(true)
   const unhandledRejection = vi.fn()
   window.addEventListener('unhandledrejection', unhandledRejection)
 
   try {
     const user = userEvent.setup()
     renderScreen(<SubscriptionScreen />)
-    await user.click(screen.getByRole('button', { name: 'Скасувати' }))
+    await user.click(screen.getByRole('button', { name: 'Скасувати підписку' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Так, скасувати підписку' }),
+    )
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Не вдалося скасувати підписку: немає з’єднання з мережею.',
     )
-    expect(screen.getByRole('button', { name: 'Скасувати' })).toBeEnabled()
+    expect(
+      screen.getByRole('button', { name: 'Так, скасувати підписку' }),
+    ).toBeEnabled()
     await Promise.resolve()
     expect(unhandledRejection).not.toHaveBeenCalled()
   } finally {
-    confirmCancellation.mockRestore()
     window.removeEventListener('unhandledrejection', unhandledRejection)
   }
 })
@@ -607,11 +670,7 @@ it('ignores a recognized tenant-scope cancellation while a new plans generation 
 
   tenantRequestScope.rotate()
   currentCabinet = cabinet(undefined, subscription, 5)
-  view.rerender(
-    <MemoryRouter>
-      <PlansScreen />
-    </MemoryRouter>,
-  )
+  view.rerender(inShell(<PlansScreen />))
   oldLoad.reject(new CanceledError())
 
   expect(await screen.findByText('Lite')).toBeInTheDocument()
@@ -640,11 +699,7 @@ it('does not surface a late mutation failure from a stale cabinet generation', a
 
   tenantRequestScope.rotate()
   currentCabinet = cabinet(undefined, subscription, 5)
-  view.rerender(
-    <MemoryRouter>
-      <PaymentsScreen />
-    </MemoryRouter>,
-  )
+  view.rerender(inShell(<PaymentsScreen />))
   staleCancellation.reject(axiosFailure(409, 'stale backend response'))
 
   await waitFor(() =>

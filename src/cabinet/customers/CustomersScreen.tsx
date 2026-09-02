@@ -6,7 +6,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
-import { Copy, MessageSquare, Phone, Plus } from 'lucide-react'
+import { ChevronLeft, Copy, MessageSquare, Phone, Plus } from 'lucide-react'
 import {
   Button,
   Fact,
@@ -20,11 +20,16 @@ import {
   PageHeader,
   Pagination,
   Panel,
+  PanelFooter,
   SearchInput,
+  SectionPanel,
   SkeletonRows,
   StatStrip,
   StatusPill,
+  TextArea,
+  TextInput,
   Toolbar,
+  useOperation,
 } from '@/components/app'
 import {
   customersApi,
@@ -33,13 +38,42 @@ import {
   type CustomerListItem,
   type CustomerPhoneConflict,
 } from '@/api/customers'
+import { normalizeApiProblem } from '@/api/errors'
 import type { Permission } from '../access-types'
 import type { CabinetModuleScreenProps } from '../ModuleBoundary'
 import { useCabinet } from '../CabinetContext'
-import { evaluateModuleAccess, type ModuleAccessOperation } from '../policy'
+import {
+  evaluateModuleAccess,
+  ModuleAccessDeniedError,
+  type ModuleAccessOperation,
+} from '../policy'
 import { useLatestMutationGuard } from '../use-latest-mutation-guard'
 
 const loadError = 'Не вдалося завантажити дані. Спробуйте ще раз.'
+const nameExample = 'Наприклад: Ірина Коваль або СТО «Пітстоп»'
+const phoneExample = 'Наприклад: +380 50 111 22 33'
+const nameMissing = `Введіть ім’я клієнта — за ним ви знайдете його в списку й у замовленнях. ${nameExample}`
+/** Digits, spaces, brackets, dashes and a leading plus — nothing else. */
+const phoneShape = /^\+?[\d\s()-]+$/
+const phoneProblem = (value: string): string | null => {
+  if (value === '') return null
+  if (!phoneShape.test(value))
+    return `Приберіть із номера зайві символи — залиште цифри, пробіли, дужки та «+». ${phoneExample}`
+  const digits = value.replace(/\D/g, '')
+  if (digits.length < 9)
+    return `У номері замало цифр. Додайте код оператора та країни. ${phoneExample}`
+  if (digits.length > 15)
+    return `У номері забагато цифр. Перевірте його: у міжнародному форматі їх щонайбільше 15. ${phoneExample}`
+  return null
+}
+/** Turns a failed save into a reason the user can act on. */
+const saveProblem = (failure: unknown): string => {
+  const conflict = readCustomerPhoneConflict(failure)
+  if (conflict) return conflict.message
+  if (failure instanceof ModuleAccessDeniedError)
+    return 'Права на зміну клієнтів більше немає. Оновіть сторінку або попросіть власника кабінету відкрити доступ.'
+  return normalizeApiProblem(failure).message
+}
 const idFromPath = (path: string) =>
   /\/customers\/([^/]+)/.exec(path)?.[1] ?? null
 const customerDirectoryPath = (path: string) =>
@@ -494,12 +528,19 @@ function CustomerForm({
   const navigate = useNavigate()
   const location = useLocation()
   const directoryPath = customerDirectoryPath(location.pathname)
+  const editing = customerId !== null
+  const backPath = editing ? `${directoryPath}/${customerId}` : directoryPath
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [notes, setNotes] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [touched, setTouched] = useState({ name: false, phone: false })
   const [duplicate, setDuplicate] = useState<CustomerPhoneConflict | null>(null)
+  const [retryable, setRetryable] = useState(true)
+  const [loadProblem, setLoadProblem] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
+  const [loading, setLoading] = useState(editing && ordersViewAllowed)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const phoneRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
     if (customerId && ordersViewAllowed) {
       const controller = new AbortController()
@@ -510,21 +551,23 @@ function CustomerForm({
             setName(customer.name)
             setPhone(customer.phone ?? '')
             setNotes(customer.notes ?? '')
+            setLoadProblem(null)
+            setLoading(false)
           }
         })
         .catch(() => {
-          if (!controller.signal.aborted) setError(loadError)
+          if (!controller.signal.aborted) {
+            setLoadProblem(loadError)
+            setLoading(false)
+          }
         })
       return () => controller.abort()
     }
-  }, [customerId, ordersViewAllowed])
-  const save = async (event: FormEvent) => {
-    event.preventDefault()
-    if (!name.trim() || busy || !mutationsAllowed || !ordersViewAllowed) return
-    setBusy(true)
-    setError(null)
-    setDuplicate(null)
-    try {
+  }, [customerId, ordersViewAllowed, reloadToken])
+  const nameIssue = name.trim() === '' ? nameMissing : null
+  const phoneIssue = phoneProblem(phone.trim())
+  const save = useOperation(
+    async () => {
       const scope = requireLatestMutation({ quota: false })
       if (customerId)
         requireLatestMutation({ permission: 'orders.view', quota: false })
@@ -533,98 +576,240 @@ function CustomerForm({
         phone: phone.trim() || null,
         notes: notes.trim() || null,
       }
-      const result = customerId
+      return customerId
         ? await customersApi.update(customerId, input, {
             signal: scope.signal,
           })
         : await customersApi.create(input, { signal: scope.signal })
-      await navigate(`${directoryPath}/${customerId ?? result.customer.id}`, {
-        replace: true,
-      })
-    } catch (saveError) {
-      const conflict = readCustomerPhoneConflict(saveError)
-      if (conflict) setDuplicate(conflict)
-      else setError(loadError)
-      setBusy(false)
-    }
-  }
-  const reactivateDuplicate = async () => {
-    if (!duplicate || busy || !mutationsAllowed) return
-    setBusy(true)
-    try {
+    },
+    {
+      successMessage: editing ? 'Зміни збережено' : 'Клієнта створено',
+      errorMessage: saveProblem,
+      onError: (failure) => {
+        setDuplicate(readCustomerPhoneConflict(failure))
+        setRetryable(!(failure instanceof ModuleAccessDeniedError))
+      },
+      onSuccess: (result) => {
+        void navigate(`${directoryPath}/${customerId ?? result.customer.id}`, {
+          replace: true,
+        })
+      },
+    },
+  )
+  const reactivateDuplicate = useOperation(
+    async () => {
+      if (duplicate === null || !mutationsAllowed) return null
       const scope = requireLatestMutation({ quota: false })
       if (customerId)
         requireLatestMutation({ permission: 'orders.view', quota: false })
       await customersApi.activate(duplicate.customerId, {
         signal: scope.signal,
       })
-      await navigate(`${directoryPath}/${duplicate.customerId}`, {
-        replace: true,
-      })
-    } catch {
-      setError(loadError)
-      setBusy(false)
+      return duplicate.customerId
+    },
+    {
+      successMessage: 'Клієнта активовано',
+      errorMessage: saveProblem,
+      onSuccess: (activatedId) => {
+        if (activatedId !== null)
+          void navigate(`${directoryPath}/${activatedId}`, { replace: true })
+      },
+    },
+  )
+  /** One entry point for saving: the footer button and the retry both validate. */
+  const attemptSave = () => {
+    setTouched({ name: true, phone: true })
+    if (nameIssue !== null) {
+      nameRef.current?.focus()
+      return
     }
+    if (phoneIssue !== null) {
+      phoneRef.current?.focus()
+      return
+    }
+    if (!mutationsAllowed || !ordersViewAllowed || save.pending) return
+    setDuplicate(null)
+    setRetryable(true)
+    save.run()
+  }
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    attemptSave()
   }
   if (!ordersViewAllowed)
-    return <p role="alert">Потрібен доступ до замовлень.</p>
+    return (
+      <PageBody width="narrow">
+        <DeniedState
+          description="Картку клієнта не відкрити без його замовлень, тож потрібен доступ до розділу «Замовлення». Попросіть власника кабінету відкрити його."
+          role="alert"
+          title="Потрібен доступ до замовлень."
+        />
+      </PageBody>
+    )
+  if (loadProblem !== null)
+    return (
+      <PageBody width="narrow">
+        <ErrorState
+          description={loadProblem}
+          onRetry={() => {
+            setLoadProblem(null)
+            setLoading(true)
+            setReloadToken((token) => token + 1)
+          }}
+          title="Не вдалося завантажити клієнта"
+        />
+      </PageBody>
+    )
+  if (loading)
+    return (
+      <PageBody width="narrow">
+        <PageHeader eyebrow="Продажі · Клієнти" title="Редагувати клієнта" />
+        <SkeletonRows columns={2} label="Завантажуємо клієнта…" rows={3} />
+      </PageBody>
+    )
   return (
-    <section className="grid gap-6">
-      <h1 className="text-3xl text-white">
-        {customerId ? 'Редагувати клієнта' : 'Новий клієнт'}
-      </h1>
-      <form onSubmit={(event) => void save(event)} className="grid gap-4">
-        <label>
-          Ім’я
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
-            disabled={!mutationsAllowed}
-          />
-        </label>
-        <label>
-          Телефон
-          <input
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            inputMode="tel"
-            disabled={!mutationsAllowed}
-          />
-        </label>
-        <label>
-          Нотатки
-          <textarea
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            disabled={!mutationsAllowed}
-          />
-        </label>
-        {error && <p role="alert">{error}</p>}
-        {duplicate && (
-          <div role="alert" className="grid gap-2">
-            <p>{duplicate.message}</p>
-            <Link to={`${directoryPath}/${duplicate.customerId}`}>
-              Використати клієнта {duplicate.customerName}
-            </Link>
-            {!duplicate.isActive && mutationsAllowed && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void reactivateDuplicate()}
-              >
-                Активувати {duplicate.customerName}
-              </button>
-            )}
-          </div>
-        )}
-        <button
-          type="submit"
-          disabled={!mutationsAllowed || busy || !name.trim()}
+    <PageBody width="narrow">
+      <Button asChild className="justify-self-start" variant="quiet">
+        <Link to={backPath}>
+          <ChevronLeft aria-hidden />
+          {editing ? 'До картки клієнта' : 'До списку клієнтів'}
+        </Link>
+      </Button>
+      <PageHeader
+        eyebrow="Продажі · Клієнти"
+        title={editing ? 'Редагувати клієнта' : 'Новий клієнт'}
+      />
+      {mutationsAllowed ? null : (
+        <Notice tone="warn">
+          Дані можна переглянути, але не змінити. Щоб редагувати клієнтів,
+          попросіть власника кабінету відкрити доступ.
+        </Notice>
+      )}
+      <form
+        aria-busy={save.pending}
+        className="grid gap-4"
+        noValidate
+        onSubmit={submit}
+      >
+        <SectionPanel
+          description="Ім’я показуємо в списку клієнтів і в замовленнях, телефон — для дзвінка та пошуку."
+          title="Контакт"
         >
-          {busy ? 'Зберігаємо…' : 'Зберегти'}
-        </button>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              error={touched.name ? nameIssue : null}
+              hint={nameExample}
+              label="Ім’я"
+              required
+            >
+              <TextInput
+                autoComplete="name"
+                disabled={!mutationsAllowed}
+                onBlur={() =>
+                  setTouched((current) => ({ ...current, name: true }))
+                }
+                onChange={(event) => setName(event.target.value)}
+                ref={nameRef}
+                required
+                value={name}
+              />
+            </Field>
+            <Field
+              error={touched.phone ? phoneIssue : null}
+              hint={`Один номер для дзвінка та SMS. ${phoneExample}`}
+              label="Телефон"
+            >
+              <TextInput
+                autoComplete="tel"
+                disabled={!mutationsAllowed}
+                inputMode="tel"
+                onBlur={() =>
+                  setTouched((current) => ({ ...current, phone: true }))
+                }
+                onChange={(event) => setPhone(event.target.value)}
+                ref={phoneRef}
+                type="tel"
+                value={phone}
+              />
+            </Field>
+          </div>
+        </SectionPanel>
+        <SectionPanel
+          description="Домовленості, зручний час для дзвінка, побажання щодо доставки."
+          title="Нотатки"
+        >
+          <Field hint="Видно лише вашій команді" label="Нотатки">
+            <TextArea
+              disabled={!mutationsAllowed}
+              onChange={(event) => setNotes(event.target.value)}
+              rows={4}
+              value={notes}
+            />
+          </Field>
+        </SectionPanel>
+        {duplicate === null ? null : (
+          <Notice block role="alert" tone="warn">
+            <p>
+              {duplicate.message} Відкрийте наявну картку, щоб не заводити
+              другу.
+            </p>
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <Button asChild>
+                <Link to={`${directoryPath}/${duplicate.customerId}`}>
+                  Використати клієнта {duplicate.customerName}
+                </Link>
+              </Button>
+              {!duplicate.isActive && mutationsAllowed && (
+                <Button
+                  {...reactivateDuplicate.triggerProps}
+                  onClick={() => {
+                    reactivateDuplicate.run()
+                  }}
+                >
+                  Активувати {duplicate.customerName}
+                </Button>
+              )}
+            </div>
+          </Notice>
+        )}
+        {reactivateDuplicate.error === null ? null : (
+          <Notice tone="danger">{reactivateDuplicate.error}</Notice>
+        )}
+        {save.error === null || duplicate !== null ? null : (
+          <Notice
+            action={
+              retryable ? (
+                <Button onClick={attemptSave}>Спробувати ще раз</Button>
+              ) : undefined
+            }
+            tone="danger"
+          >
+            {save.error}
+          </Notice>
+        )}
+        <Panel padded={false}>
+          <PanelFooter
+            className="border-t-0"
+            leading="Зірочкою позначено обов’язкове поле"
+          >
+            <Button asChild variant="quiet">
+              <Link to={backPath}>Скасувати</Link>
+            </Button>
+            <Button
+              {...save.triggerProps}
+              disabled={!mutationsAllowed || save.pending}
+              type="submit"
+              variant="primary"
+            >
+              {save.pending
+                ? 'Зберігаємо…'
+                : editing
+                  ? 'Зберегти зміни'
+                  : 'Створити клієнта'}
+            </Button>
+          </PanelFooter>
+        </Panel>
       </form>
-    </section>
+    </PageBody>
   )
 }

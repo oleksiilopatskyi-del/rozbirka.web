@@ -857,8 +857,7 @@ async function expectPopulatedDashboard(page: Page) {
   await expect(dashboardSummaryValue(page, 'Продажів сьогодні')).toHaveText('7')
   await expect(
     page
-      .getByRole('heading', { name: 'Продано запчастин', exact: true })
-      .locator('..')
+      .getByRole('region', { name: 'Продано запчастин' })
       .getByText('21', { exact: true }),
   ).toBeVisible()
 }
@@ -1801,8 +1800,11 @@ test('billing mutation failures stay truthful and handled in Chromium', async ({
   await expect(paymentAlert).not.toContainText('Raw fixture payment conflict')
 
   await page.goto('/app/koval/settings/billing/overview')
-  page.once('dialog', (dialog) => void dialog.accept())
-  await page.getByRole('button', { name: 'Скасувати' }).click()
+  // Cancelling now confirms through the shared dialog, not a native prompt.
+  await page
+    .getByRole('button', { name: 'Скасувати підписку', exact: true })
+    .click()
+  await page.getByRole('button', { name: 'Так, скасувати підписку' }).click()
   const subscriptionAlert = page.getByRole('alert')
   await expect(subscriptionAlert).toContainText(
     'Підписка вже змінилася. Оновіть сторінку та спробуйте ще раз.',

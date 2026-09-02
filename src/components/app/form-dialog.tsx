@@ -21,6 +21,8 @@ export interface FormDialogProps {
   error?: string | null
   /** Wider dialog for forms with two columns. */
   size?: 'md' | 'lg'
+  /** Runs when the dialog closes, for callers that restore focus themselves. */
+  onCloseAutoFocus?: (event: Event) => void
 }
 
 /**
@@ -41,6 +43,7 @@ export function FormDialog({
   submitDisabled = false,
   error = null,
   size = 'md',
+  onCloseAutoFocus,
 }: FormDialogProps) {
   return (
     <Dialog.Root
@@ -53,6 +56,7 @@ export function FormDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" />
         <Dialog.Content
+          onCloseAutoFocus={onCloseAutoFocus}
           className={cn(
             'bg-app-overlay border-app-line-2 rounded-sheet fixed inset-x-3 top-1/2 z-50 grid max-h-[90dvh] -translate-y-1/2 grid-rows-[auto_1fr_auto] overflow-hidden border text-white shadow-2xl sm:inset-x-auto sm:left-1/2 sm:w-full sm:-translate-x-1/2',
             size === 'lg' ? 'sm:max-w-2xl' : 'sm:max-w-md',

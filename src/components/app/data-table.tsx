@@ -92,24 +92,29 @@ export function DataTable<Row>({
               }
               role="row"
             >
-              {columns.map((column) => (
-                <td
-                  className={cn(
-                    'px-3.5 py-3',
-                    column.align === 'end' && 'text-right tabular-nums',
-                    column.variant === 'primary'
-                      ? 'text-app-ink font-medium'
-                      : 'text-app-muted',
-                  )}
-                  data-label={
-                    column.variant === 'primary' ? undefined : column.label
-                  }
-                  key={column.key}
-                  role="cell"
-                >
-                  {column.cell(row)}
-                </td>
-              ))}
+              {columns.map((column) => {
+                const isPrimary = column.variant === 'primary'
+                const Cell = isPrimary ? 'th' : 'td'
+                return (
+                  <Cell
+                    className={cn(
+                      'px-3.5 py-3 text-left font-normal',
+                      column.align === 'end' && 'text-right tabular-nums',
+                      isPrimary ? 'text-app-ink font-medium' : 'text-app-muted',
+                    )}
+                    data-label={
+                      isPrimary || column.headerHidden
+                        ? undefined
+                        : column.label
+                    }
+                    key={column.key}
+                    role={isPrimary ? 'rowheader' : 'cell'}
+                    {...(isPrimary ? { scope: 'row' as const } : {})}
+                  >
+                    {column.cell(row)}
+                  </Cell>
+                )
+              })}
             </tr>
           ))}
         </tbody>

@@ -48,10 +48,9 @@ it('keeps manual and file fallbacks visible after camera denial', async () => {
   )
 
   fireEvent.click(screen.getByRole('button', { name: 'Увімкнути камеру' }))
+  expect(await screen.findByText('Камера недоступна')).toBeInTheDocument()
   expect(
-    await screen.findByText(
-      'Камера недоступна. Введіть код або виберіть файл.',
-    ),
+    screen.getByText(/Дозвольте доступ до камери в налаштуваннях браузера/),
   ).toBeInTheDocument()
   expect(screen.getByLabelText('QR-код')).toBeInTheDocument()
   expect(screen.getByLabelText('Файл QR-коду')).toBeInTheDocument()
@@ -333,11 +332,7 @@ it('stops the old stream when a camera retry is denied', async () => {
   await screen.findByLabelText('Камера QR')
   fireEvent.click(screen.getByRole('button', { name: 'Увімкнути камеру' }))
 
-  expect(
-    await screen.findByText(
-      'Камера недоступна. Введіть код або виберіть файл.',
-    ),
-  ).toBeInTheDocument()
+  expect(await screen.findByText('Камера недоступна')).toBeInTheDocument()
   expect(stop).toHaveBeenCalledOnce()
 })
 
@@ -367,11 +362,7 @@ it('rejects a delayed camera generation after a newer retry is denied', async ()
   const enable = screen.getByRole('button', { name: 'Увімкнути камеру' })
   fireEvent.click(enable)
   fireEvent.click(enable)
-  expect(
-    await screen.findByText(
-      'Камера недоступна. Введіть код або виберіть файл.',
-    ),
-  ).toBeInTheDocument()
+  expect(await screen.findByText('Камера недоступна')).toBeInTheDocument()
   await act(async () => {
     finishFirst?.({ getTracks: () => [{ stop }] } as unknown as MediaStream)
     await Promise.resolve()
@@ -430,4 +421,62 @@ it('ignores delayed file detection after unmount and aborts an active lookup', a
   await Promise.resolve()
 
   expect(scannerMocks.resolveQr).toHaveBeenCalledTimes(1)
+})
+
+it('presents a resolved scan as a record with one obvious way onward', async () => {
+  render(
+    <MemoryRouter>
+      <ScannerScreen definition={{} as never} />
+    </MemoryRouter>,
+  )
+  fireEvent.change(screen.getByLabelText('QR-код'), {
+    target: { value: 'QR-123' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Знайти деталь' }))
+
+  expect(await screen.findByText('Bumper')).toBeInTheDocument()
+  expect(screen.getByText('Знайдено')).toBeInTheDocument()
+  expect(screen.getByText('QR-123')).toBeInTheDocument()
+  expect(
+    screen.getByRole('link', { name: 'Відкрити картку деталі' }),
+  ).toHaveAttribute('href', '/app/yard/parts/part-1')
+  expect(
+    screen.getByRole('button', { name: 'Сканувати наступний код' }),
+  ).toBeInTheDocument()
+})
+
+it('says what to do next when the code is not in this yard', async () => {
+  scannerMocks.resolveQr.mockRejectedValueOnce(new Error('not-found'))
+  render(
+    <MemoryRouter>
+      <ScannerScreen definition={{} as never} />
+    </MemoryRouter>,
+  )
+  fireEvent.change(screen.getByLabelText('QR-код'), {
+    target: { value: 'QR-missing' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Знайти деталь' }))
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('Код не знайдено в цій розбірці')
+  expect(alert).toHaveTextContent(/Звірте код на стікері/)
+  expect(
+    screen.getByRole('button', { name: 'Сканувати ще раз' }),
+  ).toBeInTheDocument()
+  expect(screen.queryByText('Bumper')).not.toBeInTheDocument()
+})
+
+it('keeps the yard actions on the 56px gloved-thumb touch floor', () => {
+  render(
+    <MemoryRouter>
+      <ScannerScreen definition={{} as never} />
+    </MemoryRouter>,
+  )
+
+  expect(screen.getByRole('button', { name: 'Увімкнути камеру' })).toHaveClass(
+    'min-h-14',
+  )
+  expect(screen.getByRole('button', { name: 'Знайти деталь' })).toHaveClass(
+    'min-h-14',
+  )
 })

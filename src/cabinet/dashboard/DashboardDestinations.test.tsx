@@ -18,6 +18,14 @@ vi.mock('../module-registry', async (importOriginal) => {
   }
 })
 
+/**
+ * Destination cards carry the plan usage of the module they open, so the
+ * accessible name of a quota-bearing module is its label plus that count.
+ */
+const CARS = 'Автомобілі Використано 1 з 10'
+const INTAKES = 'Приймання Використано 1 з 10'
+const INTAKES_EXHAUSTED = 'Приймання Ліміт вичерпано: 10 з 10'
+
 const usage = {
   cars: { used: 1, max: 10 },
   intakes: { used: 1, max: 10 },
@@ -74,10 +82,10 @@ it('derives unique in-tenant links and quick actions without dashboard.view', ()
 
   const destinations = screen.getByRole('region', { name: 'Робочі модулі' })
   expect(
-    within(destinations).getByRole('link', { name: 'Автомобілі' }),
+    within(destinations).getByRole('link', { name: CARS }),
   ).toHaveAttribute('href', '/app/koval/cars')
   expect(
-    within(destinations).getByRole('link', { name: 'Приймання' }),
+    within(destinations).getByRole('link', { name: INTAKES }),
   ).toHaveAttribute('href', '/app/koval/intakes')
   expect(
     within(destinations).getByRole('link', { name: 'Звіти' }),
@@ -118,7 +126,7 @@ it('derives unique in-tenant links and quick actions without dashboard.view', ()
   const labels = screen.getAllByRole('link').map((link) => link.textContent)
   expect(new Set(labels).size).toBe(labels.length)
   expect(
-    screen.queryByRole('link', { name: 'Запчастини' }),
+    screen.queryByRole('link', { name: /Запчастини/ }),
   ).not.toBeInTheDocument()
 })
 
@@ -130,7 +138,7 @@ it.each([
       permissions: ['cars.view', 'cars.manage', 'intakes.view'],
       features: [FEATURES.IntakeManagement],
     }),
-    ['Автомобілі', 'Приймання', 'Профіль'],
+    [CARS, INTAKES, 'Профіль'],
     ['Відкрити: Автомобілі'],
   ],
   [
@@ -140,13 +148,13 @@ it.each([
       permissions: ['intakes.view', 'intakes.manage'],
       features: [FEATURES.IntakeManagement],
     }),
-    ['Приймання', 'Профіль'],
+    [INTAKES, 'Профіль'],
     ['Відкрити: Приймання'],
   ],
   [
     'missing feature',
     snapshot({ features: [FEATURES.IntakeManagement] }),
-    ['Автомобілі', 'Приймання', 'Підписка', 'Тарифи', 'Платежі', 'Профіль'],
+    [CARS, INTAKES, 'Підписка', 'Тарифи', 'Платежі', 'Профіль'],
     [
       'Відкрити: Автомобілі',
       'Відкрити: Приймання',
@@ -167,8 +175,8 @@ it.each([
       quotaUsage: { ...usage, intakes: { used: 10, max: 10 } },
     }),
     [
-      'Автомобілі',
-      'Приймання',
+      CARS,
+      INTAKES_EXHAUSTED,
       'Звіти',
       'Підписка',
       'Тарифи',

@@ -94,10 +94,30 @@ it.each([
   },
 )
 
+it('counts the remaining trial days in the message', () => {
+  renderBanner(snapshot('trial'))
+
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Пробний період триває ще 4 дні',
+  )
+})
+
 it('guides an exhausted quota from entitlement data', () => {
   renderBanner(snapshot('active', ['billing.view'], true))
 
-  expect(screen.getByRole('alert')).toHaveTextContent('Ліміт авто вичерпано')
+  const banner = screen.getByRole('alert')
+  expect(banner).toHaveTextContent('Ліміт авто вичерпано')
+  expect(banner).toHaveTextContent('Використано 10 із 10')
+})
+
+it('stays silent when the subscription needs no decision', () => {
+  const { container } = render(
+    <MemoryRouter>
+      <DashboardBillingBanner snapshot={snapshot('active')} tenant={tenant} />
+    </MemoryRouter>,
+  )
+
+  expect(container).toBeEmptyDOMElement()
 })
 
 it('does not expose a billing link when policy denies billing view', () => {
