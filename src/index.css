@@ -30,6 +30,34 @@
   --page-width-lg: 1400px;
   --page-width-md: 1200px;
 
+  /* Cabinet surfaces — the app shell reads denser than the marketing site. */
+  --color-app-canvas: #0b0b0b;
+  --color-app-raised: #121212;
+  --color-app-input: #191919;
+  --color-app-overlay: #1f1e1d;
+  --color-app-line: rgb(255 255 255 / 0.07);
+  --color-app-line-2: rgb(255 255 255 / 0.13);
+
+  /* Cabinet neutrals — warm-shifted so they sit with the brand orange. */
+  --color-app-ink: #f6f4f2;
+  --color-app-muted: #a29b93;
+  --color-app-dim: #8a847c;
+
+  /* State semantics — deliberately separate from the brand colour. */
+  --color-state-ok: #4cc38a;
+  --color-state-ok-soft: rgb(76 195 138 / 0.13);
+  --color-state-warn: #e8b13c;
+  --color-state-warn-soft: rgb(232 177 60 / 0.13);
+  --color-state-danger: #f2645a;
+  --color-state-danger-soft: rgb(242 100 90 / 0.13);
+  --color-state-info: #6ea8fe;
+  --color-state-info-soft: rgb(110 168 254 / 0.13);
+
+  /* Control geometry (cabinet). Landing radii (--radius-card/section) stay below. */
+  --radius-control: 10px;
+  --radius-panel: 12px;
+  --radius-sheet: 16px;
+
   /* Radius (used by shadcn + sections) */
   --radius: 0.625rem;
   --radius-sm: calc(var(--radius) * 0.6);
@@ -125,10 +153,9 @@ html {
     @apply font-sans;
   }
   *:focus-visible {
-    outline: 2px solid #ffffff;
+    outline: 2px solid var(--color-brand);
     outline-offset: 2px;
-    box-shadow: 0 0 0 4px #000000;
-    border-radius: 4px;
+    border-radius: 6px;
   }
 }
 
@@ -144,6 +171,56 @@ html {
 .cabinet-access-quality label:has(input[type='checkbox']) {
   min-height: 2.75rem;
   align-items: center;
+}
+
+/*
+ * Below 768px a data table restacks into one card per record. The DOM is
+ * unchanged — only the display — so the row is never duplicated; explicit ARIA
+ * roles in DataTable keep the table semantics that `display: block` drops.
+ */
+@media (max-width: 767px) {
+  .data-table,
+  .data-table tbody,
+  .data-table tr,
+  .data-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .data-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .data-table tr {
+    border: 1px solid var(--color-app-line);
+    border-radius: var(--radius-panel);
+    padding: 0.75rem 0.8rem;
+  }
+
+  .data-table tbody tr + tr {
+    margin-top: 0.5rem;
+  }
+
+  .data-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.15rem 0;
+    text-align: left;
+  }
+
+  .data-table td[data-label]::before {
+    content: attr(data-label);
+    flex: none;
+    color: var(--color-app-dim);
+    font-size: 11.5px;
+  }
 }
 
 .cabinet-rail-tooltip {
