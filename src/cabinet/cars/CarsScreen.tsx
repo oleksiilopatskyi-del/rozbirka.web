@@ -617,9 +617,6 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
                           className="aspect-4/3 w-full object-cover"
                           src={photo.thumbnailUrl || photo.url}
                         />
-                        <span className="text-app-dim block px-2 py-1.5 text-[11.5px]">
-                          {shot}
-                        </span>
                       </a>
                     ) : (
                       <span className="border-app-line-2 rounded-panel text-app-dim grid aspect-4/3 place-items-center gap-1 border border-dashed p-2 text-center text-[11.5px]">
