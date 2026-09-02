@@ -108,18 +108,28 @@ jobs:
         run: npm run test:integration
 
   e2e:
-    name: Browser E2E ${{ inputs.project_name }} ${{ matrix.shard }}/${{ strategy.job-total }}
+    name: Browser E2E ${{ inputs.project_name }} (${{ matrix.project }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
-    # The e2e stub server keeps global state, so a shard still runs on a single
-    # worker; parallelism comes from splitting the suite across runners. Five
-    # shards split the suite evenly (65 tests each), because Playwright divides
-    # it along the five browser projects.
+    # The e2e stub server keeps global state, so a run stays on a single worker;
+    # parallelism comes from giving each browser project its own runner. One
+    # project also means one engine to install instead of three.
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5]
+        include:
+          - project: chromium
+            browser: chromium
+          - project: firefox
+            browser: firefox
+          - project: webkit
+            browser: webkit
+          - project: android
+            browser: chromium
+          - project: ios
+            browser: webkit
 
     steps:
       - uses: actions/checkout@v4
@@ -135,21 +145,44 @@ jobs:
 
       - run: npm ci
 
+      - id: playwright-version
+        name: Resolve Playwright version
+        run: |
+          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}-${{ matrix.browser }}
+
+      # Installing system deps goes through apt and has hung on the runner;
+      # bound each attempt so a stuck mirror costs seconds, not the whole job.
       - if: inputs.run_build
-        run: npx playwright install --with-deps chromium firefox webkit
+        name: Install ${{ matrix.browser }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if timeout 300 npx playwright install --with-deps ${{ matrix.browser }}; then
+              exit 0
+            fi
+            echo "playwright install attempt ${attempt} failed or timed out; retrying"
+            sleep 10
+          done
+          exit 1
 
       - if: inputs.run_build
         name: Browser E2E gate
-        run: npm run test:e2e -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        run: npm run test:e2e -- --project=${{ matrix.project }}
 
-      - if: inputs.run_build && matrix.shard == 1
+      - if: inputs.run_build && matrix.project == 'chromium'
         name: Authenticated Chromium smoke gate
         run: npm run test:smoke
 
       - if: failure() && inputs.run_build
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-failure-shard-${{ matrix.shard }}
+          name: playwright-failure-${{ matrix.project }}
           path: |
             test-results
             e2e/**/*-snapshots/*-linux-*.png
