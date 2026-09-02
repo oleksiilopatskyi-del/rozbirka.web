@@ -7,6 +7,8 @@ import { Field } from './field'
 import { FileField, UploadList } from './file-field'
 import { FormDialog, Sheet } from './form-dialog'
 import { TextInput } from './input'
+import { Meter } from './meter'
+import { RecordIdentity } from './identity'
 import { PhotoGrid, RecordCard } from './photo'
 import { SectionPanel } from './section-panel'
 import { Segmented } from './segmented'
@@ -420,4 +422,59 @@ it('runs an operation without a toast provider and reports success in place', as
   await waitFor(() =>
     expect(screen.getByRole('status')).toHaveTextContent('Збережено'),
   )
+})
+
+it('reads a figure against the limit that gives it meaning', () => {
+  render(
+    <>
+      <Meter
+        label="Повернено від вкладеного"
+        max={12000}
+        value={5000}
+        valueLabel="5 000 ₴"
+      />
+      <Meter
+        label="Повернено від вкладеного в A-104"
+        max={10000}
+        tone="ok"
+        value={15300}
+        valueLabel="15 300 ₴"
+      />
+      <Meter
+        emptyLabel="немає продажів"
+        label="Повернено від вкладеного в A-200"
+        max={null}
+        value={null}
+        valueLabel="—"
+      />
+    </>,
+  )
+
+  expect(
+    screen.getByRole('progressbar', { name: 'Повернено від вкладеного' }),
+  ).toHaveAttribute('aria-valuenow', '42')
+
+  // Over full recovery the bar stops at the limit while the figure stays true.
+  const over = screen.getByRole('progressbar', {
+    name: 'Повернено від вкладеного в A-104',
+  })
+  expect(over).toHaveAttribute('aria-valuenow', '153')
+  expect(over.firstElementChild).toHaveStyle({ width: '100%' })
+
+  // Nothing to measure yet says so instead of drawing an empty bar.
+  expect(screen.getByText('немає продажів')).toBeVisible()
+  expect(screen.getAllByRole('progressbar')).toHaveLength(2)
+})
+
+it('introduces a record by its own name with the specification under it', () => {
+  render(
+    <RecordIdentity
+      photoUrl={null}
+      subtitle="Tesla Model Y (2023)"
+      title="A-104"
+    />,
+  )
+
+  expect(screen.getByText('A-104')).toBeVisible()
+  expect(screen.getByText('Tesla Model Y (2023)')).toBeVisible()
 })

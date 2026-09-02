@@ -449,10 +449,12 @@ it('renders car identity, gallery, VIN copy, and gates warehouse access with par
   expect(await screen.findByText('Рік')).toBeVisible()
   expect(screen.getByText('2020')).toBeVisible()
   expect(
-    screen.getByRole('img', { name: 'Фото автомобіля 1' }),
+    screen.getByRole('img', { name: /Передня частина — фото автомобіля/ }),
   ).toHaveAttribute('src', 'https://cdn.example/car-thumb.jpg')
   expect(
-    screen.getByRole('img', { name: 'Фото автомобіля 1' }).closest('a'),
+    screen
+      .getByRole('img', { name: /Передня частина — фото автомобіля/ })
+      .closest('a'),
   ).toHaveAttribute('href', 'https://cdn.example/car.jpg')
   expect(screen.getByRole('link', { name: 'Склад автомобіля' })).toBeVisible()
   await user.click(screen.getByRole('button', { name: 'Копіювати VIN' }))
@@ -845,7 +847,15 @@ it('loads URL-backed car search and displays the server profitability unchanged'
   expect(
     await screen.findByRole('heading', { name: 'Автомобілі' }),
   ).toBeVisible()
-  expect(screen.getByText(/5\s000 \(42%\)/)).toBeVisible()
+  // Recouped now reads against what was invested: the figure, the share, and a
+  // bar that carries the same number for anyone scanning the column.
+  expect(screen.getByText(/5\s000/)).toBeVisible()
+  expect(screen.getByText('42%')).toBeVisible()
+  const meter = screen.getByRole('progressbar', {
+    name: /Повернено від вкладеного/,
+  })
+  expect(meter).toHaveAttribute('aria-valuenow', '42')
+  expect(meter).toHaveAttribute('aria-valuetext', '42%')
   expect(carsApi.list).toHaveBeenCalledWith(
     { search: 'BMW', status: 'active', page: 2, pageSize: 25 },
     expect.anything(),
@@ -888,4 +898,72 @@ it('writes a changed search to the URL before requesting the server list', async
       expect.anything(),
     ),
   )
+})
+
+it('reads a paid-off car as profit rather than a negative remainder', async () => {
+  vi.mocked(carsApi.get).mockResolvedValue({
+    ...detail,
+    profitability: {
+      ...detail.profitability,
+      invested: 10380,
+      recouped: 11537,
+      remaining: -1157,
+      recoupedPercent: 111,
+    },
+  })
+  render(
+    <MemoryRouter initialEntries={['/app/demo/cars/car-1']}>
+      <Routes>
+        <Route path="/app/:tenant/cars/:carId" element={<CarsScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  expect(await screen.findByText('Прибуток')).toBeVisible()
+  expect(screen.getByText(/1\s157\s₴/)).toBeVisible()
+  expect(screen.queryByText('Лишилось повернути')).not.toBeInTheDocument()
+  expect(
+    screen.getByRole('progressbar', { name: /Окупність/ }),
+  ).toHaveAttribute('aria-valuenow', '111')
+})
+
+it('keeps destructive car actions out of the header row', async () => {
+  const user = userEvent.setup()
+  render(
+    <MemoryRouter initialEntries={['/app/demo/cars/car-1']}>
+      <Routes>
+        <Route path="/app/:tenant/cars/:carId" element={<CarsScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  expect(
+    await screen.findByRole('link', { name: 'Редагувати автомобіль' }),
+  ).toBeVisible()
+  expect(
+    screen.queryByRole('button', { name: 'Видалити' }),
+  ).not.toBeInTheDocument()
+
+  await user.click(
+    screen.getByRole('button', { name: 'Інші дії з автомобілем' }),
+  )
+  const menu = await screen.findByRole('menu')
+  expect(
+    within(menu).getByRole('menuitem', { name: 'Архівувати' }),
+  ).toBeVisible()
+  expect(within(menu).getByRole('menuitem', { name: 'Видалити' })).toBeVisible()
+})
+
+it('names each photo slot so the yard knows what is still missing', async () => {
+  render(
+    <MemoryRouter initialEntries={['/app/demo/cars/car-1']}>
+      <Routes>
+        <Route path="/app/:tenant/cars/:carId" element={<CarsScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  const gallery = await screen.findByRole('list', { name: 'Фото автомобіля' })
+  expect(within(gallery).getByText('Салон')).toBeVisible()
+  expect(within(gallery).getByText('Табличка VIN')).toBeVisible()
 })

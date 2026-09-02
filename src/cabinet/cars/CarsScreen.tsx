@@ -13,6 +13,7 @@ import {
   useSearchParams,
 } from 'react-router'
 import {
+  Archive,
   ChevronLeft,
   Copy,
   ImagePlus,
@@ -22,11 +23,17 @@ import {
   Wallet,
   Wrench,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import {
+  ActionMenu,
+  Amount,
   Button,
-  Fact,
-  SectionPanel,
   ConfirmDialog,
+  DateValue,
+  FactRows,
+  Meter,
+  RecordIdentity,
+  SectionPanel,
   DataTable,
   EmptyState,
   ErrorState,
@@ -37,9 +44,8 @@ import {
   Pagination,
   Panel,
   SearchInput,
-  SelectInput,
+  Segmented,
   SkeletonRows,
-  StatCard,
   StatStrip,
   StatusPill,
   TextArea,
@@ -74,6 +80,20 @@ import {
 import { evaluateModuleAccess } from '../policy'
 import type { ModuleAccessDecision } from '../policy'
 import { useLatestMutationGuard } from '../use-latest-mutation-guard'
+
+/**
+ * The shots that make a car card usable to someone who never saw the car. The
+ * order is the upload order: photo N carries suggestion N, so the labels guide
+ * without pretending the server stores a slot per shot.
+ */
+const CAR_SHOTS = [
+  'Передня частина',
+  'Задня чверть',
+  'Бік',
+  'Салон',
+  'Дисплей',
+  'Табличка VIN',
+] as const
 
 const money = (value: number) =>
   new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 }).format(value)
@@ -269,29 +289,35 @@ function CarsList({ base }: { base: string }) {
               value={query}
             />
           </Field>
-          <Field className="min-w-40" label="Статус">
-            <SelectInput
-              onChange={(event) =>
-                change({ status: event.target.value || undefined, page: '1' })
+          <Field className="min-w-56" label="Статус">
+            <Segmented
+              as="toggle"
+              label="Статус автомобілів"
+              name="car-status"
+              onChange={(next) =>
+                change({ status: next || undefined, page: '1' })
               }
+              options={[
+                { value: '', label: 'Усі' },
+                { value: 'active', label: 'Активні' },
+                { value: 'archived', label: 'Архів' },
+              ]}
               value={selected.status ?? ''}
-            >
-              <option value="">Усі</option>
-              <option value="active">Активні</option>
-              <option value="archived">Архів</option>
-            </SelectInput>
+            />
           </Field>
-          <Field className="min-w-40" label="Розмір сторінки">
-            <SelectInput
-              onChange={(event) =>
-                change({ pageSize: event.target.value, page: '1' })
-              }
+          <Field className="min-w-52" label="На сторінці">
+            <Segmented
+              as="toggle"
+              label="Кількість автомобілів на сторінці"
+              name="car-page-size"
+              onChange={(next) => change({ pageSize: next, page: '1' })}
+              options={[
+                { value: '20', label: '20' },
+                { value: '50', label: '50' },
+                { value: '100', label: '100' },
+              ]}
               value={String(selected.pageSize)}
-            >
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </SelectInput>
+            />
           </Field>
           <Button type="submit" variant="primary">
             Шукати
@@ -309,7 +335,11 @@ function CarsList({ base }: { base: string }) {
             variant: 'primary',
             cell: (car) => (
               <Link className="hover:text-brand block" to={`${base}/${car.id}`}>
-                {car.code} · {car.brand} {car.model} ({car.year})
+                <RecordIdentity
+                  photoUrl={car.coverPhotoUrl}
+                  subtitle={`${car.brand} ${car.model} (${String(car.year)})`}
+                  title={car.code}
+                />
               </Link>
             ),
           },
@@ -334,10 +364,30 @@ function CarsList({ base }: { base: string }) {
                   key: 'recouped',
                   label: 'Повернено',
                   align: 'end' as const,
-                  cell: (car: CarListItem) =>
-                    car.profitability
-                      ? `${money(car.profitability.recouped)} (${String(car.profitability.recoupedPercent ?? '—')}%)`
-                      : '—',
+                  cell: (car: CarListItem) => (
+                    <Meter
+                      emptyLabel="немає продажів"
+                      label={`Повернено від вкладеного в ${car.code}`}
+                      max={car.profitability?.invested ?? null}
+                      tone={
+                        (car.profitability?.recoupedPercent ?? 0) >= 100
+                          ? 'ok'
+                          : 'brand'
+                      }
+                      value={car.profitability?.recouped ?? null}
+                      valueLabel={
+                        car.profitability
+                          ? money(car.profitability.recouped)
+                          : '—'
+                      }
+                      {...(car.profitability?.recoupedPercent === null ||
+                      car.profitability?.recoupedPercent === undefined
+                        ? {}
+                        : {
+                            hint: `${String(car.profitability.recoupedPercent)}%`,
+                          })}
+                    />
+                  ),
                 },
               ]
             : []),
@@ -435,127 +485,219 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
         <SkeletonRows label="Завантажуємо автомобіль…" rows={4} />
       </PageBody>
     )
+  const profit = car.profitability
+  const paidOff =
+    profit !== null && profit !== undefined && profit.remaining <= 0
+
   return (
-    <PageBody>
+    <PageBody className="max-w-6xl">
       <Button asChild className="justify-self-start" variant="quiet">
         <Link to={base}>
           <ChevronLeft aria-hidden />
           До автомобілів
         </Link>
       </Button>
-      <PageHeader
-        actions={
-          <>
-            {partsView ? (
-              <Button asChild>
-                <Link to={`${base}/${car.id}/warehouse`}>Склад автомобіля</Link>
-              </Button>
-            ) : null}
-            {manage ? (
-              <>
-                <Button asChild variant="primary">
-                  <Link to={`${base}/${car.id}/edit`}>
-                    Редагувати автомобіль
+      <div className="grid gap-2">
+        <StatusPill tone={car.status === 'active' ? 'ok' : 'neutral'}>
+          {car.status === 'active' ? 'Активний' : 'Архівний'}
+        </StatusPill>
+        <PageHeader
+          actions={
+            <>
+              {partsView ? (
+                <Button asChild>
+                  <Link to={`${base}/${car.id}/warehouse`}>
+                    Склад автомобіля
                   </Link>
                 </Button>
-                <Button
-                  disabled={busy}
-                  onClick={() => setPendingAction('archive')}
-                >
-                  Архівувати
-                </Button>
-                <Button
-                  disabled={busy}
-                  onClick={() => setPendingAction('delete')}
-                  variant="danger"
-                >
-                  Видалити
-                </Button>
-              </>
-            ) : null}
-          </>
-        }
-        eyebrow="Склад · Автомобілі"
-        title={`${car.code} · ${car.brand} ${car.model}`}
-      />
+              ) : null}
+              {manage ? (
+                <>
+                  <Button asChild variant="primary">
+                    <Link to={`${base}/${car.id}/edit`}>
+                      Редагувати автомобіль
+                    </Link>
+                  </Button>
+                  <ActionMenu
+                    actions={[
+                      {
+                        key: 'archive',
+                        label: 'Архівувати',
+                        icon: <Archive aria-hidden className="size-4" />,
+                        disabled: busy,
+                        onSelect: () => setPendingAction('archive'),
+                      },
+                      {
+                        key: 'delete',
+                        label: 'Видалити',
+                        icon: <Trash2 aria-hidden className="size-4" />,
+                        destructive: true,
+                        disabled: busy,
+                        onSelect: () => setPendingAction('delete'),
+                      },
+                    ]}
+                    label="Інші дії з автомобілем"
+                  />
+                </>
+              ) : null}
+            </>
+          }
+          eyebrow="Склад · Автомобілі"
+          title={`${car.code} · ${car.brand} ${car.model}`}
+        />
+      </div>
       {problem ? <Notice tone="danger">{problem}</Notice> : null}
       {copyStatus ? <Notice tone="ok">{copyStatus}</Notice> : null}
-      <Panel>
-        <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="grid gap-1">
-            <dt className="text-app-dim text-[12.5px]">VIN</dt>
-            <dd className="flex flex-wrap items-center gap-2 text-sm text-white">
-              <span className="font-mono">{car.vin ?? 'не вказано'}</span>
-              {car.vin ? (
-                <Button
-                  onClick={() => {
-                    void copyVin(car.vin ?? '')
-                  }}
-                >
-                  <Copy aria-hidden />
-                  Копіювати VIN
-                </Button>
-              ) : null}
-            </dd>
-          </div>
-          <Fact label="Рік">{String(car.year)}</Fact>
-          <Fact label="Колір">{car.color ?? 'не вказано'}</Fact>
-          <Fact label="Дата придбання">{car.acquiredAt}</Fact>
-          {financeView ? (
-            <Fact label="Ціна придбання">{money(car.purchasePrice)}</Fact>
+
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="grid gap-4">
+          <Panel>
+            <FactRows
+              rows={[
+                { label: 'Рік', value: String(car.year) },
+                { label: 'Колір', value: car.color ?? 'не вказано' },
+                {
+                  label: 'Дата придбання',
+                  value: <DateValue value={car.acquiredAt} withTime={false} />,
+                },
+                ...(financeView
+                  ? [
+                      {
+                        label: 'Ціна придбання',
+                        value: <Amount value={car.purchasePrice} />,
+                      },
+                    ]
+                  : []),
+                { label: 'Нотатки', value: car.notes ?? 'немає' },
+                {
+                  label: 'VIN',
+                  value: (
+                    <span className="font-mono break-all">
+                      {car.vin ?? 'не вказано'}
+                    </span>
+                  ),
+                  ...(car.vin
+                    ? {
+                        action: (
+                          <Button
+                            onClick={() => {
+                              void copyVin(car.vin ?? '')
+                            }}
+                          >
+                            <Copy aria-hidden />
+                            Копіювати VIN
+                          </Button>
+                        ),
+                      }
+                    : {}),
+                },
+              ]}
+            />
+          </Panel>
+
+          <SectionPanel
+            aside={`${String(car.photos.length)} ${plural(car.photos.length, ['знімок', 'знімки', 'знімків'])}`}
+            title="Фото"
+          >
+            <ul
+              aria-label="Фото автомобіля"
+              className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+            >
+              {CAR_SHOTS.map((shot, index) => {
+                const photo = car.photos[index]
+                return (
+                  <li key={shot}>
+                    {photo ? (
+                      <a
+                        className="rounded-panel border-app-line block overflow-hidden border"
+                        href={photo.url}
+                      >
+                        <img
+                          alt={`${shot} — фото автомобіля ${car.code}`}
+                          className="aspect-4/3 w-full object-cover"
+                          src={photo.thumbnailUrl || photo.url}
+                        />
+                      </a>
+                    ) : (
+                      <span className="border-app-line-2 rounded-panel text-app-dim grid aspect-4/3 place-items-center gap-1 border border-dashed p-2 text-center text-[11.5px]">
+                        <ImagePlus aria-hidden className="size-4" />
+                        {shot}
+                      </span>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+            <p className="text-app-dim text-[11.5px]">
+              Знімки додаються під час редагування автомобіля, у порядку списку.
+            </p>
+          </SectionPanel>
+        </div>
+
+        <div className="grid gap-4">
+          {financeView && profit ? (
+            <SectionPanel aria-label="Прибутковість" title="Прибутковість">
+              <dl className="grid gap-4">
+                <div className="grid gap-0.5">
+                  <dt className="text-app-dim text-[12.5px]">Інвестовано</dt>
+                  <dd className="text-[28px] leading-none font-light tracking-[-0.02em] text-white">
+                    <Amount value={profit.invested} />
+                  </dd>
+                </div>
+                <div className="grid gap-0.5">
+                  <dt className="text-app-dim text-[12.5px]">Повернено</dt>
+                  <dd className="text-[28px] leading-none font-light tracking-[-0.02em] text-white">
+                    <Amount value={profit.recouped} />
+                  </dd>
+                </div>
+                <div className="grid gap-0.5">
+                  <dt className="text-app-dim text-[12.5px]">
+                    {paidOff ? 'Прибуток' : 'Лишилось повернути'}
+                  </dt>
+                  <dd
+                    className={cn(
+                      'text-[28px] leading-none font-light tracking-[-0.02em]',
+                      paidOff ? 'text-state-ok' : 'text-white',
+                    )}
+                  >
+                    <Amount
+                      value={paidOff ? -profit.remaining : profit.remaining}
+                    />
+                  </dd>
+                </div>
+              </dl>
+              <div className="border-app-line mt-1 border-t pt-3">
+                <Meter
+                  className="justify-items-stretch"
+                  label={`Окупність ${car.code}`}
+                  max={profit.invested}
+                  tone={paidOff ? 'ok' : 'brand'}
+                  value={profit.recouped}
+                  valueLabel={
+                    <span className="text-app-dim text-[12.5px]">
+                      Окупність
+                    </span>
+                  }
+                  {...(profit.recoupedPercent === null ||
+                  profit.recoupedPercent === undefined
+                    ? {}
+                    : { hint: `${String(profit.recoupedPercent)}%` })}
+                />
+              </div>
+            </SectionPanel>
           ) : null}
-          <Fact label="Нотатки">{car.notes ?? 'немає'}</Fact>
-        </dl>
-      </Panel>
-      {car.photos.length > 0 ? (
-        <section aria-label="Фото автомобіля" className="grid gap-2">
-          <h2 className="text-base font-semibold text-white">Фото</h2>
-          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {car.photos.map((photo, index) => (
-              <li key={photo.id}>
-                <a
-                  className="rounded-panel border-app-line block overflow-hidden border"
-                  href={photo.url}
-                >
-                  <img
-                    alt={`Фото автомобіля ${index + 1}`}
-                    className="aspect-4/3 w-full object-cover"
-                    src={photo.thumbnailUrl || photo.url}
-                  />
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      {financeView && car.profitability ? (
-        <section aria-label="Прибутковість" className="grid gap-2">
-          <h2 className="text-base font-semibold text-white">Прибутковість</h2>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <StatCard
-              accent
-              label="Інвестовано"
-              value={money(car.profitability.invested)}
+
+          {financeView ? (
+            <Expenses
+              car={car}
+              canManage={financeManage}
+              onChanged={load}
+              onProblem={setProblem}
             />
-            <StatCard
-              label="Повернено"
-              value={money(car.profitability.recouped)}
-            />
-            <StatCard
-              label="Залишок"
-              value={money(car.profitability.remaining)}
-            />
-          </div>
-        </section>
-      ) : null}
-      {financeView ? (
-        <Expenses
-          car={car}
-          canManage={financeManage}
-          onChanged={load}
-          onProblem={setProblem}
-        />
-      ) : null}
+          ) : null}
+        </div>
+      </div>
+
       <ConfirmDialog
         confirmLabel={pendingAction === 'archive' ? 'Архівувати' : 'Видалити'}
         consequence={
