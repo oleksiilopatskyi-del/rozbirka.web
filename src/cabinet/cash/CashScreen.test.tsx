@@ -924,15 +924,13 @@ it('manages register currencies and lifecycle through documented endpoints', asy
     name: 'Підтвердити видалення каси',
   })
   expect(dialog).toHaveAttribute('aria-modal', 'true')
-  expect(
-    screen.getByRole('button', { name: 'Підтвердити видалення' }),
-  ).toHaveFocus()
-  await user.tab({ shift: true })
   expect(screen.getByRole('button', { name: 'Скасувати' })).toHaveFocus()
-  await user.tab()
+  await user.tab({ shift: true })
   expect(
     screen.getByRole('button', { name: 'Підтвердити видалення' }),
   ).toHaveFocus()
+  await user.tab()
+  expect(screen.getByRole('button', { name: 'Скасувати' })).toHaveFocus()
   await user.click(screen.getByRole('button', { name: 'Скасувати' }))
   await waitFor(() => expect(deleteTrigger).toHaveFocus())
   await user.click(deleteTrigger)

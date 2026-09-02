@@ -576,16 +576,18 @@ function CashRegisterDetail({
           <p className="text-app-muted text-sm" id="cash-delete-description">
             Каса та її журнал операцій зникнуть назавжди.
           </p>
-          <Button
-            disabled={busy}
-            onClick={() => void removeRegister()}
-            autoFocus
-          >
-            Підтвердити видалення
-          </Button>
-          <Button disabled={busy} onClick={() => setConfirmDelete(false)}>
-            Скасувати
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button disabled={busy} onClick={() => setConfirmDelete(false)}>
+              Скасувати
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={() => void removeRegister()}
+              variant="danger"
+            >
+              Підтвердити видалення
+            </Button>
+          </div>
         </div>
       )}
       {transferAllowed && register.isActive && (

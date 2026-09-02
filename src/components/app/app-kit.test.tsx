@@ -197,6 +197,8 @@ it('confirms a destructive action through its consequence', async () => {
   expect(
     screen.getByRole('dialog', { name: 'Видалити деталь?' }),
   ).toHaveAccessibleDescription('Історія продажів і резерви зникнуть назавжди.')
+  // A destructive question opens on the way out of it.
+  expect(screen.getByRole('button', { name: 'Скасувати' })).toHaveFocus()
 
   await user.click(screen.getByRole('button', { name: 'Видалити деталь' }))
   expect(onConfirm).toHaveBeenCalledOnce()

@@ -428,16 +428,15 @@ function CustomerDetailScreen({
             немає, тож історія продажів не постраждає.
           </p>
           <div className="flex flex-wrap justify-end gap-2">
+            <Button onClick={() => setConfirmDelete(false)} disabled={busy}>
+              Скасувати
+            </Button>
             <Button
               onClick={() => void remove()}
               disabled={busy}
-              autoFocus
               variant="danger"
             >
               Підтвердити
-            </Button>
-            <Button onClick={() => setConfirmDelete(false)} disabled={busy}>
-              Скасувати
             </Button>
           </div>
         </div>
