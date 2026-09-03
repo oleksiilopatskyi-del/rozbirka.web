@@ -935,7 +935,7 @@ async function completeOtpLogin(page: Page) {
 }
 
 async function loginFrom(page: Page) {
-  await page.goto('/login')
+  await page.goto('/login', { waitUntil: 'domcontentloaded' })
   await completeOtpLogin(page)
   await expect(page).toHaveURL('/app/koval/dashboard')
   await expect(
