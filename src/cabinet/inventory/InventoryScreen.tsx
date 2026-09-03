@@ -1227,6 +1227,7 @@ function PartPlacementView({ partId }: { partId: string }) {
   const [selection, setSelection] = useState<string[] | null>(null)
   const [saving, setSaving] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
   const selected = useMemo(
     () =>
       selection ??
@@ -1241,6 +1242,7 @@ function PartPlacementView({ partId }: { partId: string }) {
     setSaving(true)
     try {
       setOperationError(null)
+      setSaved(false)
       const scope = requireLatestMutation({
         permission: 'inventory.zones.manage',
         quota: false,
@@ -1249,6 +1251,7 @@ function PartPlacementView({ partId }: { partId: string }) {
         signal: scope.signal,
       })
       setSelection(null)
+      setSaved(true)
       resource.reload()
     } catch (error) {
       setOperationError(normalizeApiProblem(error).message)
@@ -1271,6 +1274,7 @@ function PartPlacementView({ partId }: { partId: string }) {
         показується серед фізичних місць.
       </Notice>
       {operationError ? <Notice tone="danger">{operationError}</Notice> : null}
+      {saved ? <Notice tone="ok">Розміщення збережено</Notice> : null}
       <Resource state={resource.state} retry={resource.reload}>
         {({ zones: items }: { zones: InventoryZone[] }) => (
           <Panel>
@@ -1288,14 +1292,15 @@ function PartPlacementView({ partId }: { partId: string }) {
                         aria-label={`${zone.warehouseName} · ${zone.name}`}
                         checked={checked}
                         disabled={!canManage}
-                        onChange={() =>
+                        onChange={() => {
+                          setSaved(false)
                           setSelection((value) => {
                             const current = value ?? selected
                             return checked
                               ? current.filter((id) => id !== zone.id)
                               : [...current, zone.id]
                           })
-                        }
+                        }}
                         type="checkbox"
                       />
                       <span>
@@ -1308,11 +1313,12 @@ function PartPlacementView({ partId }: { partId: string }) {
             {canManage ? (
               <Button
                 className="mt-4 w-full"
+                aria-busy={saving}
                 disabled={saving || !selected.length}
                 onClick={() => void save()}
                 variant="primary"
               >
-                Зберегти розміщення
+                {saving ? 'Зберігаємо…' : 'Зберегти розміщення'}
               </Button>
             ) : null}
           </Panel>

@@ -39,7 +39,25 @@ vi.mock('../CabinetContext', () => ({
   useCabinet: () => ({
     status: 'ready',
     targetTenant: { id: 'tenant-1', slug: 'yard' },
-    snapshot: { permissions: permissions.value },
+    snapshot: {
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      generation: 1,
+      permissions: permissions.value,
+      features: new Set<string>(),
+      entitlement: {
+        state: 'active',
+        usage: {
+          cars: { used: 0, max: null },
+          intakes: { used: 0, max: null },
+          parts: { used: 0, max: null },
+          users: { used: 0, max: null },
+          cashRegisters: { used: 0, max: null },
+        },
+      },
+      subscription: null,
+      cabinetParityRollout: null,
+    },
   }),
 }))
 
@@ -357,6 +375,56 @@ it('manages part placement without exposing counting actions', async () => {
     screen.getByRole('button', { name: 'Зберегти розміщення' }),
   ).toBeInTheDocument()
   expect(screen.queryByText(/камера/i)).not.toBeInTheDocument()
+})
+
+it('shows progress while part placement is being saved', async () => {
+  let finishSaving: (() => void) | undefined
+  api.getPartZones.mockResolvedValue([
+    {
+      isSystemUnassigned: false,
+      warehouseId: 'wh-1',
+      warehouseName: 'Основний склад',
+      zoneCode: 'A1',
+      zoneId: 'zone-1',
+      zoneName: 'Стелаж A1',
+      zoneQrCode: 'ZONE-1',
+    },
+  ])
+  api.replacePartZones.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finishSaving = () => resolve([])
+      }),
+  )
+
+  renderAt('/app/yard/parts/part-1/inventory')
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Зберегти розміщення' }),
+  )
+
+  expect(screen.getByRole('button', { name: 'Зберігаємо…' })).toBeDisabled()
+  finishSaving?.()
+})
+
+it('confirms that part placement was saved', async () => {
+  api.getPartZones.mockResolvedValue([
+    {
+      isSystemUnassigned: false,
+      warehouseId: 'wh-1',
+      warehouseName: 'Основний склад',
+      zoneCode: 'A1',
+      zoneId: 'zone-1',
+      zoneName: 'Стелаж A1',
+      zoneQrCode: 'ZONE-1',
+    },
+  ])
+
+  renderAt('/app/yard/parts/part-1/inventory')
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Зберегти розміщення' }),
+  )
+
+  expect(await screen.findByText('Розміщення збережено')).toBeInTheDocument()
 })
 
 it('does not allow replacement when current part placement failed to load', async () => {
