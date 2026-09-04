@@ -29,7 +29,9 @@ const report = (status: ReportJob['status']): ReportJob => ({
   requestedAt: '2026-08-28T08:00:00Z',
   startedAt: null,
   completedAt: status === 'completed' ? '2026-08-28T08:01:00Z' : null,
-  expiresAt: '2026-09-04T08:00:00Z',
+  // Relative on purpose: a fixed date turns every download test into a time
+  // bomb that passes until the day the file would really have expired.
+  expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
   errorMessage: status === 'failed' ? 'Service unavailable' : null,
   fileSizeBytes: status === 'completed' ? 1234 : null,
 })
