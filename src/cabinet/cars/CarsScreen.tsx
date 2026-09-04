@@ -15,6 +15,7 @@ import {
 import {
   Archive,
   ChevronLeft,
+  ChevronRight,
   Copy,
   ImagePlus,
   Pencil,
@@ -31,6 +32,8 @@ import {
   ConfirmDialog,
   DateValue,
   FactRows,
+  FormDialog,
+  Gallery,
   Meter,
   RecordIdentity,
   SectionPanel,
@@ -208,7 +211,7 @@ function Denied({ decision }: { decision: ModuleAccessDecision }) {
 }
 
 export function CarsScreen(_props: Partial<CabinetModuleScreenProps> = {}) {
-  const { cabinet, createDecision, manageDecision, partsView } = useAccess()
+  const { cabinet, createDecision, manageDecision } = useAccess()
   const { tenant, carId } = useParams<{ tenant: string; carId: string }>()
   const location = useLocation()
   const base = `/app/${tenant ?? cabinet.targetTenant?.slug ?? ''}/cars`
@@ -216,14 +219,10 @@ export function CarsScreen(_props: Partial<CabinetModuleScreenProps> = {}) {
     return <Denied decision={createDecision} />
   if (location.pathname.endsWith('/edit') && manageDecision.kind !== 'allowed')
     return <Denied decision={manageDecision} />
-  if (location.pathname.endsWith('/warehouse') && !partsView)
-    return <Denied decision={{ kind: 'permission-denied' }} />
   if (location.pathname.endsWith('/new'))
     return <CarForm title="Новий автомобіль" />
   if (carId && location.pathname.endsWith('/edit'))
     return <CarForm carId={carId} title="Редагувати автомобіль" />
-  if (carId && location.pathname.endsWith('/warehouse'))
-    return <CarWarehouse base={base} key={carId} carId={carId} />
   return carId ? (
     <CarDetail base={base} carId={carId} />
   ) : (
@@ -501,6 +500,11 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
   const profit = car.profitability
   const paidOff =
     profit !== null && profit !== undefined && profit.remaining <= 0
+  // What "invested" is made of, so the figure is not a number to take on trust.
+  const expensesTotal = (car.expenses ?? []).reduce(
+    (sum, expense) => sum + expense.amount,
+    0,
+  )
 
   return (
     <PageBody className="max-w-6xl">
@@ -517,13 +521,6 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
         <PageHeader
           actions={
             <>
-              {partsView ? (
-                <Button asChild>
-                  <Link to={`${base}/${car.id}/warehouse`}>
-                    Склад автомобіля
-                  </Link>
-                </Button>
-              ) : null}
               {manage ? (
                 <>
                   <Button asChild variant="primary">
@@ -617,90 +614,125 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
             aside={`${String(car.photos.length)} ${plural(car.photos.length, ['знімок', 'знімки', 'знімків'])}`}
             title="Фото"
           >
-            <ul
-              aria-label="Фото автомобіля"
-              className="grid grid-cols-2 gap-2 sm:grid-cols-3"
-            >
-              {CAR_SHOTS.map((shot, index) => {
-                const photo = car.photos[index]
-                return (
-                  <li key={shot}>
-                    {photo ? (
-                      <a
-                        className="rounded-panel border-app-line block overflow-hidden border"
-                        href={photo.url}
-                      >
-                        <img
-                          alt={`${shot} — фото автомобіля ${car.code}`}
-                          className="aspect-4/3 w-full object-cover"
-                          src={photo.thumbnailUrl || photo.url}
-                        />
-                      </a>
-                    ) : (
-                      <span className="border-app-line-2 rounded-panel text-app-dim grid aspect-4/3 place-items-center gap-1 border border-dashed p-2 text-center text-[11.5px]">
-                        <ImagePlus aria-hidden className="size-4" />
-                        {shot}
-                      </span>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-            <p className="text-app-dim text-[11.5px]">
-              Знімки додаються під час редагування автомобіля, у порядку списку.
-            </p>
+            <Gallery
+              emptyLabel={
+                <span className="grid gap-1">
+                  <span>Фото цього авто ще немає.</span>
+                  <span>
+                    Радимо зняти{' '}
+                    {CAR_SHOTS.slice(0, 3).join(', ').toLowerCase()} — і додати
+                    їх у редагуванні автомобіля.
+                  </span>
+                </span>
+              }
+              label={`Фото автомобіля ${car.code}`}
+              photos={car.photos.map((photo, index) => ({
+                id: photo.id,
+                url: photo.url,
+                ...(photo.thumbnailUrl
+                  ? { thumbnailUrl: photo.thumbnailUrl }
+                  : {}),
+                alt: `${CAR_SHOTS[index] ?? `Знімок ${String(index + 1)}`} — фото автомобіля ${car.code}`,
+              }))}
+            />
           </SectionPanel>
         </div>
 
         <div className="grid gap-4">
           {financeView && profit ? (
-            <SectionPanel aria-label="Прибутковість" title="Прибутковість">
-              <dl className="grid gap-4">
-                <div className="grid gap-0.5">
-                  <dt className="text-app-dim text-[12.5px]">Інвестовано</dt>
-                  <dd className="text-[28px] leading-none font-light tracking-[-0.02em] text-white">
+            <SectionPanel
+              aside={`${String(profit.partsTotal)} ${plural(profit.partsTotal, ['запчастина', 'запчастини', 'запчастин'])} · ${String(profit.partsSold)} ${plural(profit.partsSold, ['продана', 'продані', 'продано'])}`}
+              title="Прибутковість авто"
+            >
+              <dl className="grid gap-4 sm:grid-cols-3 sm:gap-0">
+                <div className="sm:border-app-line grid gap-1 sm:border-r sm:pr-4">
+                  <dt className="text-app-dim font-mono text-[10.5px] tracking-[0.08em] uppercase">
+                    Інвестовано
+                  </dt>
+                  <dd className="text-[26px] leading-none font-light tracking-[-0.02em] text-white">
                     <Amount currency={CAR_CURRENCY} value={profit.invested} />
                   </dd>
-                </div>
-                <div className="grid gap-0.5">
-                  <dt className="text-app-dim text-[12.5px]">Повернено</dt>
-                  <dd className="text-[28px] leading-none font-light tracking-[-0.02em] text-white">
-                    <Amount currency={CAR_CURRENCY} value={profit.recouped} />
+                  <dd className="text-app-dim text-[11.5px]">
+                    авто {money(car.purchasePrice)} · витрати{' '}
+                    {money(expensesTotal)}
                   </dd>
                 </div>
-                <div className="grid gap-0.5">
-                  <dt className="text-app-dim text-[12.5px]">
+
+                <div className="sm:border-app-line grid gap-1 sm:border-r sm:px-4">
+                  <dt className="text-app-dim font-mono text-[10.5px] tracking-[0.08em] uppercase">
+                    Повернено
+                  </dt>
+                  <dd className="text-[26px] leading-none font-light tracking-[-0.02em] text-white">
+                    <Amount currency={CAR_CURRENCY} value={profit.recouped} />
+                  </dd>
+                  <dd className="text-app-dim text-[11.5px]">
+                    {profit.partsSold}{' '}
+                    {plural(profit.partsSold, [
+                      'позиція продана',
+                      'позиції продані',
+                      'позицій продано',
+                    ])}
+                  </dd>
+                </div>
+
+                <div
+                  className={cn(
+                    'grid gap-1 border-l-2 pl-4 sm:pl-4',
+                    paidOff ? 'border-state-ok' : 'border-app-line-2',
+                  )}
+                >
+                  <dt
+                    className={cn(
+                      'font-mono text-[10.5px] tracking-[0.08em] uppercase',
+                      paidOff ? 'text-state-ok' : 'text-app-dim',
+                    )}
+                  >
                     {paidOff ? 'Прибуток' : 'Лишилось повернути'}
                   </dt>
                   <dd
                     className={cn(
-                      'text-[28px] leading-none font-light tracking-[-0.02em]',
+                      'text-[26px] leading-none font-light tracking-[-0.02em]',
                       paidOff ? 'text-state-ok' : 'text-white',
                     )}
                   >
+                    {paidOff ? '+' : ''}
                     <Amount
                       currency={CAR_CURRENCY}
                       value={paidOff ? -profit.remaining : profit.remaining}
                     />
                   </dd>
+                  <dd className="text-app-dim text-[11.5px]">
+                    окупність {String(profit.recoupedPercent ?? 0)}%
+                  </dd>
                 </div>
               </dl>
-              <div className="border-app-line mt-1 border-t pt-3">
+
+              <div className="border-app-line mt-1 grid gap-2 border-t pt-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <span className="text-app-muted text-[12.5px]">
+                    Повернення проти вкладеного
+                  </span>
+                  <span className="text-app-dim text-[11.5px]">
+                    на складі {profit.partsAvailable}{' '}
+                    {plural(profit.partsAvailable, [
+                      'позиція',
+                      'позиції',
+                      'позицій',
+                    ])}
+                  </span>
+                </div>
                 <Meter
                   className="justify-items-stretch"
+                  hint={
+                    paidOff
+                      ? `окупилось, і ще ${money(-profit.remaining)} понад вкладене`
+                      : `лишилось повернути ${money(profit.remaining)}`
+                  }
                   label={`Окупність ${car.code}`}
                   max={profit.invested}
                   tone={paidOff ? 'ok' : 'brand'}
                   value={profit.recouped}
-                  valueLabel={
-                    <span className="text-app-dim text-[12.5px]">
-                      Окупність
-                    </span>
-                  }
-                  {...(profit.recoupedPercent === null ||
-                  profit.recoupedPercent === undefined
-                    ? {}
-                    : { hint: `${String(profit.recoupedPercent)}%` })}
+                  valueLabel={null}
                 />
               </div>
             </SectionPanel>
@@ -716,6 +748,13 @@ function CarDetail({ base, carId }: { base: string; carId: string }) {
           ) : null}
         </div>
       </div>
+
+      {partsView ? (
+        <CarParts
+          carId={car.id}
+          partsHref={`${base.replace(/\/cars$/, '/parts')}?car_ids=${car.id}`}
+        />
+      ) : null}
 
       <ConfirmDialog
         confirmLabel={pendingAction === 'archive' ? 'Архівувати' : 'Видалити'}
@@ -754,6 +793,7 @@ function Expenses({
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [editing, setEditing] = useState<CarExpense | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
   const [pendingRemoval, setPendingRemoval] = useState<CarExpense | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -800,6 +840,7 @@ function Expenses({
       setName('')
       setAmount('')
       setEditing(null)
+      setFormOpen(false)
       await onChanged()
     } catch (error: unknown) {
       onProblem(normalizeApiProblem(error).message)
@@ -827,9 +868,40 @@ function Expenses({
   }
   const expenses = car.expenses ?? []
   const total = expenses.reduce((sum, expense) => sum + expense.amount, 0)
+  const openForm = (expense: CarExpense | null) => {
+    setFormError(null)
+    setEditing(expense)
+    setName(expense?.name ?? '')
+    setAmount(expense === null ? '' : String(expense.amount))
+    setFormOpen(true)
+  }
   return (
-    <section aria-label="Витрати" className="grid gap-3">
-      <h2 className="text-base font-semibold text-white">Витрати</h2>
+    <SectionPanel
+      aside={
+        expenses.length === 0
+          ? undefined
+          : `${String(expenses.length)} ${plural(expenses.length, ['витрата', 'витрати', 'витрат'])} на ${money(total)}`
+      }
+      description="Транспортування, мийка, розмитнення — усе, що ви вклали в авто понад ціну придбання. Кожна витрата збільшує інвестовану суму."
+      footer={
+        canManage ? (
+          <>
+            <span className="text-app-dim text-[12.5px]">
+              Разом вкладено понад ціну придбання: {money(total)}
+            </span>
+            <Button
+              disabled={busy}
+              onClick={() => openForm(null)}
+              variant="primary"
+            >
+              <Plus aria-hidden />
+              Додати витрату
+            </Button>
+          </>
+        ) : undefined
+      }
+      title="Витрати"
+    >
       <DataTable
         caption="Витрати автомобіля"
         columns={[
@@ -858,30 +930,26 @@ function Expenses({
                   align: 'end' as const,
                   headerHidden: true,
                   cell: (expense: CarExpense) => (
-                    <span className="flex min-w-0 flex-wrap justify-end gap-2">
-                      <Button
-                        aria-label={`Редагувати витрату ${expense.name}`}
-                        disabled={busy}
-                        onClick={() => {
-                          setFormError(null)
-                          setEditing(expense)
-                          setName(expense.name)
-                          setAmount(String(expense.amount))
-                        }}
-                      >
-                        <Pencil aria-hidden />
-                        Редагувати
-                      </Button>
-                      <Button
-                        aria-label={`Видалити витрату ${expense.name}`}
-                        disabled={busy}
-                        onClick={() => setPendingRemoval(expense)}
-                        variant="danger"
-                      >
-                        <Trash2 aria-hidden />
-                        Видалити
-                      </Button>
-                    </span>
+                    <ActionMenu
+                      actions={[
+                        {
+                          key: 'edit',
+                          label: 'Редагувати',
+                          icon: <Pencil aria-hidden className="size-4" />,
+                          disabled: busy,
+                          onSelect: () => openForm(expense),
+                        },
+                        {
+                          key: 'remove',
+                          label: 'Видалити',
+                          icon: <Trash2 aria-hidden className="size-4" />,
+                          destructive: true,
+                          disabled: busy,
+                          onSelect: () => setPendingRemoval(expense),
+                        },
+                      ]}
+                      label={`Дії з витратою ${expense.name}`}
+                    />
                   ),
                 },
               ]
@@ -910,66 +978,44 @@ function Expenses({
         rowKey={(expense: CarExpense) => expense.id}
         rows={expenses}
       />
-      {canManage ? (
-        <Panel className="grid gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-white">
-              {editing
-                ? `Редагування витрати «${editing.name}»`
-                : 'Нова витрата'}
-            </h3>
-            <p className="text-app-dim mt-1 text-[12.5px]">
-              Витрата збільшує інвестовану суму й змінює прибутковість авто.
-            </p>
-          </div>
-          <form
-            aria-busy={busy}
-            className="grid gap-3"
-            onSubmit={(event) => void create(event)}
-          >
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-              <Field label="Назва витрати">
-                <TextInput
-                  onChange={(event) => setName(event.target.value)}
-                  value={name}
-                />
-              </Field>
-              <Field hint="У гривнях" label="Сума витрати">
-                <TextInput
-                  inputMode="decimal"
-                  onChange={(event) => setAmount(event.target.value)}
-                  value={amount}
-                />
-              </Field>
-            </div>
-            {formError ? <Notice tone="danger">{formError}</Notice> : null}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                aria-busy={busy}
-                disabled={busy}
-                type="submit"
-                variant="primary"
-              >
-                {editing ? 'Зберегти витрату' : 'Додати витрату'}
-              </Button>
-              {editing ? (
-                <Button
-                  disabled={busy}
-                  onClick={() => {
-                    setEditing(null)
-                    setName('')
-                    setAmount('')
-                    setFormError(null)
-                  }}
-                  variant="quiet"
-                >
-                  Скасувати редагування
-                </Button>
-              ) : null}
-            </div>
-          </form>
-        </Panel>
-      ) : null}
+
+      <FormDialog
+        description={
+          editing
+            ? 'Сума й назва змінюються разом; прибутковість авто перерахується одразу.'
+            : 'Витрата збільшує інвестовану суму й змінює прибутковість авто.'
+        }
+        error={formError}
+        onOpenChange={(open) => {
+          setFormOpen(open)
+          if (!open) {
+            setEditing(null)
+            setFormError(null)
+          }
+        }}
+        onSubmit={(event) => void create(event)}
+        open={formOpen}
+        pending={busy}
+        submitLabel={editing ? 'Зберегти витрату' : 'Додати витрату'}
+        title={
+          editing ? `Редагування витрати «${editing.name}»` : 'Нова витрата'
+        }
+      >
+        <Field label="Назва витрати">
+          <TextInput
+            onChange={(event) => setName(event.target.value)}
+            value={name}
+          />
+        </Field>
+        <Field hint="У доларах" label="Сума витрати">
+          <TextInput
+            inputMode="decimal"
+            onChange={(event) => setAmount(event.target.value)}
+            value={amount}
+          />
+        </Field>
+      </FormDialog>
+
       <ConfirmDialog
         confirmLabel="Видалити витрату"
         consequence={
@@ -985,7 +1031,7 @@ function Expenses({
         pending={busy}
         title="Видалити витрату?"
       />
-    </section>
+    </SectionPanel>
   )
 }
 
@@ -1010,6 +1056,11 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
     { id: number; name: string; amount: string }[]
   >([])
   const [createdCarId, setCreatedCarId] = useState<string | null>(null)
+  // Shown while typing, so the invested sum is not a surprise after saving.
+  const initialExpensesTotal = expenses.reduce((sum, expense) => {
+    const value = Number(expense.amount)
+    return Number.isFinite(value) && value > 0 ? sum + value : sum
+  }, 0)
   const [completedExpenseIds, setCompletedExpenseIds] = useState<Set<number>>(
     new Set(),
   )
@@ -1253,7 +1304,7 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
               hint={
                 priceLocked
                   ? 'Ціну змінює користувач із правом на фінанси'
-                  : 'У гривнях, без пробілів'
+                  : 'У доларах, без пробілів'
               }
               label="Ціна придбання"
               required={!priceLocked}
@@ -1312,7 +1363,31 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
         )}
         {!carId && financeManage ? (
           <SectionPanel
-            description="Те, що вже витрачено на авто: транспортування, розмитнення, мийка. Витрати можна додати й пізніше."
+            aside={
+              initialExpensesTotal > 0
+                ? `Разом ${money(initialExpensesTotal)}`
+                : undefined
+            }
+            description="Те, що вже витрачено на авто: транспортування, розмитнення, мийка. Разом із ціною придбання це інвестована сума."
+            footer={
+              <>
+                <span className="text-app-dim text-[12.5px]">
+                  Витрати можна додати й пізніше, на сторінці авто.
+                </span>
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    setExpenses((current) => [
+                      ...current,
+                      { id: Date.now(), name: '', amount: '' },
+                    ])
+                  }
+                >
+                  <Plus aria-hidden />
+                  Додати витрату
+                </Button>
+              </>
+            }
             title="Початкові витрати"
           >
             {expenses.length === 0 ? (
@@ -1320,68 +1395,72 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
                 Витрат ще немає — авто збережеться й без них.
               </p>
             ) : (
-              <ul className="grid gap-3">
+              <ul className="grid">
                 {expenses.map((expense, index) => {
                   const saved = completedExpenseIds.has(expense.id)
                   return (
                     <li
-                      className="border-app-line rounded-control grid gap-3 border p-3"
+                      className={cn(
+                        'grid gap-3 py-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto] sm:items-end',
+                        index > 0 && 'border-app-line border-t',
+                      )}
                       key={expense.id}
                     >
-                      <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                        <Field
-                          label={`Назва початкової витрати ${String(index + 1)}`}
-                        >
-                          <TextInput
-                            disabled={busy || saved}
-                            onChange={(event) =>
-                              setExpenses((current) =>
-                                current.map((item) =>
-                                  item.id === expense.id
-                                    ? { ...item, name: event.target.value }
-                                    : item,
-                                ),
-                              )
-                            }
-                            value={expense.name}
-                          />
-                        </Field>
-                        <Field
-                          label={`Сума початкової витрати ${String(index + 1)}`}
-                        >
-                          <TextInput
-                            disabled={busy || saved}
-                            inputMode="decimal"
-                            onChange={(event) =>
-                              setExpenses((current) =>
-                                current.map((item) =>
-                                  item.id === expense.id
-                                    ? { ...item, amount: event.target.value }
-                                    : item,
-                                ),
-                              )
-                            }
-                            value={expense.amount}
-                          />
-                        </Field>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
+                      {/* The label stays short on screen; the number that keeps
+                          each row apart is carried in the accessible name. */}
+                      <Field label="Назва" srLabel={`витрати ${index + 1}`}>
+                        <TextInput
+                          disabled={busy || saved}
+                          onChange={(event) =>
+                            setExpenses((current) =>
+                              current.map((item) =>
+                                item.id === expense.id
+                                  ? { ...item, name: event.target.value }
+                                  : item,
+                              ),
+                            )
+                          }
+                          placeholder="Транспортування"
+                          value={expense.name}
+                        />
+                      </Field>
+                      <Field
+                        hint={index === 0 ? 'У доларах' : undefined}
+                        label="Сума"
+                        srLabel={`витрати ${index + 1}`}
+                      >
+                        <TextInput
+                          disabled={busy || saved}
+                          inputMode="decimal"
+                          onChange={(event) =>
+                            setExpenses((current) =>
+                              current.map((item) =>
+                                item.id === expense.id
+                                  ? { ...item, amount: event.target.value }
+                                  : item,
+                              ),
+                            )
+                          }
+                          placeholder="500"
+                          value={expense.amount}
+                        />
+                      </Field>
+                      <div className="flex items-center justify-end gap-2 pb-0.5">
                         {saved ? (
                           <StatusPill tone="ok">Збережено</StatusPill>
                         ) : null}
                         <Button
-                          aria-label={`Прибрати початкову витрату ${String(index + 1)}`}
-                          className="ml-auto"
+                          aria-label={`Прибрати витрату ${String(index + 1)}`}
                           disabled={busy || saved}
                           onClick={() =>
                             setExpenses((current) =>
                               current.filter((item) => item.id !== expense.id),
                             )
                           }
+                          size="icon"
                           variant="quiet"
                         >
                           <Trash2 aria-hidden />
-                          Прибрати
                         </Button>
                       </div>
                     </li>
@@ -1389,20 +1468,6 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
                 })}
               </ul>
             )}
-            <div className="flex flex-wrap">
-              <Button
-                disabled={busy}
-                onClick={() =>
-                  setExpenses((current) => [
-                    ...current,
-                    { id: Date.now(), name: '', amount: '' },
-                  ])
-                }
-              >
-                <Plus aria-hidden />
-                Додати початкову витрату
-              </Button>
-            </div>
           </SectionPanel>
         ) : null}
         <div className="border-app-line rounded-panel bg-app-raised flex flex-wrap items-center justify-end gap-2 border p-3">
@@ -1423,7 +1488,22 @@ function CarForm({ carId, title }: { carId?: string; title: string }) {
   )
 }
 
-function CarWarehouse({ base, carId }: { base: string; carId: string }) {
+/** How many parts the car page shows before handing over to the warehouse. */
+const PARTS_PREVIEW = 5
+
+/**
+ * What this car became on the shelf. The page shows the first few parts and
+ * then hands over to the warehouse filtered by this car, instead of keeping a
+ * second, poorer copy of the parts screen behind its own route.
+ */
+function CarParts({
+  carId,
+  partsHref,
+}: {
+  carId: string
+  /** The warehouse, already filtered to this car. */
+  partsHref: string
+}) {
   const [requestVersion, setRequestVersion] = useState(0)
   const [state, setState] = useState<{
     parts: Awaited<ReturnType<typeof carsApi.listParts>> | null
@@ -1432,34 +1512,60 @@ function CarWarehouse({ base, carId }: { base: string; carId: string }) {
   }>({ parts: null, problem: null, loading: true })
   useEffect(() => {
     const controller = new AbortController()
-    void carsApi.listParts(carId, {}, { signal: controller.signal }).then(
-      (parts) => {
-        if (!controller.signal.aborted)
-          setState({ parts, problem: null, loading: false })
-      },
-      (error: unknown) => {
-        if (!controller.signal.aborted)
-          setState({
-            parts: null,
-            problem: normalizeApiProblem(error).message,
-            loading: false,
-          })
-      },
-    )
+    void carsApi
+      .listParts(
+        carId,
+        { pageSize: PARTS_PREVIEW },
+        { signal: controller.signal },
+      )
+      .then(
+        (parts) => {
+          if (!controller.signal.aborted)
+            setState({ parts, problem: null, loading: false })
+        },
+        (error: unknown) => {
+          if (!controller.signal.aborted)
+            setState({
+              parts: null,
+              problem: normalizeApiProblem(error).message,
+              loading: false,
+            })
+        },
+      )
     return () => controller.abort()
   }, [carId, requestVersion])
+
   const parts = state.parts
+  const shown = parts?.items.slice(0, PARTS_PREVIEW) ?? []
+
   return (
-    <PageBody>
-      <Button asChild className="justify-self-start" variant="quiet">
-        <Link to={`${base}/${carId}`}>
-          <ChevronLeft aria-hidden />
-          До автомобіля
-        </Link>
-      </Button>
-      <PageHeader eyebrow="Склад · Автомобілі" title="Склад автомобіля" />
+    <SectionPanel
+      aside={
+        parts
+          ? `${String(parts.total)} ${plural(parts.total, ['позиція', 'позиції', 'позицій'])} з цього авто`
+          : undefined
+      }
+      footer={
+        parts && parts.total > 0 ? (
+          <>
+            <span className="text-app-dim text-[12.5px]">
+              {parts.total > shown.length
+                ? `Показано ${String(shown.length)} із ${String(parts.total)}`
+                : 'Показано всі позиції'}
+            </span>
+            <Button asChild variant="primary">
+              <Link to={partsHref}>
+                Відкрити на складі
+                <ChevronRight aria-hidden />
+              </Link>
+            </Button>
+          </>
+        ) : undefined
+      }
+      title="Запчастини авто"
+    >
       {state.loading ? (
-        <SkeletonRows columns={3} label="Завантажуємо склад…" rows={4} />
+        <SkeletonRows columns={3} label="Завантажуємо запчастини…" rows={3} />
       ) : null}
       {state.problem ? (
         <ErrorState
@@ -1468,64 +1574,50 @@ function CarWarehouse({ base, carId }: { base: string; carId: string }) {
             setState({ parts: null, problem: null, loading: true })
             setRequestVersion((current) => current + 1)
           }}
-          title="Не вдалося завантажити склад"
+          title="Не вдалося завантажити запчастини"
         />
       ) : null}
       {parts ? (
-        <>
-          <StatStrip
-            items={[
-              {
-                label: plural(parts.total, [
-                  'деталь на складі',
-                  'деталі на складі',
-                  'деталей на складі',
-                ]),
-                value: parts.total,
+        <DataTable
+          caption="Запчастини автомобіля на складі"
+          columns={[
+            {
+              key: 'name',
+              label: 'Деталь',
+              variant: 'primary',
+              cell: (part: CarPartListItem) => part.name,
+            },
+            {
+              key: 'status',
+              label: 'Статус',
+              cell: (part: CarPartListItem) => {
+                const presentation = partStatus(part.status)
+                return (
+                  <StatusPill tone={presentation.tone}>
+                    {presentation.label}
+                  </StatusPill>
+                )
               },
-            ]}
-          />
-          <DataTable
-            caption="Деталі автомобіля на складі"
-            columns={[
-              {
-                key: 'name',
-                label: 'Деталь',
-                variant: 'primary',
-                cell: (part: CarPartListItem) => part.name,
-              },
-              {
-                key: 'status',
-                label: 'Статус',
-                cell: (part: CarPartListItem) => {
-                  const presentation = partStatus(part.status)
-                  return (
-                    <StatusPill tone={presentation.tone}>
-                      {presentation.label}
-                    </StatusPill>
-                  )
-                },
-              },
-              {
-                key: 'quantity',
-                label: 'Доступно',
-                align: 'end',
-                cell: (part: CarPartListItem) => part.quantityAvailable,
-              },
-            ]}
-            empty={
-              <EmptyState
-                description="Деталі зʼявляться тут, щойно ви розберете авто й додасте запчастини на склад."
-                icon={<Wrench aria-hidden />}
-                title="Деталей цього авто ще немає"
-              />
-            }
-            rowKey={(part: CarPartListItem) => part.id}
-            rows={parts.items}
-          />
-        </>
+            },
+            {
+              key: 'quantity',
+              label: 'Доступно',
+              align: 'end',
+              cell: (part: CarPartListItem) => part.quantityAvailable,
+            },
+          ]}
+          empty={
+            <EmptyState
+              description="Деталі зʼявляться тут, щойно ви розберете авто й додасте запчастини на склад."
+              icon={<Wrench aria-hidden />}
+              title="Деталей цього авто ще немає"
+            />
+          }
+          rowKey={(part: CarPartListItem) => part.id}
+          rows={shown}
+        />
       ) : null}
-    </PageBody>
+    </SectionPanel>
   )
 }
 

@@ -130,12 +130,7 @@ const commerceDetailRoutes: RouteObject[] = [
       path,
     ),
   ),
-  ...[
-    'cars/new',
-    'cars/:carId',
-    'cars/:carId/edit',
-    'cars/:carId/warehouse',
-  ].map((path) =>
+  ...['cars/new', 'cars/:carId', 'cars/:carId/edit'].map((path) =>
     cabinetScreenRoute(
       'cars',
       async () => {

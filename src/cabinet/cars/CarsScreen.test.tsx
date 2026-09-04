@@ -314,16 +314,24 @@ it('refetches authoritative detail after an expense mutation and disables duplic
   )
 
   await screen.findByRole('heading', { name: /CAR-001/ })
-  await user.type(screen.getByLabelText('Назва витрати'), 'Транспорт')
-  await user.type(screen.getByLabelText('Сума витрати'), '500')
-  const save = screen.getByRole('button', { name: 'Додати витрату' })
+  await user.click(screen.getByRole('button', { name: 'Додати витрату' }))
+  const form = within(await screen.findByRole('dialog'))
+  await user.type(form.getByLabelText('Назва витрати'), 'Транспорт')
+  await user.type(form.getByLabelText('Сума витрати'), '500')
+  const save = form.getByRole('button', { name: 'Додати витрату' })
   await user.click(save)
   expect(save).toBeDisabled()
   await user.click(save)
   expect(carsApi.createExpense).toHaveBeenCalledTimes(1)
   resolveExpense(refreshed.expenses[0]!)
   await waitFor(() => expect(carsApi.get).toHaveBeenCalledTimes(2))
-  expect(await screen.findByText(/7\s500/)).toBeVisible()
+  // The refreshed figure is what profitability is judged by, so assert it
+  // there rather than wherever the number happens to appear first.
+  const profitability = await screen.findByRole('region', {
+    name: /Прибутковість авто/,
+  })
+  const remaining = within(profitability).getByText('Лишилось повернути')
+  expect(remaining.parentElement).toHaveTextContent(/7\s500/)
 })
 
 it('rechecks cars.view before dispatching an expense mutation', async () => {
@@ -343,10 +351,12 @@ it('rechecks cars.view before dispatching an expense mutation', async () => {
   )
 
   await screen.findByRole('heading', { name: /CAR-001/ })
-  await user.type(screen.getByLabelText('Назва витрати'), 'Транспорт')
-  await user.type(screen.getByLabelText('Сума витрати'), '500')
-  currentCabinet.snapshot.permissions.delete('cars.view')
   await user.click(screen.getByRole('button', { name: 'Додати витрату' }))
+  const form = within(await screen.findByRole('dialog'))
+  await user.type(form.getByLabelText('Назва витрати'), 'Транспорт')
+  await user.type(form.getByLabelText('Сума витрати'), '500')
+  currentCabinet.snapshot.permissions.delete('cars.view')
+  await user.click(form.getByRole('button', { name: 'Додати витрату' }))
 
   expect(carsApi.createExpense).not.toHaveBeenCalled()
 })
@@ -390,15 +400,23 @@ it('edits an expense with PUT, retains the form while pending, and refetches det
     within(transportRow).getByRole('cell', { name: /500,00\s?\$/ }),
   ).toBeVisible()
   await user.click(
-    screen.getByRole('button', { name: 'Редагувати витрату Транспорт' }),
+    within(transportRow).getByRole('button', {
+      name: 'Дії з витратою Транспорт',
+    }),
   )
-  const name = screen.getByLabelText('Назва витрати')
-  const amount = screen.getByLabelText('Сума витрати')
+  await user.click(
+    within(await screen.findByRole('menu')).getByRole('menuitem', {
+      name: 'Редагувати',
+    }),
+  )
+  const form = within(await screen.findByRole('dialog'))
+  const name = form.getByLabelText('Назва витрати')
+  const amount = form.getByLabelText('Сума витрати')
   await user.clear(name)
   await user.type(name, 'Доставка')
   await user.clear(amount)
   await user.type(amount, '750')
-  const save = screen.getByRole('button', { name: 'Зберегти витрату' })
+  const save = form.getByRole('button', { name: 'Зберегти витрату' })
   await user.click(save)
 
   expect(save).toBeDisabled()
@@ -420,7 +438,7 @@ it('edits an expense with PUT, retains the form while pending, and refetches det
   expect(screen.getByText('Разом 1 витрата')).toBeVisible()
 })
 
-it('renders car identity, gallery, VIN copy, and gates warehouse access with parts.view', async () => {
+it('renders car identity, gallery, and VIN copy', async () => {
   const user = userEvent.setup()
   const writeText = vi.fn().mockResolvedValue(undefined)
   Object.defineProperty(navigator, 'clipboard', {
@@ -439,9 +457,7 @@ it('renders car identity, gallery, VIN copy, and gates warehouse access with par
       },
     ],
   })
-  vi.mocked(useCabinet).mockReturnValue(
-    cabinet(['cars.view', 'cars.manage', 'parts.view']),
-  )
+  vi.mocked(useCabinet).mockReturnValue(cabinet(['cars.view', 'cars.manage']))
   render(
     <MemoryRouter initialEntries={['/app/demo/cars/car-1']}>
       <Routes>
@@ -455,10 +471,12 @@ it('renders car identity, gallery, VIN copy, and gates warehouse access with par
   expect(
     screen.getByAltText(/Передня частина — фото автомобіля/),
   ).toHaveAttribute('src', 'https://cdn.example/car-thumb.jpg')
+  // Without parts.view the car page keeps quiet about the warehouse instead of
+  // offering a link that would deny on arrival.
   expect(
-    screen.getByAltText(/Передня частина — фото автомобіля/).closest('a'),
-  ).toHaveAttribute('href', 'https://cdn.example/car.jpg')
-  expect(screen.getByRole('link', { name: 'Склад автомобіля' })).toBeVisible()
+    screen.queryByRole('region', { name: 'Запчастини авто' }),
+  ).not.toBeInTheDocument()
+  expect(carsApi.listParts).not.toHaveBeenCalled()
   await user.click(screen.getByRole('button', { name: 'Копіювати VIN' }))
   expect(writeText).toHaveBeenCalledWith('WBAXX11010A123456')
   expect(await screen.findByRole('status')).toHaveTextContent(
@@ -466,24 +484,47 @@ it('renders car identity, gallery, VIN copy, and gates warehouse access with par
   )
 })
 
-it('denies the warehouse route without parts.view', async () => {
-  vi.mocked(useCabinet).mockReturnValue(cabinet(['cars.view', 'cars.manage']))
+it('previews the first parts and links to the warehouse filtered by this car', async () => {
+  vi.mocked(useCabinet).mockReturnValue(
+    cabinet(['cars.view', 'cars.manage', 'parts.view']),
+  )
+  vi.mocked(carsApi.listParts).mockResolvedValue({
+    items: [
+      {
+        id: 'part-1',
+        name: 'Бампер',
+        status: 'available',
+        quantityAvailable: 1,
+      },
+    ],
+    page: 1,
+    pageSize: 5,
+    total: 12,
+    totalPages: 3,
+  })
   render(
-    <MemoryRouter initialEntries={['/app/demo/cars/car-1/warehouse']}>
+    <MemoryRouter initialEntries={['/app/demo/cars/car-1']}>
       <Routes>
-        <Route
-          path="/app/:tenant/cars/:carId/warehouse"
-          element={<CarsScreen />}
-        />
+        <Route path="/app/:tenant/cars/:carId" element={<CarsScreen />} />
       </Routes>
     </MemoryRouter>,
   )
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('Недостатньо прав')
-  expect(carsApi.listParts).not.toHaveBeenCalled()
+  const section = await screen.findByRole('region', { name: 'Запчастини авто' })
+  expect(section).toHaveTextContent('12 позицій з цього авто')
+  expect(section).toHaveTextContent('Показано 1 із 12')
+  const partRow = within(section).getByRole('row', { name: /Бампер/ })
+  expect(within(partRow).getByRole('cell', { name: 'Доступна' })).toBeVisible()
+  expect(
+    within(section).getByRole('link', { name: 'Відкрити на складі' }),
+  ).toHaveAttribute('href', '/app/demo/parts?car_ids=car-1')
+  const request = vi.mocked(carsApi.listParts).mock.calls[0]
+  expect(request?.[0]).toBe('car-1')
+  expect(request?.[1]).toEqual({ pageSize: 5 })
+  expect(request?.[2]?.signal).toBeInstanceOf(AbortSignal)
 })
 
-it('normalizes warehouse loading failures and retries without an unhandled rejection', async () => {
+it('normalizes a failed parts preview and retries without an unhandled rejection', async () => {
   const user = userEvent.setup()
   vi.mocked(useCabinet).mockReturnValue(
     cabinet(['cars.view', 'cars.manage', 'parts.view']),
@@ -503,38 +544,32 @@ it('normalizes warehouse loading failures and retries without an unhandled rejec
         },
       ],
       page: 1,
-      pageSize: 20,
+      pageSize: 5,
       total: 1,
       totalPages: 1,
     })
   render(
-    <MemoryRouter initialEntries={['/app/demo/cars/car-1/warehouse']}>
+    <MemoryRouter initialEntries={['/app/demo/cars/car-1']}>
       <Routes>
-        <Route
-          path="/app/:tenant/cars/:carId/warehouse"
-          element={<CarsScreen />}
-        />
+        <Route path="/app/:tenant/cars/:carId" element={<CarsScreen />} />
       </Routes>
     </MemoryRouter>,
   )
 
-  expect(screen.getByRole('status')).toHaveTextContent('Завантажуємо склад')
-  expect(await screen.findByRole('alert')).toHaveTextContent(
+  const section = await screen.findByRole('region', { name: 'Запчастини авто' })
+  expect(await within(section).findByRole('alert')).toHaveTextContent(
     'Склад тимчасово недоступний.',
   )
-  await user.click(screen.getByRole('button', { name: 'Спробувати ще раз' }))
+  await user.click(
+    within(section).getByRole('button', { name: 'Спробувати ще раз' }),
+  )
 
-  const partsTable = await screen.findByRole('table', {
-    name: 'Деталі автомобіля на складі',
+  const partsTable = await within(section).findByRole('table', {
+    name: 'Запчастини автомобіля на складі',
   })
   const partRow = within(partsTable).getByRole('row', { name: /Бампер/ })
-  expect(within(partRow).getByRole('cell', { name: 'Доступна' })).toBeVisible()
   expect(within(partRow).getByRole('cell', { name: '1' })).toBeVisible()
   expect(carsApi.listParts).toHaveBeenCalledTimes(2)
-  const firstRequest = vi.mocked(carsApi.listParts).mock.calls[0]
-  expect(firstRequest?.[0]).toBe('car-1')
-  expect(firstRequest?.[1]).toEqual({})
-  expect(firstRequest?.[2]?.signal).toBeInstanceOf(AbortSignal)
 })
 
 it('retains successful files when another media upload fails and reports that file', async () => {
@@ -642,19 +677,12 @@ it('retries only remaining initial expenses after partial failure without recrea
     screen.getByRole('textbox', { name: 'Ціна придбання' }),
     '12000',
   )
-  await user.click(
-    screen.getByRole('button', { name: 'Додати початкову витрату' }),
-  )
-  await user.type(
-    screen.getByLabelText('Назва початкової витрати 1'),
-    'Доставка',
-  )
-  await user.type(screen.getByLabelText('Сума початкової витрати 1'), '500')
-  await user.click(
-    screen.getByRole('button', { name: 'Додати початкову витрату' }),
-  )
-  await user.type(screen.getByLabelText('Назва початкової витрати 2'), 'Мито')
-  await user.type(screen.getByLabelText('Сума початкової витрати 2'), '250')
+  await user.click(screen.getByRole('button', { name: 'Додати витрату' }))
+  await user.type(screen.getByLabelText('Назва витрати 1'), 'Доставка')
+  await user.type(screen.getByLabelText('Сума витрати 1'), '500')
+  await user.click(screen.getByRole('button', { name: 'Додати витрату' }))
+  await user.type(screen.getByLabelText('Назва витрати 2'), 'Мито')
+  await user.type(screen.getByLabelText('Сума витрати 2'), '250')
   await user.click(screen.getByRole('button', { name: 'Створити автомобіль' }))
 
   await waitFor(() => expect(carsApi.create).toHaveBeenCalledTimes(1))
@@ -703,13 +731,8 @@ it('validates every initial expense before creating the car', async () => {
     screen.getByRole('textbox', { name: 'Ціна придбання' }),
     '12000',
   )
-  await user.click(
-    screen.getByRole('button', { name: 'Додати початкову витрату' }),
-  )
-  await user.type(
-    screen.getByLabelText('Назва початкової витрати 1'),
-    'Доставка',
-  )
+  await user.click(screen.getByRole('button', { name: 'Додати витрату' }))
+  await user.type(screen.getByLabelText('Назва витрати 1'), 'Доставка')
   await user.click(screen.getByRole('button', { name: 'Створити автомобіль' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -956,7 +979,7 @@ it('keeps destructive car actions out of the header row', async () => {
   expect(within(menu).getByRole('menuitem', { name: 'Видалити' })).toBeVisible()
 })
 
-it('names each photo slot so the yard knows what is still missing', async () => {
+it('says which shots are missing when a car has no photos yet', async () => {
   render(
     <MemoryRouter initialEntries={['/app/demo/cars/car-1']}>
       <Routes>
@@ -965,7 +988,64 @@ it('names each photo slot so the yard knows what is still missing', async () => 
     </MemoryRouter>,
   )
 
-  const gallery = await screen.findByRole('list', { name: 'Фото автомобіля' })
-  expect(within(gallery).getByText('Салон')).toBeVisible()
-  expect(within(gallery).getByText('Табличка VIN')).toBeVisible()
+  const photos = await screen.findByRole('region', { name: 'Фото' })
+  expect(photos).toHaveTextContent('Фото цього авто ще немає.')
+  expect(photos).toHaveTextContent(/передня частина, задня чверть, бік/)
+  expect(
+    within(photos).queryByRole('button', { name: /відкрити/ }),
+  ).not.toBeInTheDocument()
+})
+
+it('opens the gallery viewer and pages through the shots', async () => {
+  const user = userEvent.setup()
+  vi.mocked(carsApi.get).mockResolvedValue({
+    ...detail,
+    photos: [
+      {
+        id: 'photo-1',
+        storageKey: 'cars/photo-1',
+        url: 'https://cdn.example/front.jpg',
+        thumbnailUrl: 'https://cdn.example/front-thumb.jpg',
+        sortOrder: 0,
+      },
+      {
+        id: 'photo-2',
+        storageKey: 'cars/photo-2',
+        url: 'https://cdn.example/rear.jpg',
+        thumbnailUrl: 'https://cdn.example/rear-thumb.jpg',
+        sortOrder: 1,
+      },
+    ],
+  })
+  render(
+    <MemoryRouter initialEntries={['/app/demo/cars/car-1']}>
+      <Routes>
+        <Route path="/app/:tenant/cars/:carId" element={<CarsScreen />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  await user.click(
+    await screen.findByRole('button', {
+      name: 'Передня частина — фото автомобіля CAR-001 — відкрити',
+    }),
+  )
+  const viewer = await screen.findByRole('dialog')
+  expect(
+    within(viewer).getByAltText('Передня частина — фото автомобіля CAR-001'),
+  ).toHaveAttribute('src', 'https://cdn.example/front.jpg')
+  expect(viewer).toHaveTextContent('1 з 2')
+
+  await user.click(
+    within(viewer).getByRole('button', { name: 'Наступне фото' }),
+  )
+  expect(
+    within(viewer).getByAltText('Задня чверть — фото автомобіля CAR-001'),
+  ).toHaveAttribute('src', 'https://cdn.example/rear.jpg')
+  expect(viewer).toHaveTextContent('2 з 2')
+
+  await user.click(within(viewer).getByRole('button', { name: 'Закрити фото' }))
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+  )
 })

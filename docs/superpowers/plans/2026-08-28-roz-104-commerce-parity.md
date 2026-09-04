@@ -31,7 +31,7 @@
 - Integrator modifies: `src/routes/routes.tsx`, `src/routes/routes.test.tsx`, `src/cabinet/module-registry.ts`, `src/cabinet/module-registry.test.ts`
 
 **Interfaces:**
-- Stable routes: `/app/:tenant/cars`, `/app/:tenant/cars/new`, `/app/:tenant/cars/:carId`, `/app/:tenant/cars/:carId/edit`, `/app/:tenant/cars/:carId/warehouse`.
+- Stable routes: `/app/:tenant/cars`, `/app/:tenant/cars/new`, `/app/:tenant/cars/:carId`, `/app/:tenant/cars/:carId/edit`. Parts of a car are read on the car page and opened in `/app/:tenant/parts?car_ids=:carId`.
 - Query state preserves server-side search, filters, and pagination in the URL.
 - Car mutations send only OpenAPI-defined fields; expense and ROI displays consume authoritative server fields.
 

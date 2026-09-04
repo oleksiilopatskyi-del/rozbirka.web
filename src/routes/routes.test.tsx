@@ -93,7 +93,6 @@ describe('production route boundary', () => {
     ['cars/new', 'CarsScreen'],
     ['cars/:carId', 'CarsScreen'],
     ['cars/:carId/edit', 'CarsScreen'],
-    ['cars/:carId/warehouse', 'CarsScreen'],
     ['intakes', 'IntakesScreen'],
     ['intakes/new', 'IntakesScreen'],
     ['intakes/batch', 'IntakesScreen'],
