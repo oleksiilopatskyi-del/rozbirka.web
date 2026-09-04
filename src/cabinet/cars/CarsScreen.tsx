@@ -24,7 +24,7 @@ import {
   Wallet,
   Wrench,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, plural } from '@/lib/utils'
 import {
   ActionMenu,
   Amount,
@@ -119,14 +119,6 @@ const day = (value: string) => {
   return Number.isNaN(parsed.getTime())
     ? value
     : new Intl.DateTimeFormat('uk-UA', { dateStyle: 'medium' }).format(parsed)
-}
-/** Ukrainian counts take three forms: 1 деталь, 2 деталі, 5 деталей. */
-const plural = (count: number, forms: [string, string, string]) => {
-  const rest = Math.abs(count) % 100
-  if (rest >= 11 && rest <= 14) return forms[2]
-  if (rest % 10 === 1) return forms[0]
-  if (rest % 10 >= 2 && rest % 10 <= 4) return forms[1]
-  return forms[2]
 }
 const partStatus = (status: string): { label: string; tone: StatusTone } => {
   if (status === 'available') return { label: 'Доступна', tone: 'ok' }

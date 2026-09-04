@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import {
   MemoryRouter,
   Route,
@@ -384,6 +385,28 @@ it('loads only the source selector that becomes relevant', async () => {
 })
 
 it('shows server-authoritative compatibility as read-only when mutation is absent from the contract', async () => {
+  partMocks.get.mockResolvedValue({
+    id: 'part-1',
+    name: 'Bumper',
+    condition: 'used',
+    status: 'available',
+    source: 'free',
+    quantityTotal: 1,
+    quantityAvailable: 1,
+    quantityReserved: 0,
+    quantitySoldTotal: 0,
+    compatCarBrand: 'Ford',
+    compatCarModel: 'Focus',
+    compatCarYear: 2018,
+    oemCode: null,
+    effectiveSalePrice: null,
+    photos: [],
+    reservations: null,
+    order: null,
+    soldOrders: null,
+    createdByName: 'Olena',
+    createdAt: '2026-08-28T12:00:00Z',
+  })
   render(
     <MemoryRouter initialEntries={['/app/yard/parts/part-1']}>
       <Routes>
@@ -395,9 +418,8 @@ it('shows server-authoritative compatibility as read-only when mutation is absen
     </MemoryRouter>,
   )
 
-  expect(
-    await screen.findByRole('heading', { name: 'Деталь' }),
-  ).toBeInTheDocument()
+  expect(await screen.findByText('Ford Focus 2018')).toBeInTheDocument()
+  // The note belongs beside the value it explains, not adrift at the page foot.
   expect(
     screen.getByText('Сумісність недоступна для редагування'),
   ).toBeInTheDocument()
@@ -895,10 +917,8 @@ it('uses opaque media labels and never renders storage keys', async () => {
     </MemoryRouter>,
   )
 
-  expect(await screen.findByRole('link', { name: 'Фото 1' })).toHaveAttribute(
-    'href',
-    'https://cdn.example/photo.jpg',
-  )
+  const photo = await screen.findByAltText('Фото деталі Bumper 1')
+  expect(photo).toHaveAttribute('src', 'https://cdn.example/photo.jpg')
   expect(screen.queryByText(/tenant-secret/)).not.toBeInTheDocument()
 })
 
@@ -915,7 +935,11 @@ it('confirms deletion, prevents duplicates, and reports a server conflict', asyn
     </MemoryRouter>,
   )
   await screen.findByRole('heading', { name: 'Деталь' })
-  fireEvent.click(screen.getByRole('button', { name: 'Видалити деталь' }))
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Інші дії з деталлю' }))
+  await user.click(
+    await screen.findByRole('menuitem', { name: 'Видалити деталь' }),
+  )
   const confirmDelete = await screen.findByRole('button', { name: 'Видалити' })
   fireEvent.click(confirmDelete)
   fireEvent.click(confirmDelete)
@@ -1045,8 +1069,12 @@ it('applies the parts quota only to create, not edit or delete', async () => {
       </Routes>
     </MemoryRouter>,
   )
-  fireEvent.click(
-    await screen.findByRole('button', { name: 'Видалити деталь' }),
+  const user = userEvent.setup()
+  await user.click(
+    await screen.findByRole('button', { name: 'Інші дії з деталлю' }),
+  )
+  await user.click(
+    await screen.findByRole('menuitem', { name: 'Видалити деталь' }),
   )
   fireEvent.click(await screen.findByRole('button', { name: 'Видалити' }))
   await vi.waitFor(() =>
@@ -1135,11 +1163,23 @@ it('renders the immutable detail and history contract with permission-aware link
     </MemoryRouter>,
   )
 
-  expect(await screen.findByText('Нотатки: Small scratch')).toBeInTheDocument()
-  expect(screen.getByText(/Усього:/)).toHaveTextContent(
-    'Усього: 4; доступно: 1; у резерві: 1; продано: 2',
+  expect(await screen.findByText('Small scratch')).toBeInTheDocument()
+  const stock = screen.getByRole('region', { name: 'Наявність' })
+  expect(stock).toHaveTextContent('Усього 4 шт')
+  expect(within(stock).getByText('Доступно').parentElement).toHaveTextContent(
+    '1',
   )
-  expect(screen.getByText(/Створила\/в: Olena/)).toBeInTheDocument()
+  expect(within(stock).getByText('У резерві').parentElement).toHaveTextContent(
+    '1',
+  )
+  expect(within(stock).getByText('Продано').parentElement).toHaveTextContent(
+    '2',
+  )
+  // Who created the part, in the facts rather than in a run-on sentence.
+  const createdFact = screen
+    .getAllByRole('term')
+    .find((term) => term.textContent === 'Створено')
+  expect(createdFact?.parentElement).toHaveTextContent('Olena')
   expect(screen.getByRole('link', { name: 'CAR-01' })).toHaveAttribute(
     'href',
     '/app/yard/cars/car-1',
@@ -1153,7 +1193,11 @@ it('renders the immutable detail and history contract with permission-aware link
   expect(
     screen.getAllByRole('link', { name: /Замовлення 42/ }),
   ).not.toHaveLength(0)
-  expect(screen.getByText(/created · initial · Olena/)).toBeInTheDocument()
+  const historySection = screen.getByRole('region', { name: 'Історія' })
+  const created = within(historySection).getByRole('listitem')
+  expect(created).toHaveTextContent('Створено')
+  expect(created).toHaveTextContent('initial')
+  expect(created).toHaveTextContent('Olena')
 })
 
 it('ignores an aborted stale list failure after filters change', async () => {

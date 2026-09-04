@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Link,
   useLocation,
@@ -6,11 +6,19 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router'
-import { ExternalLink, Plus } from 'lucide-react'
+import { ChevronLeft, ExternalLink, Plus, Trash2 } from 'lucide-react'
 import {
+  ActionMenu,
   ActiveFilters,
+  Amount,
+  DateValue,
+  FactRows,
   FileField,
+  Gallery,
+  Panel,
+  Quantity,
   SectionPanel,
+  SkeletonRows,
   Button,
   ConfirmDialog,
   DataTable,
@@ -30,6 +38,7 @@ import {
   Toolbar,
   type StatusTone,
 } from '@/components/app'
+import { cn, plural } from '@/lib/utils'
 import {
   partsApi,
   type CreatePartRequest,
@@ -656,6 +665,145 @@ export function PartsScreen({ definition }: CabinetModuleScreenProps) {
   )
 }
 
+/**
+ * Parts are priced in dollars, like the cars they are pulled off: the contract
+ * sends bare numbers, so the currency is stated here until it carries one.
+ */
+const PART_CURRENCY = 'USD'
+
+const conditionLabel = (value: string) =>
+  ({
+    new: 'Нова',
+    used: 'Вживана',
+    refurbished: 'Відновлена',
+    damaged: 'Пошкоджена',
+  })[value] ?? value
+
+const sourceLabel = (value: string) =>
+  ({ car: 'Авто', batch: 'Приймання', free: 'Без джерела' })[value] ?? value
+
+/** Server event names, said the way a person would say them out loud. */
+const historyLabel = (value: string) =>
+  ({
+    created: 'Створено',
+    updated: 'Змінено',
+    reserved: 'Зарезервовано',
+    released: 'Резерв знято',
+    sold: 'Продано',
+    returned: 'Повернено',
+    moved: 'Переміщено',
+    deleted: 'Видалено',
+  })[value] ?? value
+
+/**
+ * What a quantity is made of: free stock, stock promised to an order, and what
+ * has already left. One number for the total hides the only question worth
+ * asking — how much of it can still be sold.
+ */
+function QuantitySplit({
+  available,
+  reserved,
+  sold,
+  unit,
+}: {
+  available: number
+  reserved: number
+  sold: number
+  unit: string | null
+}) {
+  const segments = [
+    {
+      key: 'available',
+      label: 'Доступно',
+      value: available,
+      fill: 'bg-state-ok',
+    },
+    {
+      key: 'reserved',
+      label: 'У резерві',
+      value: reserved,
+      fill: 'bg-state-warn',
+    },
+    { key: 'sold', label: 'Продано', value: sold, fill: 'bg-app-line-2' },
+  ]
+  const scale = segments.reduce((sum, segment) => sum + segment.value, 0)
+
+  return (
+    <div className="grid gap-3">
+      {scale > 0 ? (
+        /* Decoration: the figures below carry the same split in text. */
+        <span
+          aria-hidden
+          className="bg-app-input flex h-2 w-full overflow-hidden rounded-full"
+        >
+          {segments.map((segment) =>
+            segment.value > 0 ? (
+              <span
+                className={cn('block h-full', segment.fill)}
+                key={segment.key}
+                style={{ width: `${String((segment.value / scale) * 100)}%` }}
+              />
+            ) : null,
+          )}
+        </span>
+      ) : null}
+      <dl className="grid grid-cols-3 gap-3">
+        {segments.map((segment) => (
+          <div className="grid gap-1" key={segment.key}>
+            <dt className="text-app-dim flex items-center gap-1.5 font-mono text-[10.5px] tracking-[0.08em] uppercase">
+              <span
+                aria-hidden
+                className={cn('size-1.5 rounded-full', segment.fill)}
+              />
+              {segment.label}
+            </dt>
+            <dd className="text-[22px] leading-none font-light tracking-[-0.02em] text-white">
+              <Quantity unit={unit} value={segment.value} />
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
+/** One order this part is promised to or was sold through. */
+function OrderRow({
+  number,
+  href,
+  detail,
+  aside,
+}: {
+  number: number
+  href: string | null
+  detail: ReactNode
+  aside?: ReactNode
+}) {
+  const label = `Замовлення ${String(number)}`
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5">
+      <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+        {href === null ? (
+          <span className="text-sm font-medium text-white">{label}</span>
+        ) : (
+          <Link
+            className="hover:text-brand text-sm font-medium text-white"
+            to={href}
+          >
+            {label}
+          </Link>
+        )}
+        <span className="text-app-dim text-[12.5px]">{detail}</span>
+      </span>
+      {aside === undefined ? null : (
+        <span className="text-app-muted text-[12.5px] tabular-nums">
+          {aside}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function PartDetailScreen({
   detail,
   history,
@@ -714,193 +862,364 @@ function PartDetailScreen({
       setDeleting(false)
     }
   }
+
+  const base = `/app/${tenantSlug}/parts`
+  const orderHref = (id: string) =>
+    links.orders ? `/app/${tenantSlug}/orders/${id}` : null
+  const compat = detail
+    ? [detail.compatCarBrand, detail.compatCarModel, detail.compatCarYear]
+        .filter(Boolean)
+        .join(' ')
+    : ''
+  const reservations = detail?.reservations ?? []
+  const soldOrders = detail?.soldOrders ?? []
+  const soldRevenue = soldOrders.reduce(
+    (sum, order) => sum + order.quantitySold * order.unitPrice,
+    0,
+  )
+
   return (
-    <PageBody width="narrow">
-      <PageHeader
-        eyebrow="Склад · Деталі"
-        title={detail === null ? 'Деталь' : detail.name}
-      />
+    <PageBody className="max-w-6xl">
+      <Button asChild className="justify-self-start" variant="quiet">
+        <Link to={base}>
+          <ChevronLeft aria-hidden />
+          До складу
+        </Link>
+      </Button>
+      <div className="grid gap-2">
+        {detail ? (
+          <StatusPill tone={statusPresentation(detail.status).tone}>
+            {statusPresentation(detail.status).label}
+          </StatusPill>
+        ) : null}
+        <PageHeader
+          actions={
+            <>
+              {links.inventory ? (
+                <Button asChild>
+                  <Link to={`${base}/${partId}/inventory`}>
+                    Розміщення на складі
+                  </Link>
+                </Button>
+              ) : null}
+              {canManage ? (
+                <>
+                  <Button asChild variant="primary">
+                    <Link to={`${base}/${partId}/edit`}>Редагувати деталь</Link>
+                  </Button>
+                  <ActionMenu
+                    actions={[
+                      {
+                        key: 'delete',
+                        label: 'Видалити деталь',
+                        icon: <Trash2 aria-hidden className="size-4" />,
+                        destructive: true,
+                        disabled: deleting,
+                        onSelect: () => setConfirmingDelete(true),
+                      },
+                    ]}
+                    label="Інші дії з деталлю"
+                  />
+                </>
+              ) : null}
+            </>
+          }
+          eyebrow="Склад · Деталі"
+          title={detail === null ? 'Деталь' : detail.name}
+        />
+        {detail === null ? null : (
+          /* What the part is, in the words someone would use to ask for it. */
+          <p className="text-app-dim text-[12.5px]">
+            {[
+              detail.oemCode ? `OEM ${detail.oemCode}` : null,
+              compat || null,
+              conditionLabel(detail.condition),
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        )}
+      </div>
+
+      {deleteError !== null && !confirmingDelete ? (
+        <Notice tone="danger">{deleteError}</Notice>
+      ) : null}
+
       {error ? (
         <ErrorState
           description="Деталь не вдалося завантажити. Спробуйте ще раз."
           title="Не вдалося завантажити деталь"
         />
-      ) : detail ? (
+      ) : detail === null ? (
+        <SkeletonRows columns={2} label="Завантажуємо деталь…" rows={4} />
+      ) : (
         <>
-          <div className="flex flex-wrap items-center gap-3">
-            <StatusPill tone={statusPresentation(detail.status).tone}>
-              {statusPresentation(detail.status).label}
-            </StatusPill>
-            <p className="text-app-muted text-sm tabular-nums">
-              Усього: {detail.quantityTotal}; доступно:{' '}
-              {detail.quantityAvailable}; у резерві: {detail.quantityReserved};
-              продано: {detail.quantitySoldTotal}
-            </p>
-          </div>
-          <p className="text-app-dim text-sm">
-            Сумісність:{' '}
-            {[
-              detail.compatCarBrand,
-              detail.compatCarModel,
-              detail.compatCarYear,
-            ]
-              .filter(Boolean)
-              .join(' ') || 'не вказано'}
-          </p>
-          <dl className="border-app-line rounded-panel bg-app-raised text-app-muted grid gap-1.5 border p-4 text-sm">
-            <div>OEM: {detail.oemCode ?? '—'}</div>
-            <div>Стан: {detail.condition}</div>
-            <div>Статус: {detail.status}</div>
-            <div>Ціна: {detail.effectiveSalePrice ?? '—'}</div>
-            <div>Нотатки: {detail.notes ?? '—'}</div>
-            <div>
-              Створила/в: {detail.createdByName} · {detail.createdAt}
-            </div>
-            <div>
-              Джерело:{' '}
-              {detail.carId && detail.carCode && links.cars ? (
-                <Link to={`/app/${tenantSlug}/cars/${detail.carId}`}>
-                  {detail.carCode}
-                </Link>
-              ) : detail.intakeId && links.intakes ? (
-                <Link to={`/app/${tenantSlug}/intakes/${detail.intakeId}`}>
-                  Приймання
-                </Link>
-              ) : (
-                (detail.carCode ??
-                (detail.source === 'batch' ? 'Приймання' : detail.source))
-              )}
-            </div>
-          </dl>
-          {detail.photos.length ? (
-            <ul aria-label="Фото деталі">
-              {detail.photos.map((photo, index) => (
-                <li key={photo.id}>
-                  <a href={photo.url}>Фото {index + 1}</a>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>Фото відсутні.</p>
-          )}
-          {detail.reservations?.length ? (
-            <section>
-              <h2>Резервування</h2>
-              <ul>
-                {detail.reservations.map((reservation) => (
-                  <li key={reservation.orderId}>
-                    {links.orders ? (
-                      <Link
-                        to={`/app/${tenantSlug}/orders/${reservation.orderId}`}
-                      >
-                        Замовлення {reservation.orderNumber}
-                      </Link>
-                    ) : (
-                      <>Замовлення {reservation.orderNumber}</>
-                    )}
-                    : {reservation.quantity}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-          {detail.order ? (
-            <p>
-              Поточне замовлення:{' '}
-              {links.orders ? (
-                <Link to={`/app/${tenantSlug}/orders/${detail.order.id}`}>
-                  {detail.order.number}
-                </Link>
-              ) : (
-                detail.order.number
-              )}
-            </p>
-          ) : null}
-          {detail.soldOrders?.length ? (
-            <section>
-              <h2>Продажі</h2>
-              <ul>
-                {detail.soldOrders.map((order) => (
-                  <li key={order.orderId}>
-                    {links.orders ? (
-                      <Link to={`/app/${tenantSlug}/orders/${order.orderId}`}>
-                        Замовлення {order.orderNumber}
-                      </Link>
-                    ) : (
-                      <>Замовлення {order.orderNumber}</>
-                    )}
-                    : {order.quantitySold} × {order.unitPrice}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-          {history ? (
-            <section>
-              <h2>Історія</h2>
-              <ul>
-                {history.events.map((event) => (
-                  <li key={event.id}>
-                    {event.eventType} · {event.data ?? '—'} · {event.user.name}{' '}
-                    · {event.createdAt}
-                    {event.order ? (
-                      <>
-                        {' · '}
-                        {links.orders ? (
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            <div className="grid gap-4">
+              <Panel>
+                <FactRows
+                  rows={[
+                    { label: 'OEM', value: detail.oemCode ?? '—' },
+                    { label: 'Тип', value: detail.partType ?? '—' },
+                    { label: 'Стан', value: conditionLabel(detail.condition) },
+                    {
+                      label: 'Сумісність',
+                      value: compat || 'не вказано',
+                      action: (
+                        <span className="text-app-dim text-[11.5px]">
+                          Сумісність недоступна для редагування
+                        </span>
+                      ),
+                    },
+                    {
+                      label: 'Джерело',
+                      value:
+                        detail.carId && detail.carCode && links.cars ? (
                           <Link
-                            to={`/app/${tenantSlug}/orders/${event.order.id}`}
+                            className="hover:text-brand"
+                            to={`/app/${tenantSlug}/cars/${detail.carId}`}
                           >
-                            Замовлення {event.order.number}
+                            {detail.carCode}
+                          </Link>
+                        ) : detail.intakeId && links.intakes ? (
+                          <Link
+                            className="hover:text-brand"
+                            to={`/app/${tenantSlug}/intakes/${detail.intakeId}`}
+                          >
+                            Приймання
                           </Link>
                         ) : (
-                          <>Замовлення {event.order.number}</>
-                        )}
-                      </>
+                          (detail.carCode ?? sourceLabel(detail.source))
+                        ),
+                    },
+                    {
+                      label: 'QR-код',
+                      value: (
+                        <span className="font-mono break-all">
+                          {detail.qrCode || '—'}
+                        </span>
+                      ),
+                    },
+                    { label: 'Нотатки', value: detail.notes ?? '—' },
+                    {
+                      label: 'Створено',
+                      value: (
+                        <span className="flex flex-wrap items-baseline gap-x-2">
+                          {detail.createdByName}
+                          <DateValue
+                            className="text-app-dim text-[12.5px]"
+                            value={detail.createdAt}
+                          />
+                        </span>
+                      ),
+                    },
+                  ]}
+                />
+              </Panel>
+
+              {detail.order || reservations.length > 0 ? (
+                <SectionPanel
+                  description="Скільки цієї деталі вже обіцяно покупцям."
+                  title="Резерви"
+                >
+                  <div className="grid divide-y divide-[color:var(--color-app-line)]">
+                    {detail.order ? (
+                      <OrderRow
+                        aside="поточне замовлення"
+                        detail={
+                          <>
+                            {detail.order.customerName ?? 'без клієнта'} ·{' '}
+                            {detail.order.status}
+                          </>
+                        }
+                        href={orderHref(detail.order.id)}
+                        number={detail.order.number}
+                      />
                     ) : null}
+                    {reservations.map((reservation) => (
+                      <OrderRow
+                        aside={
+                          <Quantity
+                            unit={detail.unit || null}
+                            value={reservation.quantity}
+                          />
+                        }
+                        detail={reservation.customerName ?? 'без клієнта'}
+                        href={orderHref(reservation.orderId)}
+                        key={reservation.orderId}
+                        number={reservation.orderNumber}
+                      />
+                    ))}
+                  </div>
+                </SectionPanel>
+              ) : null}
+
+              {soldOrders.length > 0 ? (
+                <SectionPanel
+                  aside={
+                    <>
+                      Виручка{' '}
+                      <Amount currency={PART_CURRENCY} value={soldRevenue} />
+                    </>
+                  }
+                  title="Продажі"
+                >
+                  <div className="grid divide-y divide-[color:var(--color-app-line)]">
+                    {soldOrders.map((order) => (
+                      <OrderRow
+                        aside={
+                          <>
+                            {order.quantitySold} ×{' '}
+                            <Amount
+                              currency={PART_CURRENCY}
+                              value={order.unitPrice}
+                            />
+                          </>
+                        }
+                        detail={
+                          <>
+                            {order.customerName ?? 'без клієнта'}
+                            {order.confirmedAt ? (
+                              <>
+                                {' · '}
+                                <DateValue
+                                  value={order.confirmedAt}
+                                  withTime={false}
+                                />
+                              </>
+                            ) : null}
+                          </>
+                        }
+                        href={orderHref(order.orderId)}
+                        key={order.orderId}
+                        number={order.orderNumber}
+                      />
+                    ))}
+                  </div>
+                </SectionPanel>
+              ) : null}
+            </div>
+            <div className="grid gap-4">
+              <SectionPanel
+                aside={`Усього ${String(detail.quantityTotal)} ${detail.unit || 'шт'}`}
+                title="Наявність"
+              >
+                <QuantitySplit
+                  available={detail.quantityAvailable}
+                  reserved={detail.quantityReserved}
+                  sold={detail.quantitySoldTotal}
+                  unit={detail.unit || null}
+                />
+                <div className="border-app-line flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t pt-3">
+                  <span className="text-app-muted text-[12.5px]">
+                    Ціна продажу
+                  </span>
+                  <span className="grid justify-items-end gap-0.5">
+                    <Amount
+                      className="text-[17px] font-semibold text-white"
+                      currency={PART_CURRENCY}
+                      fallback="ціни ще немає"
+                      value={detail.effectiveSalePrice}
+                    />
+                    {detail.desiredSalePrice !== null &&
+                    detail.desiredSalePrice !== detail.effectiveSalePrice ? (
+                      <span className="text-app-dim text-[11.5px]">
+                        бажана{' '}
+                        <Amount
+                          currency={PART_CURRENCY}
+                          value={detail.desiredSalePrice}
+                        />
+                      </span>
+                    ) : null}
+                  </span>
+                </div>
+              </SectionPanel>
+
+              <SectionPanel
+                aside={`${String(detail.photos.length)} ${plural(detail.photos.length, ['знімок', 'знімки', 'знімків'])}`}
+                title="Фото"
+              >
+                <Gallery
+                  emptyLabel="Фото цієї деталі ще немає — їх додають під час редагування."
+                  label={`Фото деталі ${detail.name}`}
+                  photos={detail.photos.map((photo, index) => ({
+                    id: photo.id,
+                    url: photo.url,
+                    ...(photo.thumbnailUrl
+                      ? { thumbnailUrl: photo.thumbnailUrl }
+                      : {}),
+                    alt: `Фото деталі ${detail.name} ${String(index + 1)}`,
+                  }))}
+                />
+              </SectionPanel>
+            </div>
+          </div>
+
+          <SectionPanel
+            description="Кожна зміна кількості, ціни й розміщення, у порядку від найновішої."
+            title="Історія"
+          >
+            {history === null ? (
+              <SkeletonRows
+                columns={1}
+                label="Завантажуємо історію…"
+                rows={3}
+              />
+            ) : history.events.length === 0 ? (
+              <p className="text-app-dim text-[12.5px]">
+                Подій ще немає — вони зʼявляться після першої зміни.
+              </p>
+            ) : (
+              <ol className="grid">
+                {history.events.map((event, index) => (
+                  <li
+                    className={cn(
+                      'flex flex-wrap items-baseline gap-x-4 gap-y-1 py-2.5',
+                      index > 0 && 'border-app-line border-t',
+                    )}
+                    key={event.id}
+                  >
+                    <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <span className="text-sm font-medium text-white">
+                        {historyLabel(event.eventType)}
+                      </span>
+                      {event.data ? (
+                        <span className="text-app-muted text-[12.5px] break-words">
+                          {event.data}
+                        </span>
+                      ) : null}
+                      {event.order ? (
+                        <span className="text-[12.5px]">
+                          {links.orders ? (
+                            <Link
+                              className="hover:text-brand text-app-muted"
+                              to={`/app/${tenantSlug}/orders/${event.order.id}`}
+                            >
+                              Замовлення {event.order.number}
+                            </Link>
+                          ) : (
+                            <span className="text-app-muted">
+                              Замовлення {event.order.number}
+                            </span>
+                          )}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="text-app-dim flex flex-wrap items-baseline gap-x-2 text-[11.5px]">
+                      {event.user.name}
+                      <DateValue value={event.createdAt} />
+                    </span>
                   </li>
                 ))}
-              </ul>
-            </section>
-          ) : null}
+              </ol>
+            )}
+          </SectionPanel>
         </>
-      ) : (
-        <p className="text-app-dim text-sm" role="status">
-          Завантажуємо серверний стан…
-        </p>
       )}
-      <p className="text-app-dim text-[12.5px]">
-        Сумісність недоступна для редагування
-      </p>
-      <p className="text-app-dim text-[12.5px]">
-        Видалення деталі перевіряється сервером.
-      </p>
-      {canManage ? (
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="primary">
-            <Link to={`/app/${tenantSlug}/parts/${partId}/edit`}>
-              Редагувати деталь
-            </Link>
-          </Button>
-          <Button
-            aria-busy={deleting}
-            disabled={deleting}
-            onClick={() => setConfirmingDelete(true)}
-            variant="danger"
-          >
-            Видалити деталь
-          </Button>
-        </div>
-      ) : null}
-      {links.inventory ? (
-        <Button asChild variant="ghost">
-          <Link to={`/app/${tenantSlug}/parts/${partId}/inventory`}>
-            Розміщення на складі
-          </Link>
-        </Button>
-      ) : null}
+
       <ConfirmDialog
         confirmLabel="Видалити"
-        consequence="Історія продажів, резерви та фото цієї деталі зникнуть назавжди."
+        consequence="Історія продажів, резерви та фото цієї деталі зникнуть назавжди. Сервер відхилить видалення, якщо деталь уже в замовленні."
         error={deleteError}
         onConfirm={() => void remove()}
         onOpenChange={setConfirmingDelete}
@@ -908,9 +1227,6 @@ function PartDetailScreen({
         pending={deleting}
         title="Видалити деталь?"
       />
-      {deleteError !== null && !confirmingDelete ? (
-        <Notice tone="danger">{deleteError}</Notice>
-      ) : null}
     </PageBody>
   )
 }
