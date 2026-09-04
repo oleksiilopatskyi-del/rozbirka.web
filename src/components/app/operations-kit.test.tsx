@@ -9,7 +9,7 @@ import { FormDialog, Sheet } from './form-dialog'
 import { TextInput } from './input'
 import { Meter } from './meter'
 import { RecordIdentity } from './identity'
-import { PhotoGrid, RecordCard } from './photo'
+import { Gallery, PhotoGrid, RecordCard } from './photo'
 import { SectionPanel } from './section-panel'
 import { Segmented } from './segmented'
 import { StepPanel, Stepper, type Step } from './stepper'
@@ -123,6 +123,53 @@ it('opens a photo full size and says which one of how many', async () => {
   const dialog = screen.getByRole('dialog', { name: 'Фото деталі' })
   expect(within(dialog).getByRole('img')).toHaveAttribute('src', '/one.jpg')
   expect(within(dialog).getByText(/1 з 2/)).toBeVisible()
+})
+
+it('pages the viewer with on-screen controls, not only the keyboard', async () => {
+  const user = userEvent.setup()
+  render(<Gallery label="Фото деталі" photos={photos} />)
+
+  await user.click(
+    screen.getByRole('button', { name: 'Бампер спереду — відкрити' }),
+  )
+  const viewer = screen.getByRole('dialog', { name: 'Фото деталі' })
+  expect(within(viewer).getByText(/1 з 2/)).toBeVisible()
+
+  // A viewer that only answers to arrow keys is unusable on a phone.
+  await user.click(
+    within(viewer).getByRole('button', { name: 'Наступне фото' }),
+  )
+  expect(within(viewer).getByText(/2 з 2/)).toBeVisible()
+
+  // Past the last photo it wraps rather than dead-ending.
+  await user.click(
+    within(viewer).getByRole('button', { name: 'Наступне фото' }),
+  )
+  expect(within(viewer).getByText(/1 з 2/)).toBeVisible()
+})
+
+it('leads with a cover photo and keeps the rest reachable', async () => {
+  const user = userEvent.setup()
+  render(<Gallery label="Фото деталі" photos={photos} />)
+
+  await user.click(
+    screen.getByRole('button', { name: 'Фото деталі 2 — відкрити' }),
+  )
+  const viewer = screen.getByRole('dialog', { name: 'Фото деталі' })
+  expect(within(viewer).getByText(/2 з 2/)).toBeVisible()
+})
+
+it('says a gallery is empty in the caller\u2019s own words', () => {
+  render(
+    <Gallery
+      emptyLabel="Фото цього авто ще немає."
+      label="Фото деталі"
+      photos={[]}
+    />,
+  )
+
+  expect(screen.getByText('Фото цього авто ще немає.')).toBeVisible()
+  expect(screen.queryByRole('button')).not.toBeInTheDocument()
 })
 
 it('says a record has no photos instead of rendering an empty strip', () => {
@@ -454,12 +501,15 @@ it('reads a figure against the limit that gives it meaning', () => {
     screen.getByRole('progressbar', { name: 'Повернено від вкладеного' }),
   ).toHaveAttribute('aria-valuenow', '42')
 
-  // Over full recovery the bar stops at the limit while the figure stays true.
+  // Past the limit the track rescales, so the limit keeps a readable position
+  // and the excess is drawn to scale rather than collapsing into a full bar.
   const over = screen.getByRole('progressbar', {
     name: 'Повернено від вкладеного в A-104',
   })
   expect(over).toHaveAttribute('aria-valuenow', '153')
-  expect(over.firstElementChild).toHaveStyle({ width: '100%' })
+  const [upToLimit, , beyond] = [...(over.firstElementChild?.children ?? [])]
+  expect(upToLimit).toHaveStyle({ width: `${String((100 / 153) * 100)}%` })
+  expect(beyond).toHaveStyle({ width: `${String((53 / 153) * 100)}%` })
 
   // Nothing to measure yet says so instead of drawing an empty bar.
   expect(screen.getByText('немає продажів')).toBeVisible()

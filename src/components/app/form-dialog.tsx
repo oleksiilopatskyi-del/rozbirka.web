@@ -90,6 +90,7 @@ export function FormDialog({
           </header>
 
           <form
+            aria-busy={pending}
             className="grid min-h-0 grid-rows-[1fr_auto]"
             onSubmit={onSubmit}
           >

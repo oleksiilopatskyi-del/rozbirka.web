@@ -40,7 +40,8 @@ export function Meter({
   max: number | null | undefined
   /** Names the measure for assistive technology, e.g. "Повернено від вкладеного". */
   label: string
-  /** The figure as the user should read it — money, a count. */
+  /** The figure as the user should read it — money, a count. `null` when the
+   * row above the bar already states it. */
   valueLabel: ReactNode
   /** Secondary line under the figure; the percentage by default. */
   hint?: ReactNode
@@ -70,11 +71,18 @@ export function Meter({
   }
 
   const percent = Math.round((value / max) * 100)
-  const filled = Math.max(0, Math.min(percent, 100))
+  // Past the limit the track stops being 0..100: it becomes 0..percent, so the
+  // limit itself keeps a visible position and the excess is drawn to scale
+  // beyond it. Capping instead would show 153% and 101% as the same full bar.
+  const scale = Math.max(percent, 100)
+  const filled = Math.max(0, Math.min(percent, 100)) * (100 / scale)
+  const excess = Math.max(0, percent - 100) * (100 / scale)
 
   return (
     <div className={cn('grid justify-items-end gap-1.5', className)}>
-      <span className="text-sm tabular-nums text-white">{valueLabel}</span>
+      {valueLabel === null || valueLabel === undefined ? null : (
+        <span className="text-sm tabular-nums text-white">{valueLabel}</span>
+      )}
       <span
         aria-label={label}
         aria-valuemax={100}
@@ -84,10 +92,22 @@ export function Meter({
         className="bg-app-line-2 block h-1.5 w-full max-w-36 overflow-hidden rounded-full"
         role="progressbar"
       >
-        <span
-          className={cn('block h-full rounded-full', fillTone[tone])}
-          style={{ width: `${String(filled)}%` }}
-        />
+        <span className="flex h-full">
+          <span
+            className={cn('block h-full', fillTone[tone])}
+            style={{ width: `${String(filled)}%` }}
+          />
+          {excess > 0 ? (
+            <>
+              {/* The limit line: everything to its right was earned past it. */}
+              <span aria-hidden className="bg-app-canvas block h-full w-0.5" />
+              <span
+                className={cn('block h-full opacity-60', fillTone[tone])}
+                style={{ width: `${String(excess)}%` }}
+              />
+            </>
+          ) : null}
+        </span>
       </span>
       <span className={cn('text-[11.5px] tabular-nums', textTone[tone])}>
         {hint ?? `${String(percent)}%`}

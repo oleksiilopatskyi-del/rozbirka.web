@@ -35,7 +35,7 @@ export {
 } from './file-field'
 export { formatFileSize } from './format'
 export { FormDialog, Sheet, type FormDialogProps } from './form-dialog'
-export { PhotoGrid, RecordCard, Thumbnail, type Photo } from './photo'
+export { Gallery, PhotoGrid, RecordCard, Thumbnail, type Photo } from './photo'
 export { Segmented, type SegmentedOption } from './segmented'
 export {
   PanelFooter,
