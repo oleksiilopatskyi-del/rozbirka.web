@@ -1,0 +1,2559 @@
+schemaVersion: 1
+
+audit:
+  mobileCommit: 2f0930509b2dbf7293da529ce2e1f225a852dba0
+  webCommit: 6aa6d92f443db451aace4875d0afd7dd358e975c
+  coreCommit: 46e2d91b371fac24043a5eebaef7a8f75fb3ff08
+  identityCommit: b7497a46204cbae0e964bb2cf4d00f91f9d382d0
+
+capabilities:
+  - id: auth.welcome.view
+    domain: auth
+    name: View the authentication entry screen and legal links
+    mobile:
+      routes:
+        - /(auth)/welcome
+      actions:
+        - Open phone authentication
+        - Open terms of use
+        - Open privacy policy
+    web:
+      outcome: Start authentication and open the applicable legal documents
+      route: /login
+      disposition: browser-native
+      browserEquivalent: Use standard Web links for legal documents and a stable login URL
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - anonymous
+      tenant: not-applicable
+      billing: not-applicable
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/(auth)/welcome.tsx
+      - rozbirka.web:src/routes/routes.tsx
+
+  - id: auth.otp.request
+    domain: auth
+    name: Request a phone OTP
+    mobile:
+      routes:
+        - /(auth)/login
+      actions:
+        - Enter a Ukrainian phone number
+        - Request an OTP
+        - Resend an OTP after cooldown
+    web:
+      outcome: Request and safely resend a phone OTP with clear rate-limit errors
+      route: /login
+      disposition: parity
+    contract:
+      service: identity
+      status: partial
+      operations:
+        - POST /auth/phone
+      notes: Runtime endpoint exists, but immutable Identity OpenAPI and OTP hardening are pending under ROZ-124 and ROZ-125
+    access:
+      permissions:
+        - anonymous
+      tenant: not-applicable
+      billing: not-applicable
+    owner: identity
+    tracking:
+      status: existing
+      issue: ROZ-125
+    evidence:
+      - rozbirka.mobile:app/(auth)/login.tsx
+      - rozbirka.mobile:src/api/auth.ts
+      - rozbirka.identity:src/Rozbirka.Identity.API/Controllers/AuthController.cs
+
+  - id: auth.otp.verify
+    domain: auth
+    name: Verify a phone OTP and establish a session
+    mobile:
+      routes:
+        - /(auth)/login
+      actions:
+        - Enter a six-digit OTP
+        - Verify the OTP
+        - Continue to name, tenant onboarding, or the dashboard
+    web:
+      outcome: Verify the OTP, establish the authenticated session, and resume the correct onboarding destination
+      route: /login
+      disposition: parity
+    contract:
+      service: identity
+      status: partial
+      operations:
+        - POST /auth/verify
+      notes: Runtime endpoint exists, but immutable Identity OpenAPI, production OTP guarantees, and negative-path coverage are pending under ROZ-124 and ROZ-125
+    access:
+      permissions:
+        - anonymous
+      tenant: not-applicable
+      billing: not-applicable
+    owner: identity
+    tracking:
+      status: existing
+      issue: ROZ-125
+    evidence:
+      - rozbirka.mobile:app/(auth)/login.tsx
+      - rozbirka.mobile:src/api/auth.ts
+      - rozbirka.identity:src/Rozbirka.Identity.API/Controllers/AuthController.cs
+
+  - id: auth.profile-name.set
+    domain: auth
+    name: Set the authenticated user display name
+    mobile:
+      routes:
+        - /(auth)/name
+      actions:
+        - Validate a display name
+        - Save the display name
+        - Resume a pending invitation
+    web:
+      outcome: Save the authenticated profile name before tenant or invitation onboarding continues
+      route: /account
+      disposition: parity
+    contract:
+      service: identity
+      status: partial
+      operations:
+        - PATCH /auth/me/name
+      notes: Runtime endpoint exists, but the immutable Identity profile contract is pending under ROZ-124
+    access:
+      permissions:
+        - authenticated
+      tenant: not-applicable
+      billing: not-applicable
+    owner: identity
+    tracking:
+      status: existing
+      issue: ROZ-124
+    evidence:
+      - rozbirka.mobile:app/(auth)/name.tsx
+      - rozbirka.mobile:src/api/auth.ts
+      - rozbirka.identity:src/Rozbirka.Identity.API/Controllers/AuthController.cs
+
+  - id: auth.invitation.preview
+    domain: auth
+    name: Preview an invitation before accepting it
+    mobile:
+      routes:
+        - /(auth)/invite/[code]
+      actions:
+        - Load invitation tenant, role, inviter, expiry, and validity
+        - Continue to login when anonymous
+    web:
+      outcome: Open a stable invitation URL and preview safe invitation information before authentication or acceptance
+      route: /invite/:code
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/invitations/{code}/info
+      notes: Anonymous runtime endpoint exists, but the immutable Core contract is pending under ROZ-121
+    access:
+      permissions:
+        - anonymous
+      tenant: not-applicable
+      billing: not-applicable
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/(auth)/invite/[code].tsx
+      - rozbirka.mobile:src/api/invites.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/InvitationsController.cs
+      - rozbirka.web:src/routes/routes.tsx
+
+  - id: auth.invitation.accept
+    domain: auth
+    name: Join a tenant through an invitation
+    mobile:
+      routes:
+        - /(auth)/invite/[code]
+        - /(auth)/onboarding
+      actions:
+        - Enter or resume an invitation code
+        - Accept the invitation
+        - Transition into the accepted tenant
+    web:
+      outcome: Accept an invitation only after authentication and transition into the new tenant without stale tenant data
+      route: /invite/:code
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/invitations/accept
+      notes: User-scoped acceptance exists, but the immutable Core contract and tenant-transition integration evidence are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - authenticated
+      tenant: invitation-target
+      billing: not-applicable
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/(auth)/invite/[code].tsx
+      - rozbirka.mobile:app/(auth)/onboarding.tsx
+      - rozbirka.mobile:src/api/invites.ts
+      - rozbirka.mobile:src/session/tenantTransition.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/InvitationsController.cs
+
+  - id: auth.tenant.list
+    domain: auth
+    name: List tenants available to the authenticated user
+    mobile:
+      routes:
+        - /(auth)/login
+        - /(auth)/name
+        - /(auth)/register
+      actions:
+        - Resolve whether the user can enter an existing tenant
+        - Detect whether the user already owns an active tenant
+    web:
+      outcome: Resolve available tenant memberships before entering the authenticated cabinet
+      route: /account
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/tenants
+      notes: Runtime endpoint exists, but immutable list and tenant-membership contracts are pending under ROZ-121 and tenant safety remains part of ROZ-122
+    access:
+      permissions:
+        - authenticated
+      tenant: user-memberships
+      billing: not-applicable
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-121
+    evidence:
+      - rozbirka.mobile:app/(auth)/login.tsx
+      - rozbirka.mobile:app/(auth)/name.tsx
+      - rozbirka.mobile:src/api/tenants.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/TenantsController.cs
+
+  - id: auth.tenant.create
+    domain: auth
+    name: Create the first business tenant
+    mobile:
+      routes:
+        - /(auth)/onboarding
+        - /(auth)/register
+      actions:
+        - Enter a business name
+        - Enforce the owner-tenant limit
+        - Create and enter the tenant
+    web:
+      outcome: Create an eligible business tenant and enter its cabinet with server-derived ownership
+      route: /onboarding/create-business
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/tenants
+        - POST /api/v1/tenants
+      notes: Runtime endpoints exist, but immutable ownership, owner-limit, and tenant creation contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - authenticated
+      tenant: absent-before-create
+      billing: initial-entitlement
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/(auth)/onboarding.tsx
+      - rozbirka.mobile:app/(auth)/register.tsx
+      - rozbirka.mobile:src/api/tenants.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/TenantsController.cs
+
+  - id: dashboard.summary.view
+    domain: dashboard
+    name: View the operational dashboard summary
+    mobile:
+      routes:
+        - /(tabs)/(home)
+      actions:
+        - View revenue and operational totals
+        - View the latest permitted activity
+        - Refresh the dashboard
+    web:
+      outcome: View permission-aware server totals and recent activity for the active tenant
+      route: /app/:tenant/dashboard
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/dashboard
+      notes: Runtime endpoint exists, but immutable aggregates, permissions, and response contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - authenticated
+        - dashboard.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-106
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/index.tsx
+      - rozbirka.mobile:src/api/dashboard.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/DashboardController.cs
+
+  - id: dashboard.analytics.view
+    domain: dashboard
+    name: View dashboard analytics by period
+    mobile:
+      routes:
+        - /(tabs)/(home)
+      actions:
+        - Switch between day, week, and month
+        - Swipe through analytics periods
+        - Refresh analytics
+    web:
+      outcome: View URL-stable day, week, and month analytics from authoritative server data
+      route: /app/:tenant/dashboard?period=week
+      disposition: browser-native
+      browserEquivalent: Use URL-backed period controls rather than a native horizontal pager gesture
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/dashboard/analytics?period={period}
+      notes: Runtime period endpoint exists, but immutable period, aggregate, and response contracts are pending under ROZ-121
+    access:
+      permissions:
+        - authenticated
+        - dashboard.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-106
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/index.tsx
+      - rozbirka.mobile:src/api/dashboard.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/DashboardController.cs
+
+  - id: dashboard.navigation.use
+    domain: dashboard
+    name: Navigate to permitted cabinet modules and quick actions
+    mobile:
+      routes:
+        - /(tabs)/(home)
+      actions:
+        - Open cars, intake, parts, orders, customers, cash, team, stickers, and reports
+        - Start permitted create actions
+    web:
+      outcome: Navigate to permission-aware cabinet modules through stable links and guarded create actions
+      route: /app/:tenant/dashboard
+      disposition: browser-native
+      browserEquivalent: Use responsive navigation links and buttons while preserving server-derived permission and usage gates
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - module-specific
+      tenant: required
+      billing: usage-gated
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-106
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/index.tsx
+      - rozbirka.web:src/routes/routes.tsx
+
+  - id: cars.list.view
+    domain: cars
+    name: Browse and find vehicles
+    mobile:
+      routes:
+        - /(tabs)/(home)/cars
+      actions:
+        - View paginated vehicles and status
+        - Open a vehicle
+        - Start vehicle creation when permitted and within quota
+    web:
+      outcome: Search, filter, paginate, and open tenant vehicles through a stable URL
+      route: /cabinet/cars
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/cars?status={status}&page={page}&pageSize={pageSize}
+      notes: Runtime pagination and status exist, but server-side search and the versioned list contract are pending under ROZ-60 and ROZ-121
+    access:
+      permissions:
+        - cars.view
+      tenant: required
+      billing: cars-quota-for-create
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-60
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/cars/index.tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: cars.detail.view
+    domain: cars
+    name: View vehicle details, profitability, photos, and linked parts
+    mobile:
+      routes:
+        - /car/[id]
+      actions:
+        - View identity, VIN, purchase data, photos, totals, and ROI
+        - Copy the VIN
+        - Open linked parts
+    web:
+      outcome: Open a permission-aware vehicle detail URL with authoritative totals and linked inventory
+      route: /cabinet/cars/:id
+      disposition: browser-native
+      browserEquivalent: Use a responsive gallery, copy action, and stable links to filtered inventory
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/cars/{id}
+        - GET /api/v1/cars/{id}/parts?status={status}&page={page}&pageSize={pageSize}
+      notes: Runtime detail and parts endpoints exist, but immutable detail, profitability, media, and pagination contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - cars.view
+        - parts.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-109
+    evidence:
+      - rozbirka.mobile:app/car/[id]/index.tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: cars.create
+    domain: cars
+    name: Create a vehicle with identification, media, and purchase data
+    mobile:
+      routes:
+        - /car/add
+      actions:
+        - Select make, model, and year
+        - Capture or enter VIN
+        - Add photos, purchase price, notes, and initial expenses
+        - Respect vehicle quota before creating
+    web:
+      outcome: Create a tenant vehicle with browser-safe media input, explicit VIN fallback, financial data, and quota enforcement
+      route: /cabinet/cars/new
+      disposition: browser-native
+      browserEquivalent: Use browser camera or file upload with manual VIN entry and desktop-friendly step navigation
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/cars
+        - POST /api/v1/cars/{id}/expenses
+      notes: Runtime create and expense endpoints exist, but immutable media, quota, VIN, and financial contracts are pending under ROZ-121, ROZ-122, and ROZ-123
+    access:
+      permissions:
+        - cars.manage
+        - finance.manage
+      tenant: required
+      billing: cars-quota
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-109
+    evidence:
+      - rozbirka.mobile:app/car/add.tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.mobile:src/api/carCatalog.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: cars.edit
+    domain: cars
+    name: Edit vehicle identification and financial metadata
+    mobile:
+      routes:
+        - /car/[id]/edit
+      actions:
+        - Change make, model, year, VIN, purchase price, and notes
+        - Save and return to vehicle details
+    web:
+      outcome: Edit a tenant vehicle through a validated form without replacing unrelated fields
+      route: /cabinet/cars/:id/edit
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/cars/{id}
+        - PUT /api/v1/cars/{id}
+      notes: Runtime read/update endpoints exist, but immutable validation, concurrency, and financial-field contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - cars.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-109
+    evidence:
+      - rozbirka.mobile:app/car/[id]/edit.tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: cars.lifecycle.manage
+    domain: cars
+    name: Archive or delete a vehicle
+    mobile:
+      routes:
+        - /car/[id]
+      actions:
+        - Archive an active vehicle
+        - Delete a vehicle after confirmation
+    web:
+      outcome: Archive or delete a tenant vehicle with explicit confirmation and server-enforced safety rules
+      route: /cabinet/cars/:id
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - PATCH /api/v1/cars/{id}/archive
+        - DELETE /api/v1/cars/{id}
+      notes: Runtime mutations exist, but immutable deletion preconditions, audit behavior, and tenant-safety contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - cars.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-109
+    evidence:
+      - rozbirka.mobile:app/car/[id]/index.tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: cars.expenses.manage
+    domain: cars
+    name: Add, edit, and remove vehicle expenses
+    mobile:
+      routes:
+        - /car/add
+        - /car/[id]
+      actions:
+        - Add an expense
+        - Edit expense name and amount
+        - Delete an expense
+        - Observe updated profitability
+    web:
+      outcome: Manage vehicle expenses and display authoritative profitability without client-side financial rules
+      route: /cabinet/cars/:id/expenses
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/cars/{id}/expenses
+        - PUT /api/v1/cars/{id}/expenses/{expenseId}
+        - DELETE /api/v1/cars/{id}/expenses/{expenseId}
+      notes: Runtime mutations exist, but idempotency, currency precision, aggregate refresh, and immutable contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - finance.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-123
+    evidence:
+      - rozbirka.mobile:app/car/add.tsx
+      - rozbirka.mobile:app/car/[id]/index.tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: cars.inventory.view
+    domain: cars
+    name: Browse inventory produced from a vehicle
+    mobile:
+      routes:
+        - /(tabs)/(home)/warehouse/[carId]
+      actions:
+        - View parts linked to a vehicle
+        - Filter by part status
+        - Open a linked part
+    web:
+      outcome: Browse paginated vehicle-scoped inventory through a stable filterable URL
+      route: /cabinet/cars/:id/parts
+      disposition: browser-native
+      browserEquivalent: Use a URL-backed inventory table with status filters and stable part links
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/cars/{id}/parts?status={status}&page={page}&pageSize={pageSize}
+      notes: Runtime vehicle-scoped pagination exists, but immutable filter, list, and tenant contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - cars.view
+        - parts.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-110
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/warehouse/[carId].tsx
+      - rozbirka.mobile:src/api/cars.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CarsController.cs
+
+  - id: intake.list.view
+    domain: intake
+    name: Browse and find vehicle intake batches
+    mobile:
+      routes:
+        - /(tabs)/(home)/intake
+      actions:
+        - View paginated intake batches
+        - Open an intake
+        - Start intake creation when permitted and within quota
+    web:
+      outcome: Search, filter by status, paginate, and open tenant intake batches through a stable URL
+      route: /cabinet/intakes
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/intakes?page={page}&pageSize={pageSize}
+      notes: Runtime pagination exists, but server-side search/status filtering and the immutable list contract are pending under ROZ-60 and ROZ-121
+    access:
+      permissions:
+        - intakes.view
+      tenant: required
+      billing: intakes-quota-for-create
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-60
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/intake/index.tsx
+      - rozbirka.mobile:src/api/intakes.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
+
+  - id: intake.detail.view
+    domain: intake
+    name: View intake details, cost, photos, and created parts
+    mobile:
+      routes:
+        - /intake/[id]
+      actions:
+        - View supplier, date, cost, notes, media, and profitability
+        - Open or add parts associated with the intake
+    web:
+      outcome: Open a permission-aware intake detail URL with server-derived totals and linked inventory
+      route: /cabinet/intakes/:id
+      disposition: browser-native
+      browserEquivalent: Use a responsive media gallery and stable links to create or filter parts
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/intakes/{id}
+      notes: Runtime detail exists, but immutable media, profitability, and linked-parts contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - intakes.view
+        - parts.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-108
+    evidence:
+      - rozbirka.mobile:app/intake/[id]/index.tsx
+      - rozbirka.mobile:src/api/intakes.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
+
+  - id: intake.create
+    domain: intake
+    name: Create a vehicle intake batch
+    mobile:
+      routes:
+        - /intake/batch
+      actions:
+        - Enter supplier, purchase date, total cost, and notes
+        - Add or remove photos
+        - Review and submit the batch
+    web:
+      outcome: Create an intake batch with browser-safe media upload, complete financial fields, and quota enforcement
+      route: /cabinet/intakes/new
+      disposition: browser-native
+      browserEquivalent: Use file upload or browser camera with desktop-friendly form steps and a review summary
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/intakes
+      notes: Runtime creation exists, but immutable media, quota, and financial contracts are pending under ROZ-121, ROZ-122, and ROZ-123
+    access:
+      permissions:
+        - intakes.manage
+      tenant: required
+      billing: intakes-quota
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-108
+    evidence:
+      - rozbirka.mobile:app/intake/batch.tsx
+      - rozbirka.mobile:src/api/intakes.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
+
+  - id: intake.edit
+    domain: intake
+    name: Edit intake metadata
+    mobile:
+      routes:
+        - /intake/[id]/edit
+      actions:
+        - Change name, supplier, purchase date, cost, and notes
+        - Save and return to intake details
+    web:
+      outcome: Edit intake metadata through a validated form while preserving omitted values
+      route: /cabinet/intakes/:id/edit
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/intakes/{id}
+        - PATCH /api/v1/intakes/{id}
+      notes: Runtime read/update endpoints exist, but immutable patch semantics, currency precision, and validation contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - intakes.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-108
+    evidence:
+      - rozbirka.mobile:app/intake/[id]/edit.tsx
+      - rozbirka.mobile:src/api/intakes.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
+
+  - id: intake.parts.create
+    domain: intake
+    name: Create and browse parts within an intake
+    mobile:
+      routes:
+        - /intake/[id]
+      actions:
+        - Start part creation linked to the intake
+        - Browse parts filtered by intake
+    web:
+      outcome: Create a part with an immutable intake relationship and browse intake-scoped inventory
+      route: /cabinet/intakes/:id/parts
+      disposition: browser-native
+      browserEquivalent: Use stable nested links to part creation and a server-filtered inventory view
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/intakes/{id}/parts
+      notes: Runtime creation exists, but immutable relationship, filtered list, and tenant-safety contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - intakes.manage
+        - parts.view
+      tenant: required
+      billing: parts-quota
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-108
+    evidence:
+      - rozbirka.mobile:app/intake/[id]/index.tsx
+      - rozbirka.mobile:src/api/intakes.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
+
+  - id: intake.delete
+    domain: intake
+    name: Delete an intake batch
+    mobile:
+      routes:
+        - /intake/[id]
+      actions:
+        - Delete an intake after explicit confirmation
+    web:
+      outcome: Delete an intake only when server-enforced relationship and audit rules allow it
+      route: /cabinet/intakes/:id
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - DELETE /api/v1/intakes/{id}
+      notes: Runtime deletion exists, but immutable deletion preconditions, linked-part behavior, and audit guarantees are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - intakes.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-108
+    evidence:
+      - rozbirka.mobile:app/intake/[id]/index.tsx
+      - rozbirka.mobile:src/api/intakes.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/IntakesController.cs
+
+  - id: parts.list.view
+    domain: parts
+    name: Search and filter tenant inventory
+    mobile:
+      routes:
+        - /(tabs)/(parts)
+      actions:
+        - Search by text
+        - Filter by status, make, vehicle, and intake
+        - View summary counts and paginated parts
+        - Open a part or start creation
+    web:
+      outcome: Search, filter, paginate, and open tenant inventory through stable URLs
+      route: /cabinet/parts
+      disposition: browser-native
+      browserEquivalent: Use URL-backed filters and a responsive table or list with server pagination
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - GET /api/v1/parts
+        - GET /api/v1/parts/summary
+        - GET /api/v1/parts/makes
+      notes: Runtime filters exist, but immutable contracts are pending under ROZ-121 and the read endpoints lack an explicit Parts.View controller permission gate covered by ROZ-122
+    access:
+      permissions:
+        - parts.view
+      tenant: required
+      billing: parts-quota-for-create
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(parts)/index.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+
+  - id: parts.detail.view
+    domain: parts
+    name: View part details, compatibility, media, and source vehicle
+    mobile:
+      routes:
+        - /part/[id]
+      actions:
+        - View quantity, price, status, condition, OEM, notes, and photos
+        - View linked vehicle or intake
+        - Open related order history
+        - Share photos
+    web:
+      outcome: Open a tenant-safe part detail URL with authoritative availability, compatibility, history links, and media
+      route: /cabinet/parts/:id
+      disposition: browser-native
+      browserEquivalent: Use a responsive gallery with download, copy-link, and Web Share fallbacks
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - GET /api/v1/parts/{id}
+      notes: Runtime detail exists, but immutable compatibility/media contracts are pending under ROZ-121 and the read endpoint lacks an explicit Parts.View permission gate covered by ROZ-122
+    access:
+      permissions:
+        - parts.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/part/[id]/index.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+
+  - id: parts.history.view
+    domain: parts
+    name: View part inventory and order history
+    mobile:
+      routes:
+        - /part/[id]
+      actions:
+        - View quantity and status changes
+        - Open orders related to the part
+    web:
+      outcome: View an auditable chronological part history and navigate to related orders
+      route: /cabinet/parts/:id/history
+      disposition: parity
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - GET /api/v1/parts/{id}/history
+      notes: Runtime history exists, but immutable event semantics and an explicit Parts.View permission gate are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - parts.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/part/[id]/index.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+
+  - id: parts.create
+    domain: parts
+    name: Create a part from a vehicle, intake, VIN, or manual source
+    mobile:
+      routes:
+        - /part/add
+      actions:
+        - Select source vehicle or intake
+        - Scan or enter VIN
+        - Set name, OEM, compatibility, condition, quantity, and price
+        - Upload photos and create the part
+    web:
+      outcome: Create a tenant part with explicit source, browser-safe media input, VIN fallback, compatibility, and validated inventory fields
+      route: /cabinet/parts/new
+      disposition: browser-native
+      browserEquivalent: Use browser camera or file input with manual VIN/OEM entry and desktop-friendly source selection
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - GET /api/v1/parts/name-suggestions
+        - POST /api/v1/media/upload
+        - POST /api/v1/parts
+      notes: Runtime creation and media upload exist, but POST /parts lacks an explicit Parts.Manage gate and media ownership/cleanup plus immutable contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - parts.manage
+      tenant: required
+      billing: parts-quota
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/part/add.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.mobile:src/api/media.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/MediaController.cs
+
+  - id: parts.edit
+    domain: parts
+    name: Edit part inventory, commercial, compatibility, and media fields
+    mobile:
+      routes:
+        - /part/[id]/edit
+      actions:
+        - Edit part fields and compatibility
+        - Add or remove photos
+        - Save the part
+    web:
+      outcome: Edit a tenant part with server validation and a safe media lifecycle
+      route: /cabinet/parts/:id/edit
+      disposition: browser-native
+      browserEquivalent: Use browser file input and responsive compatibility controls
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - GET /api/v1/parts/{id}
+        - PUT /api/v1/parts/{id}
+        - POST /api/v1/media/upload
+        - DELETE /api/v1/media
+      notes: Parts.Manage protects update, but immutable compatibility contracts and media ownership/cleanup guarantees are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - parts.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/part/[id]/edit.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.mobile:src/api/media.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/MediaController.cs
+
+  - id: parts.delete
+    domain: parts
+    name: Delete a part
+    mobile:
+      routes:
+        - /part/[id]
+        - /part/[id]/edit
+      actions:
+        - Delete a part after explicit confirmation
+    web:
+      outcome: Delete a tenant part only when server-enforced reservation, order, media, and audit rules allow it
+      route: /cabinet/parts/:id
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - DELETE /api/v1/parts/{id}
+      notes: Parts.Manage protects runtime deletion, but immutable preconditions, audit behavior, and media cleanup are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - parts.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-110
+    evidence:
+      - rozbirka.mobile:app/part/[id]/index.tsx
+      - rozbirka.mobile:app/part/[id]/edit.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+
+  - id: scanning.qr.lookup
+    domain: scanning
+    name: Resolve a part from a QR code
+    mobile:
+      routes:
+        - /(tabs)/scan-tab
+        - /scan
+      actions:
+        - Request camera permission
+        - Scan a QR or scan deep link
+        - Resolve and open the matching part
+        - Recover from camera denial or lookup failure
+    web:
+      outcome: Resolve a tenant-safe QR through camera, manual input, uploaded image, or stable scan URL
+      route: /scan/:qrCode
+      disposition: browser-native
+      browserEquivalent: Use getUserMedia with manual code and file fallbacks plus a stable authenticated scan URL
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - GET /api/v1/parts/qr/{qrCode}
+      notes: Runtime QR lookup exists, but the endpoint lacks an explicit Parts.View gate and cross-tenant disclosure guarantees are pending under ROZ-122
+    access:
+      permissions:
+        - parts.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:app/(tabs)/scan-tab.tsx
+      - rozbirka.mobile:app/scan.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+      - rozbirka.web:src/routes/routes.tsx
+
+  - id: scanning.vin.decode
+    domain: scanning
+    name: Extract and decode a VIN for vehicle and part workflows
+    mobile:
+      routes:
+        - /car/add
+        - /part/add
+        - /part/[id]/edit
+      actions:
+        - Capture VIN text from the camera
+        - Validate manual VIN input
+        - Decode make, model, year, engine, and body data
+    web:
+      outcome: Capture or enter a VIN and decode it with explicit partial-result and failure states
+      route: null
+      disposition: browser-native
+      browserEquivalent: Use browser camera or image upload when available and always provide manual VIN entry
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - cars.manage-or-parts.manage
+      tenant: not-applicable
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-111
+    evidence:
+      - rozbirka.mobile:src/components/VinOcrScanner.tsx
+      - rozbirka.mobile:src/api/vinDecode.ts
+      - rozbirka.mobile:app/car/add.tsx
+      - rozbirka.mobile:app/part/add.tsx
+
+  - id: stickers.queue.manage
+    domain: scanning
+    name: Build and persist a tenant-scoped sticker queue
+    mobile:
+      routes:
+        - /(tabs)/(home)/stickers
+        - /part/[id]
+      actions:
+        - Add part quantities to the print queue
+        - Resume, discard, and mark queue batches as printed
+        - Prevent cross-tenant queue reuse
+    web:
+      outcome: Maintain a tenant-scoped sticker selection with explicit resume, discard, and print-confirmation behavior
+      route: /cabinet/stickers
+      disposition: browser-native
+      browserEquivalent: Use a persistent browser selection scoped to the active tenant and clear it on tenant/session transitions
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - stickers.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-111
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/stickers.tsx
+      - rozbirka.mobile:src/stores/printQueueStore.ts
+      - rozbirka.mobile:src/stores/printQueuePersistence.ts
+      - rozbirka.mobile:src/session/printQueuePersistence.test.mjs
+
+  - id: stickers.generate-print-share
+    domain: scanning
+    name: Generate, print, download, or share part stickers
+    mobile:
+      routes:
+        - /(tabs)/(home)/stickers
+        - /part/[id]
+      actions:
+        - Request sticker data for up to 200 parts
+        - Generate a quantity-aware PDF
+        - Print or share the PDF
+        - Confirm printed items
+    web:
+      outcome: Generate authenticated sticker data and provide downloadable PDF plus browser print
+      route: /cabinet/stickers
+      disposition: browser-native
+      browserEquivalent: Generate or download a PDF, open browser print, and use Web Share only when supported
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/parts/batch-sticker
+      notes: Stickers.Manage protects runtime generation, but immutable batch limits, PDF data, and print confirmation contracts are pending under ROZ-121
+    access:
+      permissions:
+        - stickers.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-111
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/stickers.tsx
+      - rozbirka.mobile:app/part/[id]/index.tsx
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/PartsController.cs
+
+  - id: customers.list.view
+    domain: customers
+    name: Search and browse customers
+    mobile:
+      routes:
+        - /(tabs)/(orders)/customers
+      actions:
+        - Search customers by name or phone
+        - View order count, spend, and last-order summary
+        - Open a customer or start creation
+    web:
+      outcome: Search and paginate tenant customers through stable URL-backed controls
+      route: /cabinet/customers
+      disposition: browser-native
+      browserEquivalent: Use a responsive table or list with server search and pagination
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/customers
+        - GET /api/v1/customers/search
+      notes: Customers.View protects runtime reads, but immutable list, search, aggregate, and pagination contracts are pending under ROZ-121
+    access:
+      permissions:
+        - customers.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-113
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(orders)/customers/index.tsx
+      - rozbirka.mobile:src/api/customers.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CustomersController.cs
+
+  - id: customers.detail.view
+    domain: customers
+    name: View customer details and order history
+    mobile:
+      routes:
+        - /customer/[id]
+      actions:
+        - View contact data, notes, totals, and order history
+        - Call or message the customer
+        - Open an order or start a new order for the customer
+    web:
+      outcome: Open a tenant customer with authoritative summary and order history
+      route: /cabinet/customers/:id
+      disposition: browser-native
+      browserEquivalent: Use tel and sms links only when supported and always expose copyable contact data
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/customers/{id}
+      notes: Customers.View protects runtime detail, but immutable customer summary and embedded order-history contracts are pending under ROZ-121
+    access:
+      permissions:
+        - customers.view
+        - orders.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-113
+    evidence:
+      - rozbirka.mobile:app/customer/[id]/index.tsx
+      - rozbirka.mobile:src/api/customers.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CustomersController.cs
+
+  - id: customers.create
+    domain: customers
+    name: Create or recover a customer
+    mobile:
+      routes:
+        - /customer/new
+        - /order/new
+        - /order/[id]
+      actions:
+        - Enter name, optional phone, and notes
+        - Detect a duplicate phone
+        - Reuse or reactivate the matching customer
+    web:
+      outcome: Create a customer from the directory or order flow with safe duplicate-phone resolution
+      route: /cabinet/customers/new
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/customers
+        - PATCH /api/v1/customers/{id}/activate
+      notes: Customers.Manage protects runtime mutations, but immutable duplicate-phone conflict and reactivation contracts are pending under ROZ-121
+    access:
+      permissions:
+        - customers.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-113
+    evidence:
+      - rozbirka.mobile:app/customer/new.tsx
+      - rozbirka.mobile:app/order/new.tsx
+      - rozbirka.mobile:app/order/[id]/index.tsx
+      - rozbirka.mobile:src/api/customers.ts
+      - rozbirka.mobile:src/api/customerPhoneConflict.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CustomersController.cs
+
+  - id: customers.edit-lifecycle
+    domain: customers
+    name: Edit, activate, deactivate, or delete a customer
+    mobile:
+      routes:
+        - /customer/[id]
+        - /customer/[id]/edit
+      actions:
+        - Edit name, phone, and notes
+        - Activate or deactivate the customer
+        - Delete only when server rules allow it
+    web:
+      outcome: Manage a customer lifecycle with explicit confirmations and server-enforced order constraints
+      route: /cabinet/customers/:id/edit
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - PATCH /api/v1/customers/{id}
+        - PATCH /api/v1/customers/{id}/activate
+        - PATCH /api/v1/customers/{id}/deactivate
+        - DELETE /api/v1/customers/{id}
+      notes: Customers.Manage protects runtime mutations, but immutable lifecycle, deletion-precondition, and conflict contracts are pending under ROZ-121
+    access:
+      permissions:
+        - customers.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-113
+    evidence:
+      - rozbirka.mobile:app/customer/[id]/index.tsx
+      - rozbirka.mobile:app/customer/[id]/edit.tsx
+      - rozbirka.mobile:src/api/customers.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CustomersController.cs
+
+  - id: orders.list.view
+    domain: orders
+    name: Browse and filter orders
+    mobile:
+      routes:
+        - /(tabs)/(orders)
+      actions:
+        - Filter by status or customer
+        - Search the loaded order page by customer or part
+        - View status counts and open an order
+    web:
+      outcome: Search, filter, and paginate tenant orders through stable URL-backed controls
+      route: /cabinet/orders
+      disposition: browser-native
+      browserEquivalent: Use server-backed search, filters, pagination, and shareable URLs
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/orders
+      notes: Orders.View protects runtime reads, but search currently filters only the loaded Mobile page; server search and immutable list contracts are pending under ROZ-60 and ROZ-121
+    access:
+      permissions:
+        - orders.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-60
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(orders)/index.tsx
+      - rozbirka.mobile:src/api/orders.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/OrdersController.cs
+
+  - id: orders.create
+    domain: orders
+    name: Create a pending order
+    mobile:
+      routes:
+        - /order/new
+      actions:
+        - Search or scan available parts
+        - Set quantities and unit prices
+        - Select, create, or skip a customer
+        - Add notes and create a pending order
+    web:
+      outcome: Create a canonical pending order with validated availability, pricing, customer, and reservation behavior
+      route: /cabinet/orders/new
+      disposition: browser-native
+      browserEquivalent: Use keyboard-friendly part search with optional browser QR scanning and manual code fallback
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/parts
+        - GET /api/v1/parts/qr/{qrCode}
+        - GET /api/v1/customers/search
+        - POST /api/v1/orders
+      notes: Orders.Manage protects order creation, but immutable reservation, price, quantity, customer-conflict, and idempotency contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - orders.manage
+        - parts.view
+        - customers.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-112
+    evidence:
+      - rozbirka.mobile:app/order/new.tsx
+      - rozbirka.mobile:src/api/orders.ts
+      - rozbirka.mobile:src/api/parts.ts
+      - rozbirka.mobile:src/api/customers.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/OrdersController.cs
+
+  - id: orders.detail-manage
+    domain: orders
+    name: View and edit a pending order
+    mobile:
+      routes:
+        - /order/[id]
+        - /order/[id]/add-item
+      actions:
+        - View items, totals, customer, notes, and audit history
+        - Add, remove, or reprice pending items
+        - Set or create the customer and edit notes
+    web:
+      outcome: Open an auditable order URL and safely edit only lifecycle-eligible fields
+      route: /cabinet/orders/:id
+      disposition: browser-native
+      browserEquivalent: Keep detail, history, and pending-order editing on one responsive canonical page
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/orders/{id}
+        - PUT /api/v1/orders/{id}/items
+        - PUT /api/v1/orders/{id}/notes
+        - PUT /api/v1/orders/{id}/customer
+      notes: Orders permissions protect runtime operations, but immutable lifecycle, concurrency, reservation, audit-event, and total-recalculation contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - orders.view
+        - orders.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-112
+    evidence:
+      - rozbirka.mobile:app/order/[id]/index.tsx
+      - rozbirka.mobile:app/order/[id]/add-item.tsx
+      - rozbirka.mobile:src/api/orders.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/OrdersController.cs
+
+  - id: orders.payment-lifecycle
+    domain: orders
+    name: Confirm payment, cancel, or refund an order
+    mobile:
+      routes:
+        - /order/[id]
+      actions:
+        - Split payment across cash registers and currencies
+        - Confirm the order and inventory deduction
+        - Cancel a pending order
+        - Refund a confirmed order with a reason
+    web:
+      outcome: Execute one atomic, auditable order transition with authoritative inventory and cash effects
+      route: /cabinet/orders/:id
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/orders/{id}/confirm
+        - POST /api/v1/orders/{id}/cancel
+        - POST /api/v1/orders/{id}/refund
+      notes: Orders.Manage protects runtime transitions, but immutable idempotency, currency precision, inventory, cash, refund, and concurrency guarantees are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - orders.manage
+        - finance.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-123
+    evidence:
+      - rozbirka.mobile:app/order/[id]/index.tsx
+      - rozbirka.mobile:src/api/orders.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/OrdersController.cs
+
+  - id: cash.overview.view
+    domain: cash
+    name: View daily cash balances and registers
+    mobile:
+      routes:
+        - /(tabs)/(home)/cash
+      actions:
+        - View daily opening, movement, and closing balances by currency
+        - Browse active cash and bank registers
+        - Open a register or start creation
+    web:
+      outcome: View timezone-correct daily finance totals and open a stable register URL
+      route: /cabinet/cash
+      disposition: browser-native
+      browserEquivalent: Use responsive summary tables with explicit date and timezone context
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/cash
+        - GET /api/v1/cash/daily-summary
+      notes: Finance.View protects runtime reads, but immutable timezone, aggregation, currency precision, and pagination contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - finance.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-115
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/cash/index.tsx
+      - rozbirka.mobile:src/api/cash.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CashController.cs
+
+  - id: cash.register-manage
+    domain: cash
+    name: Create and manage cash registers
+    mobile:
+      routes:
+        - /(tabs)/(home)/cash
+        - /cash/[id]
+      actions:
+        - Create cash or bank registers with currencies and opening balances
+        - Rename a register
+        - Add or remove currencies
+        - Deactivate a register
+    web:
+      outcome: Manage tenant registers with server-enforced balance and lifecycle preconditions
+      route: /cabinet/cash/:id
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/cash
+        - PUT /api/v1/cash/{id}
+        - POST /api/v1/cash/{id}/currencies
+        - DELETE /api/v1/cash/{id}/currencies/{currency}
+        - PATCH /api/v1/cash/{id}/deactivate
+      notes: Finance.Manage protects runtime mutations, but immutable opening-balance, currency-removal, lifecycle, and concurrency contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - finance.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-115
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/cash/index.tsx
+      - rozbirka.mobile:app/cash/[id].tsx
+      - rozbirka.mobile:src/api/cash.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CashController.cs
+
+  - id: cash.transactions
+    domain: cash
+    name: View and record cash transactions
+    mobile:
+      routes:
+        - /cash/[id]
+      actions:
+        - Filter paginated transactions by currency and date
+        - Record manual income or expense with a note
+        - See actor, timestamp, direction, and linked effects
+    web:
+      outcome: Browse an auditable ledger and record validated manual movements without client-side balance authority
+      route: /cabinet/cash/:id
+      disposition: browser-native
+      browserEquivalent: Use a paginated ledger table with URL-backed filters and accessible transaction forms
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/cash/{id}/transactions
+        - POST /api/v1/cash/{id}/transactions
+      notes: Finance permissions protect runtime operations, but immutable ledger ordering, idempotency, currency precision, pagination, and audit contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - finance.view
+        - finance.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-115
+    evidence:
+      - rozbirka.mobile:app/cash/[id].tsx
+      - rozbirka.mobile:src/api/cash.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CashController.cs
+
+  - id: cash.transfer
+    domain: cash
+    name: Transfer value between registers and currencies
+    mobile:
+      routes:
+        - /cash/[id]
+      actions:
+        - Select source and destination register currencies
+        - Enter outgoing and incoming amounts
+        - Record an optional transfer note
+    web:
+      outcome: Create one atomic, balanced, and auditable cross-register transfer
+      route: /cabinet/cash/:id/transfer
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/cash/transfer
+      notes: Finance.Manage protects runtime transfer, but immutable atomicity, idempotency, exchange-rate, precision, and audit guarantees are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - finance.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-123
+    evidence:
+      - rozbirka.mobile:app/cash/[id].tsx
+      - rozbirka.mobile:src/components/TransferSheet.tsx
+      - rozbirka.mobile:src/api/cash.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/CashController.cs
+
+  - id: reports.generate
+    domain: reports
+    name: Generate a car-sales report
+    mobile:
+      routes:
+        - /(tabs)/(home)/reports
+      actions:
+        - Select a date range or common period
+        - Start from the last cash withdrawal
+        - Queue a car-sales report and monitor progress
+        - Retry a failed report
+    web:
+      outcome: Queue an authorized report job and expose clear asynchronous progress and failure states
+      route: /cabinet/reports
+      disposition: browser-native
+      browserEquivalent: Use native date inputs or an accessible date-range picker with polling that pauses off-screen
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/cash/last-withdrawal
+        - POST /api/v1/reports
+        - GET /api/v1/reports/{id}
+      notes: Reports and Finance permissions protect runtime operations, but immutable range, timezone, job-state, retry, and expiry contracts are pending under ROZ-121 and ROZ-123
+    access:
+      permissions:
+        - reports.manage
+        - finance.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-114
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/reports.tsx
+      - rozbirka.mobile:src/api/reports.ts
+      - rozbirka.mobile:src/api/cash.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/ReportsController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/CashController.cs
+
+  - id: reports.history-download
+    domain: reports
+    name: Browse and download generated reports
+    mobile:
+      routes:
+        - /(tabs)/(home)/reports
+      actions:
+        - Browse paginated report jobs and status
+        - Download a completed PDF
+        - Open the platform share sheet
+    web:
+      outcome: Browse report history and securely download or share a completed PDF before expiry
+      route: /cabinet/reports
+      disposition: browser-native
+      browserEquivalent: Use authenticated browser download with native PDF viewing, print, and optional Web Share
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/reports
+        - GET /api/v1/reports/{id}
+        - GET /api/v1/reports/{id}/download
+      notes: Reports.View protects runtime reads, but immutable download authorization, content metadata, expiry, pagination, and tenant-isolation contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - reports.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-114
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/reports.tsx
+      - rozbirka.mobile:src/api/reports.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/ReportsController.cs
+
+  - id: profile.account-settings
+    domain: profile
+    name: View and edit personal and tenant profile settings
+    mobile:
+      routes:
+        - /(tabs)/(profile)
+      actions:
+        - View current user, role, tenant, and plan summary
+        - Edit the personal display name
+        - Rename the current tenant when authorized
+        - Navigate to team, cash, reports, and billing
+    web:
+      outcome: Manage personal identity and authorized tenant settings from one stable account page
+      route: /cabinet/settings/profile
+      disposition: browser-native
+      browserEquivalent: Use standard account forms and links to separately addressable settings pages
+    contract:
+      service: gateway
+      status: partial
+      operations:
+        - GET /auth/me
+        - PATCH /auth/me/name
+        - PATCH /api/v1/tenants/{tenantId}
+      notes: Runtime Identity and Core endpoints exist, but immutable cross-service profile, owner authorization, and tenant update contracts are pending under ROZ-121, ROZ-122, and ROZ-124
+    access:
+      permissions:
+        - authenticated
+        - tenant.owner-for-tenant-update
+      tenant: required-for-tenant-settings
+      billing: readable-when-blocked
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(profile)/index.tsx
+      - rozbirka.mobile:src/api/auth.ts
+      - rozbirka.mobile:src/api/tenants.ts
+      - rozbirka.identity:src/Rozbirka.Identity.API/Controllers/AuthController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/TenantsController.cs
+
+  - id: profile.account-delete
+    domain: profile
+    name: Permanently delete the user account
+    mobile:
+      routes:
+        - /(tabs)/(profile)
+      actions:
+        - Review a destructive confirmation
+        - Permanently delete the authenticated account
+        - Clear the local session after success
+    web:
+      outcome: Permanently delete only the authenticated account after explicit re-confirmation and clear all private browser state
+      route: /cabinet/settings/profile
+      disposition: parity
+    contract:
+      service: identity
+      status: partial
+      operations:
+        - DELETE /auth/me
+      notes: Runtime deletion exists, but immutable reauthentication, ownership transfer, retention, revocation, and cross-service deletion guarantees are pending under ROZ-124 and ROZ-125
+    access:
+      permissions:
+        - authenticated
+      tenant: all-memberships-affected
+      billing: cancellation-and-retention-policy-required
+    owner: identity
+    tracking:
+      status: existing
+      issue: ROZ-125
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(profile)/index.tsx
+      - rozbirka.mobile:src/api/auth.ts
+      - rozbirka.mobile:src/session/sessionCleanup.ts
+      - rozbirka.identity:src/Rozbirka.Identity.API/Controllers/AuthController.cs
+
+  - id: team.directory.view
+    domain: team
+    name: View team members, roles, and invitations
+    mobile:
+      routes:
+        - /(tabs)/(profile)/team
+        - /(tabs)/(profile)/team/members/[id]
+        - /(tabs)/(profile)/team/roles/[id]
+      actions:
+        - Browse members and roles
+        - View member activity stats and effective role permissions
+        - View role members and permission groups
+        - View pending invitation state
+    web:
+      outcome: Browse tenant-scoped team, role, permission, and invitation details through stable URLs
+      route: /cabinet/team
+      disposition: browser-native
+      browserEquivalent: Use searchable tables with separately addressable member and role detail pages
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/team/members
+        - GET /api/v1/team/members/{id}
+        - GET /api/v1/team/roles
+        - GET /api/v1/team/roles/{id}
+        - GET /api/v1/team/invitations
+      notes: Team.View protects runtime reads, but immutable list, stats, effective-permission, invitation, and tenant-isolation contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - team.view
+      tenant: required
+      billing: users-limit-for-mutations
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-116
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(profile)/team/index.tsx
+      - rozbirka.mobile:app/(tabs)/(profile)/team/members/[id].tsx
+      - rozbirka.mobile:app/(tabs)/(profile)/team/roles/[id].tsx
+      - rozbirka.mobile:src/api/team.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/TeamController.cs
+
+  - id: team.member-lifecycle
+    domain: team
+    name: Change a member role or lifecycle state
+    mobile:
+      routes:
+        - /(tabs)/(profile)/team/members/[id]
+      actions:
+        - Change a non-owner member role
+        - Activate or deactivate a member
+        - Remove a member from the tenant
+    web:
+      outcome: Manage a non-owner member with server-enforced owner, self-action, last-owner, and user-limit rules
+      route: /cabinet/team/members/:id
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - PATCH /api/v1/team/members/{id}/role
+        - PATCH /api/v1/team/members/{id}/activate
+        - PATCH /api/v1/team/members/{id}/deactivate
+        - DELETE /api/v1/team/members/{id}
+      notes: Team.Manage protects runtime mutations, but immutable owner-protection, session revocation, user-limit, and concurrency contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - team.manage
+      tenant: required
+      billing: users-limit
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-116
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(profile)/team/members/[id].tsx
+      - rozbirka.mobile:src/api/team.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/TeamController.cs
+
+  - id: team.roles-manage
+    domain: team
+    name: Create, edit, and delete custom roles
+    mobile:
+      routes:
+        - /(tabs)/(profile)/team
+        - /(tabs)/(profile)/team/roles/[id]
+      actions:
+        - Create a named role with permission groups
+        - Edit role name and permissions
+        - Delete an eligible custom role
+        - Preserve view permission dependencies in the editor
+    web:
+      outcome: Manage custom roles with canonical permission dependencies and server-enforced system-role protections
+      route: /cabinet/team/roles/:id
+      disposition: parity
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/team/roles
+        - PATCH /api/v1/team/roles/{id}
+        - DELETE /api/v1/team/roles/{id}
+      notes: Team.Manage protects runtime mutations, but immutable permission vocabulary, dependency, system-role, member-reassignment, and concurrency contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - team.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-116
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(profile)/team/index.tsx
+      - rozbirka.mobile:app/(tabs)/(profile)/team/roles/[id].tsx
+      - rozbirka.mobile:src/constants/permissions.ts
+      - rozbirka.mobile:src/api/team.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/TeamController.cs
+
+  - id: team.invitation-manage
+    domain: team
+    name: Create, copy, and revoke team invitations
+    mobile:
+      routes:
+        - /(tabs)/(profile)/team
+      actions:
+        - Select a non-owner role and create an invitation
+        - Copy the generated invitation code
+        - Review and revoke pending invitations
+    web:
+      outcome: Create and manage expiring tenant invitations with a copyable canonical invite URL
+      route: /cabinet/team/invitations
+      disposition: browser-native
+      browserEquivalent: Copy a full HTTPS invitation URL and optionally use Web Share when supported
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/team/invitations
+        - POST /api/v1/team/invitations
+        - DELETE /api/v1/team/invitations/{id}
+      notes: Team permissions protect runtime operations, but immutable expiry, single-use, revoke, role eligibility, user-limit, and URL contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - team.view
+        - team.manage
+      tenant: required
+      billing: users-limit
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-116
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(profile)/team/index.tsx
+      - rozbirka.mobile:src/api/team.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/TeamController.cs
+
+  - id: billing.subscription.view
+    domain: billing
+    name: View subscription status, limits, and store ownership
+    mobile:
+      routes:
+        - /(tabs)/(profile)/billing
+      actions:
+        - View plan, trial, renewal, expiry, limits, and payment-problem state
+        - See whether Apple, Google, or another provider owns the subscription
+        - Open legal documents and provider subscription management
+    web:
+      outcome: Show authoritative tenant subscription, entitlements, limits, and management destination even when business access is blocked
+      route: /cabinet/billing
+      disposition: browser-native
+      browserEquivalent: Use standard links to legal documents and the authoritative external or Web billing portal
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/billing/subscription
+        - GET /api/v1/me/permissions
+      notes: Billing.View protects runtime subscription data, but immutable entitlement, provider ownership, blocked-tenant, and limit contracts are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - billing.view
+      tenant: required
+      billing: endpoint-readable-when-blocked
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-117
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(profile)/billing.tsx
+      - rozbirka.mobile:src/api/billing.ts
+      - rozbirka.mobile:src/api/me.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/BillingController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/MeController.cs
+
+  - id: billing.subscription.manage
+    domain: billing
+    name: Start, restore, synchronize, or manage a subscription
+    mobile:
+      routes:
+        - /(tabs)/(profile)/billing
+      actions:
+        - Activate a one-time trial
+        - Purchase or switch a native store package
+        - Restore native purchases and synchronize server entitlement
+        - Open provider subscription management
+    web:
+      outcome: Activate trial or complete an authorized Web checkout, then refresh authoritative server entitlement
+      route: /cabinet/billing
+      disposition: browser-native
+      browserEquivalent: Replace App Store and Play purchase APIs with server-created Web checkout and provider billing portal links
+    contract:
+      service: core
+      status: partial
+      operations:
+        - POST /api/v1/billing/trial
+        - POST /api/v1/billing/subscribe
+        - POST /api/v1/billing/revenuecat/sync
+        - POST /api/v1/billing/cancel
+      notes: Billing.Manage protects runtime operations, but immutable checkout, webhook, idempotency, provider reconciliation, trial eligibility, and blocked-tenant contracts are pending under ROZ-121, ROZ-122, and ROZ-123
+    access:
+      permissions:
+        - billing.manage
+      tenant: required
+      billing: recovery-route-readable-when-blocked
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-117
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(profile)/billing.tsx
+      - rozbirka.mobile:src/api/billing.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/BillingController.cs
+
+systemCapabilities:
+  - id: auth.session.refresh
+    domain: auth
+    name: Refresh an authenticated session
+    trigger: An API request encounters an expired access token
+    mobileBehavior: Coordinate refresh so concurrent failures do not rotate the refresh token more than once
+    webOutcome: Preserve one safe session refresh operation and retry eligible requests without exposing tokens
+    contract:
+      service: identity
+      status: partial
+      operations:
+        - POST /auth/refresh
+      notes: Runtime refresh exists, but immutable session lifecycle and concurrent refresh guarantees are pending under ROZ-124 and ROZ-125
+    access:
+      permissions:
+        - authenticated-session
+      tenant: preserved-across-refresh
+      billing: not-applicable
+    owner: identity
+    tracking:
+      status: existing
+      issue: ROZ-125
+    evidence:
+      - rozbirka.mobile:src/api/auth.ts
+      - rozbirka.mobile:src/session/authRefreshCoordinator.ts
+      - rozbirka.identity:src/Rozbirka.Identity.API/Controllers/AuthController.cs
+      - rozbirka.web:src/api/refresh-coordinator.ts
+
+  - id: auth.session.logout
+    domain: auth
+    name: Revoke and clean up an authenticated session
+    trigger: The user signs out or session recovery cannot continue
+    mobileBehavior: Revoke the refresh token and clear tenant-scoped private state
+    webOutcome: Revoke the refresh token, remove credentials, and clear private tenant data before returning to login
+    contract:
+      service: identity
+      status: partial
+      operations:
+        - POST /auth/logout
+      notes: Runtime logout exists, but immutable revocation and cleanup guarantees are pending under ROZ-124 and ROZ-125
+    access:
+      permissions:
+        - authenticated-session
+      tenant: clear-on-logout
+      billing: not-applicable
+    owner: identity
+    tracking:
+      status: existing
+      issue: ROZ-125
+    evidence:
+      - rozbirka.mobile:src/api/auth.ts
+      - rozbirka.mobile:src/session/sessionCleanup.ts
+      - rozbirka.identity:src/Rozbirka.Identity.API/Controllers/AuthController.cs
+      - rozbirka.web:src/api/session.ts
+
+  - id: auth.tenant.transition
+    domain: auth
+    name: Transition safely into a selected or accepted tenant
+    trigger: Login, tenant creation, or invitation acceptance selects a tenant
+    mobileBehavior: Update tenant identity and invalidate private tenant-scoped state before navigation
+    webOutcome: Switch the active tenant without leaking cached data, permissions, or billing state from the previous tenant
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/tenants
+        - GET /api/v1/me/permissions
+      notes: Membership and permission endpoints exist, but immutable contracts and cache-security guarantees are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - authenticated
+      tenant: transition-target
+      billing: reload-entitlements
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:src/session/tenantTransition.ts
+      - rozbirka.mobile:src/query/tenantMutationBoundary.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/TenantsController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/MeController.cs
+      - rozbirka.web:src/api/tenant-preference.ts
+
+  - id: auth.session-generation
+    domain: auth
+    name: Reject stale asynchronous work after a session boundary
+    trigger: Login, logout, account deletion, or tenant transition changes the private-data owner
+    mobileBehavior: Advance a private boundary generation so stale queries and mutations cannot commit into the new session
+    webOutcome: Associate asynchronous work with the active session and tenant generation and discard results captured before a boundary change
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - internal-session-boundary
+      tenant: captured-generation
+      billing: reload-on-generation-change
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-119
+    evidence:
+      - rozbirka.mobile:src/session/privateCacheBoundaryEpoch.ts
+      - rozbirka.mobile:src/query/tenantMutationBoundary.ts
+      - rozbirka.mobile:src/query/queryLifecycle.ts
+      - rozbirka.web:src/api/session.ts
+
+  - id: auth.tenant-query-scope
+    domain: auth
+    name: Scope every private cache key and mutation to user and tenant
+    trigger: Any tenant-private query or mutation is created
+    mobileBehavior: Require authenticated user and tenant scope in query keys and capture the tenant mutation boundary
+    webOutcome: Never share private cache entries across users or tenants and prevent stale mutation effects after tenant switching
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - internal-cache-policy
+      tenant: user-and-tenant-keyed
+      billing: entitlement-keyed-by-tenant
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-119
+    evidence:
+      - rozbirka.mobile:src/query/tenantQueryScope.ts
+      - rozbirka.mobile:src/query/tenantMutationBoundary.ts
+      - rozbirka.mobile:src/query/queryClient.ts
+      - rozbirka.web:src/api/tenant-preference.ts
+
+  - id: auth.private-cache-invalidation
+    domain: auth
+    name: Clear private caches at identity and tenant boundaries
+    trigger: Logout, account deletion, failed recovery, or tenant transition completes
+    mobileBehavior: Cancel in-flight private work, remove private queries and files, reset tenant stores, and preserve only public cache data
+    webOutcome: Cancel and remove private cached data before credentials or active tenant ownership changes
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - internal-cleanup-policy
+      tenant: clear-previous-tenant
+      billing: clear-previous-entitlement
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-119
+    evidence:
+      - rozbirka.mobile:src/session/sessionCleanup.ts
+      - rozbirka.mobile:src/query/queryLifecycle.ts
+      - rozbirka.mobile:src/stores/authStore.ts
+      - rozbirka.web:src/api/session.ts
+
+  - id: profile.private-temporary-files
+    domain: profile
+    name: Own and remove private temporary files
+    trigger: A report, sticker PDF, or private image is downloaded or generated
+    mobileBehavior: Allocate files to the active private owner and remove them on close, share completion, logout, or tenant transition
+    webOutcome: Prefer memory or authenticated downloads; revoke object URLs and remove tenant-private browser artifacts on use and session boundaries
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - internal-private-file-policy
+      tenant: active-owner-only
+      billing: not-applicable
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-119
+    evidence:
+      - rozbirka.mobile:src/lib/privateTemporaryFiles.ts
+      - rozbirka.mobile:src/utils/privateTemporaryFileLifecycle.ts
+      - rozbirka.mobile:src/session/sessionCleanup.ts
+      - rozbirka.mobile:app/(tabs)/(home)/reports.tsx
+
+  - id: auth.retry-policy
+    domain: auth
+    name: Retry only safe and current requests
+    trigger: A query fails because of transport, server, authorization, or tenant state
+    mobileBehavior: Retry bounded transient reads, coordinate one token refresh, and avoid retrying unsafe mutations or terminal authorization failures
+    webOutcome: Apply bounded retry only to idempotent current-session work and route authentication, permission, tenant-block, and validation failures to explicit handling
+    contract:
+      service: none
+      status: not-applicable
+    access:
+      permissions:
+        - internal-network-policy
+      tenant: current-boundary-only
+      billing: do-not-retry-blocked-business-request
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-119
+    evidence:
+      - rozbirka.mobile:src/query/retryPolicy.ts
+      - rozbirka.mobile:src/api/client.ts
+      - rozbirka.mobile:src/session/authRefreshCoordinator.ts
+      - rozbirka.web:src/api/client.ts
+      - rozbirka.web:src/api/refresh-coordinator.ts
+
+  - id: parts.media-ownership
+    domain: parts
+    name: Enforce private media ownership and cleanup
+    trigger: A part or vehicle image is uploaded, viewed, replaced, or deleted
+    mobileBehavior: Upload and delete media through authenticated endpoints and clear local private artifacts at session boundaries
+    webOutcome: Treat storage keys as opaque, require server authorization for every media operation, and clean abandoned uploads without exposing cross-tenant objects
+    contract:
+      service: core
+      status: unsafe
+      operations:
+        - POST /api/v1/media/upload
+        - DELETE /api/v1/media
+      notes: Runtime endpoints validate file type and size, but visible controller evidence does not bind storage-key deletion or upload targets to an authorized tenant entity; remediation is tracked by ROZ-122
+    access:
+      permissions:
+        - entity-specific-manage-permission
+      tenant: required-and-server-enforced
+      billing: media-limits
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:src/api/media.ts
+      - rozbirka.mobile:src/session/sessionCleanup.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/MediaController.cs
+
+  - id: team.permission-enforcement
+    domain: team
+    name: Enforce permissions on navigation, data, and mutations
+    trigger: A user enters a protected feature or attempts an operation
+    mobileBehavior: Load server permissions and features, hide unavailable actions, and rely on server authorization as the final authority
+    webOutcome: Gate routes and controls for clarity while requiring the API to enforce every read and mutation permission independently
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/me/permissions
+      notes: Runtime permissions and feature entitlements exist, but immutable vocabulary, cache invalidation, negative-path coverage, and complete controller enforcement are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - authenticated
+      tenant: required
+      billing: enabled-features-from-server
+    owner: core
+    tracking:
+      status: existing
+      issue: ROZ-122
+    evidence:
+      - rozbirka.mobile:src/api/me.ts
+      - rozbirka.mobile:src/hooks/usePermissions.ts
+      - rozbirka.mobile:src/hooks/useFeatures.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/MeController.cs
+      - rozbirka.web:src/routes/routes.tsx
+
+  - id: billing.access-gates
+    domain: billing
+    name: Enforce billing blocks, features, and quotas
+    trigger: Subscription state loads or a quota-sensitive operation is attempted
+    mobileBehavior: Use server entitlements to show blocks and paywalls while retaining billing recovery access
+    webOutcome: Preserve billing and recovery routes for blocked tenants, gate feature UI from server entitlements, and rely on authoritative API quota enforcement
+    contract:
+      service: core
+      status: partial
+      operations:
+        - GET /api/v1/billing/subscription
+        - GET /api/v1/me/permissions
+      notes: Runtime entitlement and blocked-tenant behavior exist, but immutable middleware exceptions, quota semantics, cache invalidation, and negative-path coverage are pending under ROZ-121 and ROZ-122
+    access:
+      permissions:
+        - authenticated
+      tenant: required
+      billing: authoritative-server-gate
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-119
+    evidence:
+      - rozbirka.mobile:src/stores/blockedStore.ts
+      - rozbirka.mobile:src/stores/paywallStore.ts
+      - rozbirka.mobile:src/billing/featureSource.ts
+      - rozbirka.core:src/Rozbirka.API/Controllers/BillingController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/MeController.cs
+      - rozbirka.web:src/api/billing.ts
+
+  - id: inventory.structure.manage
+    domain: inventory
+    name: Manage warehouses, zones, zone labels, and part placement
+    trigger: An authorized user configures physical inventory storage or part placement
+    mobileBehavior: Create, rename, and archive warehouses and zones, print zone QR labels, and assign parts to physical zones
+    webOutcome: Configure the same inventory structure from responsive management screens and print browser-native QR label sheets
+    contract:
+      service: core
+      status: ready
+      operations:
+        - GET /api/v1/warehouses
+        - POST /api/v1/warehouses
+        - PUT /api/v1/warehouses/{id}
+        - DELETE /api/v1/warehouses/{id}
+        - GET /api/v1/inventory/zones
+        - POST /api/v1/inventory/zones
+        - PUT /api/v1/inventory/zones/{id}
+        - DELETE /api/v1/inventory/zones/{id}
+        - GET /api/v1/parts/{partId}/inventory-zones
+        - PUT /api/v1/parts/{partId}/inventory-zones
+    access:
+      permissions:
+        - inventory.view
+        - inventory.zones.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/inventory/index.tsx
+      - rozbirka.mobile:app/inventory/warehouses/[id]/index.tsx
+      - rozbirka.mobile:app/inventory/part-zones/[partId].tsx
+      - rozbirka.core:src/Rozbirka.API/Controllers/WarehousesController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/InventoryZonesController.cs
+      - rozbirka.web:src/cabinet/inventory/InventoryScreen.tsx
+
+  - id: inventory.sessions.manage
+    domain: inventory
+    name: Create and manage inventory sessions
+    trigger: An authorized user prepares or controls a physical inventory count
+    mobileBehavior: Select zones, create a draft, manage the session lifecycle, and monitor zone progress and lease ownership
+    webOutcome: Create and control inventory sessions while monitoring Mobile counting progress without taking a scanner lease
+    contract:
+      service: core
+      status: ready
+      operations:
+        - GET /api/v1/inventory/sessions
+        - POST /api/v1/inventory/sessions
+        - GET /api/v1/inventory/sessions/{id}
+        - POST /api/v1/inventory/sessions/{id}/start
+        - POST /api/v1/inventory/sessions/{id}/cancel
+        - POST /api/v1/inventory/sessions/{id}/complete
+        - POST /api/v1/inventory/sessions/{id}/reopen
+    access:
+      permissions:
+        - inventory.view
+        - inventory.manage
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/inventory/new.tsx
+      - rozbirka.mobile:app/inventory/sessions/[id]/index.tsx
+      - rozbirka.core:src/Rozbirka.API/Controllers/InventorySessionsController.cs
+      - rozbirka.web:src/cabinet/inventory/InventoryScreen.tsx
+
+  - id: inventory.results.review
+    domain: inventory
+    name: Review inventory results, discrepancies, adjustments, and audit
+    trigger: An inventory count reaches review or an operator inspects historical counting activity
+    mobileBehavior: Compare expected and counted quantities, apply a reasoned adjustment, and review audit and scan journals
+    webOutcome: Review responsive discrepancy results, apply authorized adjustments, and inspect immutable audit and scan journals
+    contract:
+      service: core
+      status: ready
+      operations:
+        - GET /api/v1/inventory/sessions/{id}/results
+        - GET /api/v1/inventory/sessions/{id}/audit
+        - GET /api/v1/inventory/sessions/{sessionId}/zones/{zoneId}/scans
+        - POST /api/v1/inventory/sessions/{sessionId}/adjustments/{partId}
+    access:
+      permissions:
+        - inventory.view
+        - inventory.adjust
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/inventory/sessions/[id]/index.tsx
+      - rozbirka.mobile:app/inventory/sessions/[id]/journal/[zoneId].tsx
+      - rozbirka.core:src/Rozbirka.API/Controllers/InventorySessionsController.cs
+      - rozbirka.core:src/Rozbirka.API/Controllers/InventoryScansController.cs
+      - rozbirka.web:src/cabinet/inventory/InventoryScreen.tsx
+
+  - id: inventory.count.mobile-only
+    domain: inventory
+    name: Physically count a zone with QR scanning and an exclusive lease
+    trigger: A worker starts physically counting an inventory zone
+    mobileBehavior: Scan the zone, acquire and heartbeat its exclusive lease, scan parts with an offline queue, undo the latest scan, and complete the zone
+    webOutcome: Show count progress and the resulting scan journal without camera, scan, lease, undo, offline-queue, or zone-completion controls
+    contract:
+      service: core
+      status: ready
+      operations:
+        - GET /api/v1/inventory/sessions/{id}
+        - GET /api/v1/inventory/sessions/{sessionId}/zones/{zoneId}/scans
+      notes: Web intentionally consumes only read operations; scan mutation, lease, offline queue, undo, and zone completion remain Mobile-only
+    access:
+      permissions:
+        - inventory.view
+      tenant: required
+      billing: enabled-feature-set
+    owner: web
+    tracking:
+      status: existing
+      issue: ROZ-104
+    evidence:
+      - rozbirka.mobile:app/inventory/sessions/[id]/zone-scan.tsx
+      - rozbirka.mobile:app/inventory/sessions/[id]/count/[zoneId].tsx
+      - rozbirka.mobile:src/inventory/offlineScanQueue.ts
+      - rozbirka.mobile:src/inventory/useZoneLease.ts
+      - rozbirka.web:src/api/inventory.ts
+      - rozbirka.web:src/cabinet/inventory/InventoryScreen.tsx
+
+excludedRoutes:
+  - route: /_layout
+    classification: unreachable
+    reason: Expo Router root layout initializes providers, session recovery, and navigation but is not a user-addressable capability
+    evidence:
+      - rozbirka.mobile:app/_layout.tsx
+    webReplacement: null
+  - route: /(auth)/_layout
+    classification: unreachable
+    reason: Expo Router layout groups authentication screens but is not a user-addressable capability
+    evidence:
+      - rozbirka.mobile:app/(auth)/_layout.tsx
+    webReplacement: null
+  - route: /(tabs)/_layout
+    classification: unreachable
+    reason: Expo Router tab layout declares navigation and access policy but is not a user-addressable capability
+    evidence:
+      - rozbirka.mobile:app/(tabs)/_layout.tsx
+    webReplacement: null
+  - route: /(tabs)/(home)/_layout
+    classification: unreachable
+    reason: Expo Router home stack layout groups dashboard screens but is not a user-addressable capability
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(home)/_layout.tsx
+    webReplacement: null
+  - route: /(tabs)/(orders)/_layout
+    classification: unreachable
+    reason: Expo Router orders stack layout groups order and customer screens but is not a user-addressable capability
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(orders)/_layout.tsx
+    webReplacement: null
+  - route: /(tabs)/(parts)/_layout
+    classification: unreachable
+    reason: Expo Router layout groups parts screens but is not a user-addressable capability
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(parts)/_layout.tsx
+    webReplacement: null
+  - route: /(tabs)/(profile)/_layout
+    classification: unreachable
+    reason: Expo Router profile stack layout groups account, team, and billing screens but is not a user-addressable capability
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(profile)/_layout.tsx
+    webReplacement: null
+  - route: /+not-found
+    classification: unreachable
+    reason: Expo Router fallback handles invalid URLs and does not represent a Mobile business capability requiring parity
+    evidence:
+      - rozbirka.mobile:app/+not-found.tsx
+    webReplacement: /404
+  - route: /part/[id]/sell
+    classification: obsolete
+    reason: Legacy direct-sale is replaced by the canonical Orders flow for reserve, payment, cancel, refund, and audit consistency
+    evidence:
+      - rozbirka.mobile:app/part/[id]/sell.tsx
+      - rozbirka.mobile:src/api/sales.ts
+    webReplacement: /cabinet/orders/new?partId=:id
+    tracking:
+      status: existing
+      issue: ROZ-112
+  - route: /part/[id]/success
+    classification: obsolete
+    reason: The legacy direct-sale success screen is replaced by the canonical order detail and payment outcome
+    evidence:
+      - rozbirka.mobile:app/part/[id]/success.tsx
+    webReplacement: /cabinet/orders/:id
+    tracking:
+      status: existing
+      issue: ROZ-112
+  - route: native://revenuecat/purchase-restore
+    classification: native-only
+    reason: App Store and Play billing SDK purchase and restore mechanics do not run on Web; the required browser outcome is server-created checkout and authoritative entitlement refresh
+    evidence:
+      - rozbirka.mobile:app/(tabs)/(profile)/billing.tsx
+      - rozbirka.mobile:src/api/billing.ts
+    webReplacement: /cabinet/billing
+    tracking:
+      status: existing
+      issue: ROZ-117

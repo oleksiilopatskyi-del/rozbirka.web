@@ -8,6 +8,7 @@ package-lock.json
 .wrangler
 playwright-report
 test-results
+gha-creds-*.json
 worker-configuration.d.ts
 src/api/generated/*.ts
 

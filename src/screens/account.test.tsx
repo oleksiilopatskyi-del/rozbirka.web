@@ -1,263 +1,111 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { MemoryRouter, useLocation } from 'react-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { billingApi } from '@/api/billing'
-import type { SubscriptionDto } from '@/api/types'
-import { useAuth } from '@/auth/AuthContext'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
+import { beforeEach, expect, it, vi } from 'vitest'
+import { useAuth, type AuthContextValue } from '@/auth/AuthContext'
 import { AccountScreen } from './account'
 
-vi.mock('@/api/billing', () => ({
-  billingApi: {
-    getSubscription: vi.fn(),
-    getPayments: vi.fn(),
-    getPlans: vi.fn(),
-    subscribe: vi.fn(),
-    cancel: vi.fn(),
-    cancelPayment: vi.fn(),
-  },
-}))
+vi.mock('@/auth/AuthContext', () => ({ useAuth: vi.fn() }))
 
-vi.mock('@/auth/AuthContext', () => ({
-  useAuth: vi.fn(),
-}))
-
-/* eslint-disable @typescript-eslint/unbound-method */
-const getSubscription = vi.mocked(billingApi.getSubscription)
-const getPayments = vi.mocked(billingApi.getPayments)
-const getPlans = vi.mocked(billingApi.getPlans)
-/* eslint-enable @typescript-eslint/unbound-method */
-const mockedUseAuth = vi.mocked(useAuth)
-const signOut = vi.fn<() => Promise<void>>()
+const tenant = {
+  id: 'tenant-1',
+  name: 'Koval Auto',
+  slug: 'koval',
+  plan: 'active' as const,
+  planTier: 'pro',
+  city: 'Київ',
+  logoUrl: null,
+  isActive: true,
+  createdAt: '2026-08-01T10:00:00Z',
+  roleName: 'owner',
+}
 
 function LocationProbe() {
   const location = useLocation()
-  return <output aria-label="Поточний маршрут">{location.pathname}</output>
+  return (
+    <output aria-label="Поточний маршрут">
+      {location.pathname + location.search}
+    </output>
+  )
 }
 
-const subscription: SubscriptionDto = {
-  state: 'trial',
-  planCode: 'pro_monthly',
-  planName: 'Pro',
-  trialEndsAt: '2026-07-31T00:00:00Z',
-  trialDaysRemaining: 7,
-  currentPeriodEnd: '2026-07-31T00:00:00Z',
-  nextChargeAt: null,
-  amount: 0,
-  currency: 'USD',
-  cardLast4: null,
-  cardBrand: null,
-  canSubscribe: true,
-  canCancel: false,
-  canReactivate: false,
-  canActivateTrial: false,
-  usage: {
-    cars: { used: 0, max: 100 },
-    intakes: { used: 0, max: 100 },
-    parts: { used: 0, max: 1000 },
-    users: { used: 1, max: 10 },
-    cashRegisters: { used: 0, max: 5 },
-  },
-  features: [],
-}
-
-function renderAccount() {
+function renderAccount(path = '/account') {
   return render(
-    <MemoryRouter>
-      <AccountScreen />
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/account" element={<AccountScreen />} />
+        <Route path="*" element={<LocationProbe />} />
+      </Routes>
     </MemoryRouter>,
   )
 }
 
-describe('AccountScreen subscription state', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    signOut.mockResolvedValue()
-    mockedUseAuth.mockReturnValue({
-      status: 'authenticated',
-      user: {
-        id: 'user-1',
-        phone: '+380501112233',
-        displayName: 'Власник',
-        role: 'owner',
-        isActive: true,
-        lastLoginAt: null,
-      },
-      tenant: {
-        id: 'tenant-1',
-        name: 'Test',
-        slug: 'test',
-        plan: 'trial',
-        planTier: 'pro',
-        city: null,
-        logoUrl: null,
-        isActive: true,
-        createdAt: '2026-07-24T00:00:00Z',
-        roleName: 'Owner',
-      },
-      tenants: [
-        {
-          id: 'tenant-1',
-          name: 'Test',
-          slug: 'test',
-          plan: 'trial',
-          planTier: 'pro',
-          city: null,
-          logoUrl: null,
-          isActive: true,
-          createdAt: '2026-07-24T00:00:00Z',
-          roleName: 'Owner',
-        },
-      ],
-      hydrate: vi.fn(),
-      switchTenant: vi.fn(),
-      signOut,
-    })
-    getPayments.mockResolvedValue({
-      items: [],
-      page: 1,
-      pageSize: 10,
-      total: 0,
-      totalPages: 0,
-    })
-    getPlans.mockResolvedValue([])
+beforeEach(() => {
+  vi.mocked(useAuth).mockReturnValue({
+    status: 'authenticated',
+    user: {
+      id: 'user-1',
+      phone: '+380501112233',
+      displayName: 'Власник',
+      role: 'owner',
+      isActive: true,
+      lastLoginAt: null,
+    },
+    tenant,
+    tenants: [tenant],
+    hydrate: vi.fn(),
+    commitTenant: vi.fn(),
+    updateName: vi.fn(),
+    signOut: vi.fn(),
+  } satisfies AuthContextValue)
+})
+
+it('redirects an authenticated account visit to the selected tenant dashboard', async () => {
+  renderAccount()
+
+  expect(await screen.findByLabelText('Поточний маршрут')).toHaveTextContent(
+    '/app/koval/dashboard',
+  )
+})
+
+it('preserves the selected plan in the billing plans route', async () => {
+  renderAccount('/account?section=plans&plan=pro_monthly')
+
+  expect(await screen.findByLabelText('Поточний маршрут')).toHaveTextContent(
+    '/app/koval/settings/billing/plans?plan=pro_monthly',
+  )
+})
+
+it('retains a safe scan intent on the selected tenant dashboard', async () => {
+  renderAccount('/account?scan=QR-123~part')
+
+  expect(await screen.findByLabelText('Поточний маршрут')).toHaveTextContent(
+    '/app/koval/dashboard?scan=QR-123~part',
+  )
+})
+
+it('never shows first-tenant onboarding when a tenant already exists', async () => {
+  const current = vi.mocked(useAuth)()
+  vi.mocked(useAuth).mockReturnValue({ ...current, tenant: null })
+
+  renderAccount()
+
+  expect(await screen.findByLabelText('Поточний маршрут')).toHaveTextContent(
+    '/app/koval/dashboard',
+  )
+  expect(screen.queryByText('Перший крок')).toBeNull()
+})
+
+it('renders first-tenant onboarding for an authenticated user with no tenants', () => {
+  const current = vi.mocked(useAuth)()
+  vi.mocked(useAuth).mockReturnValue({
+    ...current,
+    tenant: null,
+    tenants: [],
   })
 
-  it('renders the trial already activated by the backend', async () => {
-    getSubscription.mockResolvedValue(subscription)
+  renderAccount()
 
-    renderAccount()
-
-    expect(await screen.findByText('Pro')).toBeInTheDocument()
-    expect(screen.getByText('7 днів')).toBeInTheDocument()
-    expect(screen.getByText('14 днів безкоштовно')).toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: /активувати/i }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('does not expose the marketplace seller tab', async () => {
-    getSubscription.mockResolvedValue(subscription)
-
-    renderAccount()
-
-    expect(await screen.findByText('Pro')).toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: 'Магазин' }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('routes a legacy activatable tenant to paid plans', async () => {
-    getSubscription.mockResolvedValue({
-      ...subscription,
-      state: 'blocked',
-      planCode: null,
-      planName: null,
-      trialEndsAt: null,
-      trialDaysRemaining: null,
-      currentPeriodEnd: null,
-      canActivateTrial: true,
-    })
-
-    renderAccount()
-
-    expect(
-      await screen.findByRole('button', { name: 'Оформити підписку' }),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: /активувати/i }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('opens and marks the plan requested in the URL', async () => {
-    getSubscription.mockResolvedValue(subscription)
-    getPlans.mockResolvedValue([
-      {
-        code: 'pro_monthly',
-        name: 'Pro',
-        amount: 59,
-        currency: 'USD',
-        interval: '1m',
-        trialDays: 14,
-        limits: {
-          cars: 20,
-          intakes: 25,
-          parts: 2000,
-          users: 5,
-          cashRegisters: 2,
-          photosPerPart: null,
-        },
-        features: [],
-      },
-    ])
-
-    render(
-      <MemoryRouter
-        initialEntries={['/account?section=plans&plan=pro_monthly']}
-      >
-        <AccountScreen />
-      </MemoryRouter>,
-    )
-
-    expect(await screen.findByText('Обрано')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Тарифи' })).toBeInTheDocument()
-  })
-
-  it('leaves the protected account route before waiting for logout', async () => {
-    getSubscription.mockResolvedValue(subscription)
-    let finishLogout!: () => void
-    signOut.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finishLogout = resolve
-      }),
-    )
-    render(
-      <MemoryRouter initialEntries={['/account']}>
-        <AccountScreen />
-        <LocationProbe />
-      </MemoryRouter>,
-    )
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Вийти' }))
-
-    expect(
-      screen.getByRole('status', { name: 'Поточний маршрут' }),
-    ).toHaveTextContent(/^\/$/)
-    finishLogout()
-  })
-
-  it('filters removed and unknown plans from a stale account API response', async () => {
-    getSubscription.mockResolvedValue(subscription)
-    const plan = {
-      amount: 59,
-      currency: 'USD',
-      interval: '1m',
-      trialDays: 14,
-      limits: {
-        cars: 20,
-        intakes: 25,
-        parts: 2000,
-        users: 5,
-        cashRegisters: 2,
-        photosPerPart: null,
-      },
-      features: [],
-    }
-    getPlans.mockResolvedValue([
-      { ...plan, code: 'lite_monthly', name: 'Lite', amount: 19 },
-      { ...plan, code: 'pro_monthly', name: 'Pro' },
-      { ...plan, code: 'enterprise_monthly', name: 'Enterprise', amount: 299 },
-      { ...plan, code: 'unknown_monthly', name: 'Unknown' },
-    ])
-
-    render(
-      <MemoryRouter initialEntries={['/account?section=plans']}>
-        <AccountScreen />
-      </MemoryRouter>,
-    )
-
-    expect(await screen.findByText('Enterprise')).toBeInTheDocument()
-    expect(screen.queryByText('Lite')).toBeNull()
-    expect(screen.queryByText('Unknown')).toBeNull()
-  })
+  expect(screen.getByRole('heading', { name: /Створіть/ })).toBeInTheDocument()
+  expect(screen.getByLabelText('Назва розбірки')).toBeInTheDocument()
+  expect(screen.queryByLabelText('Поточний маршрут')).toBeNull()
 })

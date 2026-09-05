@@ -1,5 +1,25 @@
+import { isValidElement, type ReactElement, type ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
 import { createAppRoutes } from './routes'
+
+const cabinetRoute = () =>
+  createAppRoutes(false).find((route) => route.path === '/app/:tenant')!
+
+const loadRoute = async (route: NonNullable<ReturnType<typeof cabinetRoute>>) =>
+  (route.lazy as () => Promise<{ element: ReactNode }>)()
+
+const elementTypeNames = (node: ReactNode): string[] => {
+  if (!isValidElement(node)) return []
+  const type = node.type
+  const name =
+    typeof type === 'function'
+      ? type.name
+      : typeof type === 'string'
+        ? type
+        : ''
+  const children = (node.props as { children?: ReactNode }).children
+  return [name, ...elementTypeNames(children)]
+}
 
 describe('production route boundary', () => {
   it('omits prototype routes in production', () => {
@@ -40,4 +60,84 @@ describe('production route boundary', () => {
     expect(paths).toContain('/invite/:code')
     expect(paths).toContain('/scan/:qrCode')
   })
+
+  it('registers the cabinet parent and lazy children', () => {
+    const app = cabinetRoute()
+    const childPaths = app?.children?.map((route) => route.path)
+
+    expect(app?.lazy).toEqual(expect.any(Function))
+    expect(childPaths).toContain('dashboard')
+    expect(childPaths).toContain('settings/billing/plans')
+    expect(childPaths).toContain('settings/billing/payments')
+    expect(app?.children?.at(-1)?.path).toBe('*')
+    expect(
+      app?.children
+        ?.filter((route) => route.path !== undefined)
+        .every((route) => route.lazy !== undefined),
+    ).toBe(true)
+  })
+
+  it('mounts the responsive cabinet shell inside the tenant provider', async () => {
+    const loaded = await loadRoute(cabinetRoute())
+
+    expect(elementTypeNames(loaded.element)).toEqual([
+      'RequireAuth',
+      'CabinetProvider',
+      'CabinetShell',
+    ])
+  })
+
+  it.each([
+    ['dashboard', 'DashboardScreen'],
+    ['cars', 'CarsScreen'],
+    ['cars/new', 'CarsScreen'],
+    ['cars/:carId', 'CarsScreen'],
+    ['cars/:carId/edit', 'CarsScreen'],
+    ['intakes', 'IntakesScreen'],
+    ['intakes/new', 'IntakesScreen'],
+    ['intakes/batch', 'IntakesScreen'],
+    ['intakes/:intakeId', 'IntakesScreen'],
+    ['intakes/:intakeId/edit', 'IntakesScreen'],
+    ['intakes/:intakeId/parts/new', 'IntakesScreen'],
+    ['parts', 'PartsScreen'],
+    ['parts/new', 'PartsScreen'],
+    ['parts/:partId', 'PartsScreen'],
+    ['parts/:partId/edit', 'PartsScreen'],
+    ['scan', 'ScannerScreen'],
+    ['stickers', 'StickersScreen'],
+    ['customers', 'CustomersScreen'],
+    ['customers/new', 'CustomersScreen'],
+    ['customers/:customerId', 'CustomersScreen'],
+    ['customers/:customerId/edit', 'CustomersScreen'],
+    ['orders', 'OrdersScreen'],
+    ['orders/new', 'OrdersScreen'],
+    ['orders/:orderId', 'OrdersScreen'],
+    ['orders/:orderId/items/new', 'OrdersScreen'],
+    ['cash', 'CashScreen'],
+    ['cash/new', 'CashScreen'],
+    ['cash/:registerId', 'CashScreen'],
+    ['cash/:registerId/edit', 'CashScreen'],
+    ['settings/billing/overview', 'SubscriptionScreen'],
+    ['settings/billing/plans', 'PlansScreen'],
+    ['settings/billing/payments', 'PaymentsScreen'],
+    ['settings/profile', 'ProfileScreen'],
+    ['settings/business', 'BusinessSettingsScreen'],
+    ['reports', 'ReportsScreen'],
+    ['team', 'TeamScreen'],
+  ])(
+    'loads %s through its distinct released screen',
+    async (path, screenName) => {
+      const route = cabinetRoute().children?.find(
+        (child) => child.path === path,
+      )
+      const loaded = await loadRoute(route!)
+      const element = loaded.element as ReactElement<{
+        screen?: { displayName?: string; name?: string }
+      }>
+
+      expect(
+        element.props.screen?.displayName ?? element.props.screen?.name,
+      ).toBe(screenName)
+    },
+  )
 })

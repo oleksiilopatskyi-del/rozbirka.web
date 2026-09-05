@@ -39,4 +39,23 @@ describe('safe post-login destinations', () => {
       '/account',
     )
   })
+
+  it('maps authenticated account and plan destinations into the selected cabinet', () => {
+    expect(resolvePostLoginDestination('', '/account', { slug: 'koval' })).toBe(
+      '/app/koval/dashboard',
+    )
+    expect(
+      resolvePostLoginDestination('?plan=pro_monthly', '/account', {
+        slug: 'koval',
+      }),
+    ).toBe('/app/koval/settings/billing/plans?plan=pro_monthly')
+  })
+
+  it('keeps a safe scan resume ahead of cabinet fallback routing', () => {
+    expect(
+      resolvePostLoginDestination('?scan=QR-123~part', '/account', {
+        slug: 'koval',
+      }),
+    ).toBe('/scan/QR-123~part')
+  })
 })

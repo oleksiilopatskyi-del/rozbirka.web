@@ -24,13 +24,15 @@ it('accepts only the documented openapi-typescript TypeScript peer mismatch', as
   )
 })
 
-it('pins the lockfile npm version in both CI install jobs', async () => {
+it('pins the lockfile npm version in every CI install job', async () => {
   const manifest: unknown = JSON.parse(await readFile(packageManifest, 'utf8'))
   const workflow = await readFile(deployWorkflow, 'utf8')
   const npmPins = workflow.match(/npm install --global npm@11\.16\.0/g) ?? []
+  const cleanInstalls = workflow.match(/\bnpm ci\b/g) ?? []
 
   expect(manifest).toMatchObject({ packageManager: 'npm@11.16.0' })
-  expect(npmPins).toHaveLength(2)
+  expect(cleanInstalls.length).toBeGreaterThan(0)
+  expect(npmPins).toHaveLength(cleanInstalls.length)
 })
 
 describe('dependency report validation', () => {

@@ -112,6 +112,26 @@ describe('edge routing', () => {
     )
   })
 
+  it.each([
+    [
+      'http://rozbirka.pro/app/koval/dashboard?source=http',
+      'https://rozbirka.pro/app/koval/dashboard?source=http',
+    ],
+    [
+      'https://www.rozbirka.pro/app/koval/dashboard?source=www',
+      'https://rozbirka.pro/app/koval/dashboard?source=www',
+    ],
+  ])(
+    'keeps cabinet redirect %s private and noindex',
+    async (source, target) => {
+      const response = await handleRequest(new Request(source), env())
+
+      expect(response.status).toBe(308)
+      expect(response.headers.get('location')).toBe(target)
+      expect(response.headers.get('x-robots-tag')).toBe('noindex')
+    },
+  )
+
   it('does not force HTTPS for the local Worker test server', async () => {
     const response = await handleRequest(
       new Request('http://127.0.0.1:4173/'),
@@ -172,6 +192,45 @@ describe('edge routing', () => {
       expect(response.status).toBe(200)
       expect(response.headers.get('x-robots-tag')).toBe('noindex')
       expect(await response.text()).toContain('shell')
+    },
+  )
+
+  it.each([
+    '/app/a',
+    '/app/koval/',
+    '/app/a/dashboard',
+    '/app/koval/dashboard',
+    `/app/${'a'.repeat(63)}/settings/billing/plans`,
+    '/app/koval-/settings/profile/',
+    '/app/koval/unknown/nested',
+  ])('serves a noindex SPA shell for cabinet path %s', async (path) => {
+    const response = await handleRequest(
+      new Request(`https://rozbirka.pro${path}`),
+      env(),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('x-robots-tag')).toBe('noindex')
+    expect(await response.text()).toContain('shell')
+  })
+
+  it.each([
+    '/app//dashboard',
+    '/app/-koval/dashboard',
+    '/app/Koval/dashboard',
+    '/app/koval_auto/dashboard',
+    `/app/${'a'.repeat(64)}/dashboard`,
+  ])(
+    'returns the branded real 404 for invalid cabinet path %s',
+    async (path) => {
+      const response = await handleRequest(
+        new Request(`https://rozbirka.pro${path}`),
+        env(),
+      )
+
+      expect(response.status).toBe(404)
+      expect(response.headers.get('x-robots-tag')).toBe('noindex')
+      expect(await response.text()).toContain('branded 404')
     },
   )
 

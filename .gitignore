@@ -15,14 +15,18 @@ coverage
 .wrangler
 playwright-report
 test-results
+gha-creds-*.json
 *.local
 
 # Env
 .env
 .env.*
 !.env.example
+!.env.development
+!.env.test
 !.env.qa
 !.env.production
+.dev.vars
 
 # Editor directories and files
 .vscode/*

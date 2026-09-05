@@ -37,13 +37,160 @@ on:
       CF_ACCESS_CLIENT_SECRET:
         description: Cloudflare Access service-token secret for QA checks
         required: false
+      GCP_WIF_PROVIDER:
+        description: GCP Workload Identity provider for private contract access
+        required: true
+      GCP_CONTRACT_READER_SERVICE_ACCOUNT:
+        description: Read-only GCP service account for private OpenAPI contracts
+        required: true
 
 env:
   NODE_VERSION: '22'
 
 jobs:
+  quality:
+    name: Quality ${{ inputs.project_name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm install --global npm@11.16.0
+
+      - run: npm ci
+
+      - if: inputs.run_build
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_CONTRACT_READER_SERVICE_ACCOUNT }}
+
+      - if: inputs.run_build
+        uses: google-github-actions/setup-gcloud@v2
+
+      - if: inputs.run_build
+        name: Lint, typecheck, parity, and dependency gates
+        run: npm run check:static
+
+      - if: inputs.run_build
+        name: Unit test gate
+        run: npm run test:unit
+
+      - if: inputs.run_build
+        name: Contract tooling and API adapter gate
+        run: npm run test:contracts
+
+      - if: inputs.run_build
+        name: Immutable Core and Identity contract drift gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          contract_dir="$RUNNER_TEMP/openapi-contracts"
+          paths_json="$(node scripts/fetch-api-contracts.mjs \
+            --manifest contracts/openapi-sources.json \
+            --out "$contract_dir")"
+          core_path="$(node -e 'const value=JSON.parse(process.argv[1]); process.stdout.write(value.core)' "$paths_json")"
+          identity_path="$(node -e 'const value=JSON.parse(process.argv[1]); process.stdout.write(value.identity)' "$paths_json")"
+          npm run contracts:check -- --core "$core_path" --identity "$identity_path"
+
+      - if: inputs.run_build
+        name: Auth and tenant integration gate
+        run: npm run test:integration
+
+  e2e:
+    name: Browser E2E ${{ inputs.project_name }} (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    # The e2e stub server keeps global state, so a run stays on a single worker;
+    # parallelism comes from giving each browser project its own runner. One
+    # project also means one engine to install instead of three.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: chromium
+            browser: chromium
+          - project: firefox
+            browser: firefox
+          - project: webkit
+            browser: webkit
+          - project: android
+            browser: chromium
+          - project: ios
+            browser: webkit
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm install --global npm@11.16.0
+
+      - run: npm ci
+
+      - id: playwright-version
+        name: Resolve Playwright version
+        run: |
+          echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}-${{ matrix.browser }}
+
+      # Installing system deps goes through apt and has hung on the runner;
+      # bound each attempt so a stuck mirror costs seconds, not the whole job.
+      - if: inputs.run_build
+        name: Install ${{ matrix.browser }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if timeout 300 npx playwright install --with-deps ${{ matrix.browser }}; then
+              exit 0
+            fi
+            echo "playwright install attempt ${attempt} failed or timed out; retrying"
+            sleep 10
+          done
+          exit 1
+
+      - if: inputs.run_build
+        name: Browser E2E gate
+        run: npm run test:e2e -- --project=${{ matrix.project }}
+
+      - if: inputs.run_build && matrix.project == 'chromium'
+        name: Authenticated Chromium smoke gate
+        run: npm run test:smoke
+
+      - if: failure() && inputs.run_build
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-${{ matrix.project }}
+          path: |
+            test-results
+            e2e/**/*-snapshots/*-linux-*.png
+          if-no-files-found: warn
+
   build:
-    name: Build ${{ inputs.project_name }}
+    needs: [quality, e2e]
+    name: Build release artifact ${{ inputs.project_name }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -63,30 +210,13 @@ jobs:
       - run: npm ci
 
       - if: inputs.run_build
-        run: npx playwright install --with-deps chromium firefox webkit
-
-      - if: inputs.run_build
         run: |
           env_name="${{ inputs.auto_qa_deploy && 'qa' || inputs.environment }}"
           if [ "$env_name" = "prod" ]; then
-            npm run verify:prod
+            npm run verify:release:prod
           else
-            npm run check
-            npm run build:qa
-            npm run check:artifact:qa
-            npm run budget:assets
-            npm run test:e2e
-            npx wrangler deploy --dry-run --env qa
+            npm run verify:release:qa
           fi
-
-      - if: failure() && inputs.run_build
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-failure
-          path: |
-            test-results
-            e2e/**/*-snapshots/*-linux-*.png
-          if-no-files-found: warn
 
       - uses: actions/upload-artifact@v4
         with:

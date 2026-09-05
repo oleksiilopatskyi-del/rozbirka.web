@@ -13,6 +13,7 @@ export default defineConfig([
     'node_modules',
     '.wrangler',
     'worker-configuration.d.ts',
+    'src/api/generated/*.ts',
   ]),
   {
     files: ['**/*.{ts,tsx}'],
