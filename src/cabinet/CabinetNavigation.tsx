@@ -1,5 +1,5 @@
 import { useMemo, useState, type ComponentProps, type ReactNode } from 'react'
-import { Ellipsis, LogOut, X } from 'lucide-react'
+import { ChevronLeft, Ellipsis, LogOut, X } from 'lucide-react'
 import { Dialog } from 'radix-ui'
 import { NavLink } from 'react-router'
 import type { Tenant } from '../api/types'
@@ -15,6 +15,7 @@ import {
 } from './module-registry'
 import { evaluateModuleAccess } from './policy'
 import { TenantSwitcher } from './TenantSwitcher'
+import { useNavigationCollapsed } from './use-navigation-collapsed'
 
 interface NavigationEntry {
   key: CabinetModuleKey
@@ -148,40 +149,75 @@ function DesktopNavigation({
   const primary = entries.filter((entry) => entry.placement === 'primary')
   const account = entries.filter((entry) => entry.placement === 'account')
 
+  const [collapsed, toggleCollapsed] = useNavigationCollapsed()
+
   return (
-    <aside className="bg-surface-1 hidden min-h-dvh w-[280px] shrink-0 flex-col border-r border-white/[0.06] px-6 py-7 lg:flex">
-      <BrandLogo href={cabinetPath(tenant.slug, 'dashboard')} />
-      <nav
-        aria-label="Навігація кабінету"
-        className="mt-8 flex flex-1 flex-col"
+    <div
+      className={cn(
+        'sticky top-0 hidden h-dvh shrink-0 self-start lg:block',
+        collapsed ? 'w-0' : 'w-[280px]',
+      )}
+    >
+      <aside
+        className="bg-surface-1 scrollbar-none flex h-full w-[280px] flex-col overflow-y-auto border-r border-white/[0.06] px-6 py-7"
+        hidden={collapsed}
+        id="cabinet-navigation"
       >
-        {groupsOf(primary).map((section) => (
-          <NavigationList
-            className="mt-1"
-            entries={section.entries}
-            key={section.group}
-            label={section.label}
-            presentation="desktop"
+        <BrandLogo href={cabinetPath(tenant.slug, 'dashboard')} />
+        <nav
+          aria-label="Навігація кабінету"
+          className="mt-8 flex flex-1 flex-col"
+        >
+          {groupsOf(primary).map((section) => (
+            <NavigationList
+              className="mt-1"
+              entries={section.entries}
+              key={section.group}
+              label={section.label}
+              presentation="desktop"
+            />
+          ))}
+          {account.length > 0 ? (
+            <NavigationList
+              className="mt-auto pt-6"
+              entries={account}
+              label="Налаштування"
+              presentation="desktop"
+            />
+          ) : null}
+        </nav>
+        <div className="mt-5 border-t border-white/[0.06] pt-5">
+          <TenantSwitcher
+            tenant={tenant}
+            tenants={tenants}
+            onSwitch={onSwitchTenant}
           />
-        ))}
-        {account.length > 0 ? (
-          <NavigationList
-            className="mt-auto pt-6"
-            entries={account}
-            label="Налаштування"
-            presentation="desktop"
-          />
-        ) : null}
-      </nav>
-      <div className="mt-5 border-t border-white/[0.06] pt-5">
-        <TenantSwitcher
-          tenant={tenant}
-          tenants={tenants}
-          onSwitch={onSwitchTenant}
+          <LogoutButton onLogout={onLogout} presentation="desktop" />
+        </div>
+      </aside>
+      {/* Sits on the seam between menu and page, so the way back is exactly
+          where the menu was folded away. */}
+      <button
+        aria-controls="cabinet-navigation"
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? 'Показати меню' : 'Сховати меню'}
+        className={cn(
+          "border-app-line-2 bg-app-raised text-app-muted hover:text-app-ink focus-visible:outline-brand absolute top-1/2 z-30 grid size-7 -translate-y-1/2 cursor-pointer place-items-center rounded-full border shadow-lg before:absolute before:-inset-2.5 before:content-[''] hover:bg-white/[0.06]",
+          // Folded away, the control still needs to be fully on screen.
+          collapsed ? 'left-2' : '-right-3.5',
+        )}
+        onClick={toggleCollapsed}
+        type="button"
+      >
+        <ChevronLeft
+          aria-hidden
+          className={cn(
+            'size-3.5 transition-transform',
+            collapsed && 'rotate-180',
+          )}
         />
-        <LogoutButton onLogout={onLogout} presentation="desktop" />
-      </div>
-    </aside>
+      </button>
+    </div>
   )
 }
 
@@ -196,7 +232,7 @@ function TabletNavigation({
   const account = entries.filter((entry) => entry.placement === 'account')
 
   return (
-    <aside className="bg-surface-1 hidden min-h-dvh w-[72px] shrink-0 flex-col items-center border-r border-white/[0.06] px-3 py-5 md:flex lg:hidden">
+    <aside className="bg-surface-1 scrollbar-none sticky top-0 hidden h-dvh w-[72px] shrink-0 flex-col items-center self-start overflow-y-auto border-r border-white/[0.06] px-3 py-5 md:flex lg:hidden">
       <span aria-hidden className="text-brand text-xl font-semibold">
         r
       </span>

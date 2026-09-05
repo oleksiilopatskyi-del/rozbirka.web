@@ -22,6 +22,40 @@ const partMocks = vi.hoisted(() => ({
   summary: vi
     .fn()
     .mockResolvedValue({ total: 0, available: 0, reserved: 0, sold: 0 }),
+  makes: vi.fn().mockResolvedValue(['Ford', 'Tesla']),
+  search: vi.fn().mockResolvedValue({
+    items: [],
+    page: 1,
+    pageSize: 30,
+    total: 0,
+    totalPages: 0,
+  }),
+  facets: vi.fn().mockResolvedValue({
+    statuses: [
+      { id: 'available', name: 'available', count: 939 },
+      { id: 'reserved', name: 'reserved', count: 39 },
+      { id: 'sold', name: 'sold', count: 318 },
+    ],
+    warehouses: [{ id: 'w1', name: 'Львів, Городоцька', count: 12 }],
+    zones: [],
+    conditions: [
+      { id: 'good', name: 'good', count: 812 },
+      { id: 'fair', name: 'fair', count: 361 },
+      { id: 'scrap', name: 'scrap', count: 123 },
+    ],
+    equipmentTypes: [],
+    makes: [{ id: 'make-ford', name: 'Ford', count: 40 }],
+    models: [{ id: 'model-focus', name: 'Focus', count: 12 }],
+    generations: [],
+    origins: [
+      { id: 'car', name: 'car', count: 900 },
+      { id: 'batch', name: 'batch', count: 300 },
+      { id: 'free', name: 'free', count: 96 },
+    ],
+    qualityFlags: [],
+    inventoryLocks: [],
+    discrepancies: [],
+  }),
   get: vi.fn().mockResolvedValue(null),
   history: vi.fn().mockResolvedValue({ partId: 'part-1', events: [] }),
   create: vi.fn().mockResolvedValue({ id: 'part-1' }),
@@ -102,6 +136,9 @@ beforeEach(() => {
   partMocks.summary
     .mockReset()
     .mockResolvedValue({ total: 0, available: 0, reserved: 0, sold: 0 })
+  partMocks.makes.mockReset().mockResolvedValue(['Ford', 'Tesla'])
+  partMocks.search.mockClear()
+  partMocks.facets.mockClear()
   partMocks.get.mockReset().mockResolvedValue(null)
   partMocks.history
     .mockReset()
@@ -207,24 +244,31 @@ it('normalizes invalid URL filters before requesting inventory', async () => {
   )
 
   await vi.waitFor(() =>
-    expect(partMocks.list).toHaveBeenCalledWith(
-      expect.objectContaining({
-        page: 1,
-        pageSize: 30,
-        carIds: [],
-        intakeIds: ['intake-1'],
-      }),
+    expect(partMocks.search).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 1, pageSize: 30 }),
+      expect.anything(),
     ),
   )
-  expect(partMocks.list.mock.calls.at(-1)?.[0]).not.toHaveProperty('status')
-  expect(screen.getByLabelText('Статус')).toHaveValue('')
-  expect(screen.getByLabelText('Розмір сторінки')).toHaveValue('30')
+  expect(partMocks.search.mock.calls.at(-1)?.[0]).not.toHaveProperty('statuses')
+  expect(partMocks.search.mock.calls.at(-1)?.[0]).not.toHaveProperty('carIds')
+  const statusRow = (name: string | RegExp) =>
+    within(screen.getByRole('region', { name: 'Статус' })).getByRole('button', {
+      name,
+    })
+  expect(statusRow(/Усі/)).toHaveAttribute('aria-pressed', 'true')
+  expect(
+    within(
+      screen.getByRole('radiogroup', {
+        name: 'Кількість деталей на сторінці',
+      }),
+    ).getByRole('radio', { name: '30' }),
+  ).toBeChecked()
   await vi.waitFor(() =>
     expect(screen.getByLabelText('Поточний маршрут')).toHaveTextContent(
       'page=1&per_page=30&intake_ids=intake-1',
     ),
   )
-  await vi.waitFor(() => expect(partMocks.list).toHaveBeenCalledTimes(2))
+  await vi.waitFor(() => expect(partMocks.search).toHaveBeenCalledTimes(2))
 })
 
 it('keeps controlled filters synced with back navigation and resets page when filters change', async () => {
@@ -250,12 +294,19 @@ it('keeps controlled filters synced with back navigation and resets page when fi
     </MemoryRouter>,
   )
 
-  expect(screen.getByLabelText('Статус')).toHaveValue('reserved')
-  fireEvent.change(screen.getByLabelText('Марка'), {
-    target: { value: 'Ford' },
-  })
+  const statusRow = (name: string | RegExp) =>
+    within(screen.getByRole('region', { name: 'Статус' })).getByRole('button', {
+      name,
+    })
+  expect(statusRow(/У резерві/)).toHaveAttribute('aria-pressed', 'true')
+  const make = screen.getByLabelText('Марка')
+  // Options arrive with the facets, so wait for the one we are about to pick.
+  await vi.waitFor(() =>
+    expect(within(make).getByRole('option', { name: /Ford/ })).toBeDefined(),
+  )
+  fireEvent.change(make, { target: { value: 'make-ford' } })
   expect(screen.getByLabelText('Поточний маршрут')).toHaveTextContent(
-    'make=Ford',
+    'make=make-ford',
   )
   expect(screen.getByLabelText('Поточний маршрут').textContent).not.toMatch(
     /(?:^|[?&])page=3(?:&|$)/,
@@ -263,16 +314,16 @@ it('keeps controlled filters synced with back navigation and resets page when fi
 
   fireEvent.click(screen.getByRole('button', { name: 'Назад' }))
   await vi.waitFor(() =>
-    expect(screen.getByLabelText('Статус')).toHaveValue('reserved'),
+    expect(statusRow(/У резерві/)).toHaveAttribute('aria-pressed', 'true'),
   )
   fireEvent.click(screen.getByRole('button', { name: 'Назад' }))
   await vi.waitFor(() =>
-    expect(screen.getByLabelText('Статус')).toHaveValue('available'),
+    expect(statusRow(/В наявності/)).toHaveAttribute('aria-pressed', 'true'),
   )
 })
 
 it('uses server-authoritative pagination metadata for previous and next links', async () => {
-  partMocks.list.mockResolvedValueOnce({
+  partMocks.search.mockResolvedValueOnce({
     items: [],
     page: 2,
     pageSize: 30,
@@ -313,8 +364,9 @@ it('accepts an unbounded positive page while limiting page size to 100', async (
   )
 
   await vi.waitFor(() =>
-    expect(partMocks.list).toHaveBeenCalledWith(
+    expect(partMocks.search).toHaveBeenCalledWith(
       expect.objectContaining({ page: 101, pageSize: 30 }),
+      expect.anything(),
     ),
   )
 })
@@ -332,7 +384,7 @@ it('does not request car or intake selectors without their view permissions', as
     </MemoryRouter>,
   )
 
-  await vi.waitFor(() => expect(partMocks.list).toHaveBeenCalled())
+  await vi.waitFor(() => expect(partMocks.search).toHaveBeenCalled())
   expect(selectorMocks.cars).not.toHaveBeenCalled()
   expect(selectorMocks.intakes).not.toHaveBeenCalled()
   expect(screen.queryByLabelText('Авто')).not.toBeInTheDocument()
@@ -1164,22 +1216,21 @@ it('renders the immutable detail and history contract with permission-aware link
   )
 
   expect(await screen.findByText('Small scratch')).toBeInTheDocument()
-  const stock = screen.getByRole('region', { name: 'Наявність' })
-  expect(stock).toHaveTextContent('Усього 4 шт')
-  expect(within(stock).getByText('Доступно').parentElement).toHaveTextContent(
-    '1',
+  expect(screen.getByRole('region', { name: 'Наявність' })).toHaveTextContent(
+    'Усього 4 шт',
   )
-  expect(within(stock).getByText('У резерві').parentElement).toHaveTextContent(
-    '1',
-  )
-  expect(within(stock).getByText('Продано').parentElement).toHaveTextContent(
-    '2',
-  )
+  // The split reads beside the title, before anything has to be scrolled.
+  const stat = (label: string) =>
+    screen
+      .getAllByRole('term')
+      .find((term) => term.textContent?.trim() === label)?.parentElement
+  expect(stat('Доступно')).toHaveTextContent('1')
+  expect(stat('У резерві')).toHaveTextContent('1')
+  expect(stat('Продано')).toHaveTextContent('2')
   // Who created the part, in the facts rather than in a run-on sentence.
-  const createdFact = screen
-    .getAllByRole('term')
-    .find((term) => term.textContent === 'Створено')
-  expect(createdFact?.parentElement).toHaveTextContent('Olena')
+  const specs = screen.getByRole('region', { name: 'Характеристики' })
+  expect(specs).toHaveTextContent('Створено')
+  expect(specs).toHaveTextContent('Olena')
   expect(screen.getByRole('link', { name: 'CAR-01' })).toHaveAttribute(
     'href',
     '/app/yard/cars/car-1',
@@ -1200,9 +1251,149 @@ it('renders the immutable detail and history contract with permission-aware link
   expect(created).toHaveTextContent('Olena')
 })
 
+it('reads history payloads as facts and shows an order once', async () => {
+  cabinetMock.snapshot.permissions.add('orders.view')
+  partMocks.get.mockResolvedValue({
+    id: 'part-1',
+    name: 'Карта дверей',
+    condition: 'good',
+    status: 'reserved',
+    source: 'batch',
+    quantityTotal: 1,
+    quantityAvailable: 0,
+    quantityReserved: 1,
+    quantitySoldTotal: 0,
+    compatCarBrand: null,
+    compatCarModel: null,
+    compatCarYear: null,
+    oemCode: null,
+    effectiveSalePrice: 360,
+    photos: [],
+    createdByName: 'Андрій Мельник',
+    createdAt: '2026-07-23T10:53:00Z',
+    order: {
+      id: 'order-284',
+      number: 284,
+      status: 'pending',
+      customerName: 'Марина Данилюк',
+      createdAt: '2026-08-25T16:09:00Z',
+      confirmedAt: null,
+      payments: null,
+    },
+    reservations: [
+      {
+        orderId: 'order-284',
+        orderNumber: 284,
+        quantity: 1,
+        customerName: 'Марина Данилюк',
+      },
+    ],
+    soldOrders: null,
+  })
+  partMocks.history.mockResolvedValue({
+    partId: 'part-1',
+    events: [
+      {
+        id: 'event-1',
+        eventType: 'reserved',
+        data: '{"order_id": "ee50afa2-e480", "quantity": 1, "order_number": 284}',
+        createdAt: '2026-08-25T16:09:00Z',
+        user: { id: 'user-2', name: 'Олександр Ковальчук' },
+        order: { id: 'order-284', number: 284 },
+      },
+      {
+        id: 'event-2',
+        eventType: 'edited',
+        data: '{}',
+        createdAt: '2026-08-14T15:26:00Z',
+        user: { id: 'user-3', name: 'Марія Бондаренко' },
+        order: null,
+      },
+    ],
+  })
+  render(
+    <MemoryRouter initialEntries={['/app/yard/parts/part-1']}>
+      <Routes>
+        <Route
+          path="/app/:tenant/parts/:partId"
+          element={<PartsScreen definition={partsDefinition as never} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  const history = await screen.findByRole('region', { name: 'Історія' })
+  const [reserved, edited] = within(history).getAllByRole('listitem')
+  // Storage ids and braces are not facts a person reads.
+  expect(reserved).toHaveTextContent('Зарезервовано')
+  expect(reserved).toHaveTextContent('кількість 1')
+  expect(reserved).not.toHaveTextContent('ee50afa2')
+  expect(reserved).not.toHaveTextContent('order_id')
+  expect(edited).toHaveTextContent('Змінено')
+  expect(edited).not.toHaveTextContent('{}')
+
+  // The current order is one of the reservations, so it takes a single row.
+  const reserves = screen.getByRole('region', { name: 'Резерви' })
+  expect(
+    within(reserves).getAllByRole('link', { name: 'Замовлення 284' }),
+  ).toHaveLength(1)
+})
+
+it('counts every filter value from the server and narrows the search by it', async () => {
+  render(
+    <MemoryRouter initialEntries={['/app/yard/parts']}>
+      <Routes>
+        <Route
+          path="/app/:tenant/parts"
+          element={<PartsScreen definition={partsDefinition as never} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  const conditions = await screen.findByRole('region', { name: 'Стан деталі' })
+  // The numbers are the server's, counted under the rest of the filter.
+  expect(
+    within(conditions).getByRole('button', { name: /good/ }),
+  ).toHaveTextContent('812')
+  fireEvent.click(within(conditions).getByRole('button', { name: /good/ }))
+
+  await vi.waitFor(() =>
+    expect(partMocks.search).toHaveBeenLastCalledWith(
+      expect.objectContaining({ conditions: ['good'] }),
+      expect.anything(),
+    ),
+  )
+  expect(partMocks.facets).toHaveBeenLastCalledWith(
+    expect.objectContaining({ conditions: ['good'] }),
+    expect.anything(),
+    expect.anything(),
+  )
+})
+
+it('opens the model filter only once a make is chosen', async () => {
+  render(
+    <MemoryRouter initialEntries={['/app/yard/parts']}>
+      <Routes>
+        <Route
+          path="/app/:tenant/parts"
+          element={<PartsScreen definition={partsDefinition as never} />}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
+
+  const model = await screen.findByLabelText('Модель')
+  expect(model).toBeDisabled()
+  fireEvent.change(screen.getByLabelText('Марка'), {
+    target: { value: 'make-ford' },
+  })
+  await vi.waitFor(() => expect(screen.getByLabelText('Модель')).toBeEnabled())
+})
+
 it('ignores an aborted stale list failure after filters change', async () => {
   let rejectFirst: ((reason: unknown) => void) | undefined
-  partMocks.list
+  partMocks.search
     .mockImplementationOnce(
       () =>
         new Promise((_, reject) => {
@@ -1233,8 +1424,8 @@ it('ignores an aborted stale list failure after filters change', async () => {
       </Routes>
     </MemoryRouter>,
   )
-  await vi.waitFor(() => expect(partMocks.list).toHaveBeenCalledOnce())
-  fireEvent.change(screen.getByLabelText('Пошук'), {
+  await vi.waitFor(() => expect(partMocks.search).toHaveBeenCalledOnce())
+  fireEvent.change(screen.getByLabelText('Пошук деталей'), {
     target: { value: 'mirror' },
   })
   expect(

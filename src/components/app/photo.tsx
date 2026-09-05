@@ -258,15 +258,16 @@ export function PhotoGrid({
 
 /**
  * A record's photos when they are the point of the section: one large frame
- * carries what the record actually looks like, the rest sit under it as a
- * strip. Every frame opens the same viewer, so the small ones are a way in
- * rather than all a person gets.
+ * showing the chosen shot, the whole set as a strip under it. Picking a
+ * thumbnail changes the large frame; the large frame opens the viewer — so a
+ * glance costs one click and a close look costs two.
  */
 export function Gallery({
   photos,
   label,
   emptyLabel = 'Фото ще не додано',
   ratio = 'wide',
+  variant = 'panel',
   className,
 }: {
   photos: readonly Photo[]
@@ -275,50 +276,98 @@ export function Gallery({
   emptyLabel?: ReactNode
   /** Shape of the large frame. */
   ratio?: 'wide' | 'square'
+  /**
+   * `panel` sits inside a padded section. `framed` runs the large photo to the
+   * edges of its card, with the strip inset under it.
+   */
+  variant?: 'panel' | 'framed'
   className?: string
 }) {
+  const [current, setCurrent] = useState(0)
   const [openIndex, setOpenIndex] = useState<number | null>(null)
-  const cover = photos[0]
+  const shown = photos[Math.min(current, photos.length - 1)]
 
-  if (!cover) {
+  if (!shown) {
     return (
-      <p className={cn('text-app-dim text-[12.5px]', className)}>
+      <p
+        className={cn(
+          'text-app-dim text-[12.5px]',
+          variant === 'framed' && 'px-6 py-5',
+          className,
+        )}
+      >
         {emptyLabel}
       </p>
     )
   }
 
+  const framed = variant === 'framed'
+
   const nameOf = (photo: Photo, index: number) =>
     photo.alt ?? `${label} ${String(index + 1)}`
+  const pad = (value: number) => String(value).padStart(2, '0')
 
   return (
-    <div className={cn('grid gap-2', className)}>
-      <button
-        aria-label={`${nameOf(cover, 0)} — відкрити`}
-        className="focus-visible:outline-brand block cursor-zoom-in"
-        onClick={() => setOpenIndex(0)}
-        type="button"
-      >
-        <Thumbnail
-          alt={nameOf(cover, 0)}
-          photo={cover}
-          ratio={ratio === 'wide' ? 'wide' : 'square'}
-        />
-      </button>
+    <div className={cn('grid', framed ? 'gap-0' : 'gap-2', className)}>
+      <div className={cn('relative', framed && 'border-app-line border-y')}>
+        <button
+          aria-label={`${nameOf(shown, current)} — відкрити на весь екран`}
+          className="focus-visible:outline-brand block w-full cursor-zoom-in"
+          onClick={() => setOpenIndex(current)}
+          type="button"
+        >
+          <Thumbnail
+            alt={nameOf(shown, current)}
+            className={cn(framed && 'rounded-none border-0')}
+            photo={shown}
+            ratio={ratio === 'wide' ? 'wide' : 'square'}
+          />
+        </button>
+        {photos.length > 1 ? (
+          <span
+            aria-hidden
+            className="border-app-line-2 text-app-muted pointer-events-none absolute bottom-3 left-3 rounded-full border bg-black/70 px-3 py-1 font-mono text-[11px] tracking-[0.08em] tabular-nums backdrop-blur-sm"
+          >
+            {pad(current + 1)} / {pad(photos.length)}
+          </span>
+        ) : null}
+      </div>
       {photos.length > 1 ? (
         <ul
           aria-label={label}
-          className="grid grid-cols-4 gap-2 sm:grid-cols-5"
+          className={cn(
+            'grid',
+            framed
+              ? 'auto-cols-fr grid-flow-col gap-2.5 overflow-x-auto p-3.5'
+              : 'grid-cols-4 gap-2 sm:grid-cols-5',
+          )}
         >
-          {photos.slice(1).map((photo, position) => (
+          {photos.map((photo, index) => (
             <li key={photo.id}>
               <button
-                aria-label={`${nameOf(photo, position + 1)} — відкрити`}
-                className="focus-visible:outline-brand block w-full cursor-zoom-in"
-                onClick={() => setOpenIndex(position + 1)}
+                aria-current={index === current ? 'true' : undefined}
+                aria-label={`Показати ${nameOf(photo, index)}`}
+                className={cn(
+                  'focus-visible:outline-brand block w-full cursor-pointer overflow-hidden transition-opacity',
+                  framed
+                    ? 'rounded-[10px] border-[1.5px]'
+                    : 'rounded-panel border',
+                  index === current
+                    ? 'border-brand'
+                    : 'border-app-line-2 opacity-70 hover:opacity-100',
+                )}
+                onClick={() => setCurrent(index)}
                 type="button"
               >
-                <Thumbnail alt={nameOf(photo, position + 1)} photo={photo} />
+                <Thumbnail
+                  alt={nameOf(photo, index)}
+                  className={cn(
+                    'rounded-none border-0',
+                    framed && 'rounded-[9px]',
+                  )}
+                  photo={photo}
+                  ratio="wide"
+                />
               </button>
             </li>
           ))}
@@ -329,7 +378,10 @@ export function Gallery({
           index={openIndex}
           label={label}
           onClose={() => setOpenIndex(null)}
-          onIndex={setOpenIndex}
+          onIndex={(next) => {
+            setOpenIndex(next)
+            setCurrent(next)
+          }}
           photos={photos}
         />
       )}

@@ -325,12 +325,9 @@ it('refetches authoritative detail after an expense mutation and disables duplic
   expect(carsApi.createExpense).toHaveBeenCalledTimes(1)
   resolveExpense(refreshed.expenses[0]!)
   await waitFor(() => expect(carsApi.get).toHaveBeenCalledTimes(2))
-  // The refreshed figure is what profitability is judged by, so assert it
-  // there rather than wherever the number happens to appear first.
-  const profitability = await screen.findByRole('region', {
-    name: /Прибутковість авто/,
-  })
-  const remaining = within(profitability).getByText('Лишилось повернути')
+  // The refreshed figure is what profitability is judged by, so assert it on
+  // the labelled stat rather than wherever the number happens to appear first.
+  const remaining = await screen.findByText('Лишилось')
   expect(remaining.parentElement).toHaveTextContent(/7\s500/)
 })
 
@@ -397,7 +394,7 @@ it('edits an expense with PUT, retains the form while pending, and refetches det
     name: /Транспорт/,
   })
   expect(
-    within(transportRow).getByRole('cell', { name: /500,00\s?\$/ }),
+    within(transportRow).getByRole('cell', { name: /500\s?\$/ }),
   ).toBeVisible()
   await user.click(
     within(transportRow).getByRole('button', {
@@ -433,7 +430,7 @@ it('edits an expense with PUT, retains the form while pending, and refetches det
   await waitFor(() => expect(carsApi.get).toHaveBeenCalledTimes(2))
   const deliveryRow = await screen.findByRole('row', { name: /Доставка/ })
   expect(
-    within(deliveryRow).getByRole('cell', { name: /750,00\s?\$/ }),
+    within(deliveryRow).getByRole('cell', { name: /750\s?\$/ }),
   ).toBeVisible()
   expect(screen.getByText('Разом 1 витрата')).toBeVisible()
 })
@@ -466,8 +463,9 @@ it('renders car identity, gallery, and VIN copy', async () => {
     </MemoryRouter>,
   )
 
+  // The year reads both in the identity line and in the spec cell.
   expect(await screen.findByText('Рік')).toBeVisible()
-  expect(screen.getByText('2020')).toBeVisible()
+  expect(screen.getAllByText('2020').length).toBeGreaterThan(0)
   expect(
     screen.getByAltText(/Передня частина — фото автомобіля/),
   ).toHaveAttribute('src', 'https://cdn.example/car-thumb.jpg')
@@ -872,15 +870,16 @@ it('loads URL-backed car search and displays the server profitability unchanged'
   expect(
     await screen.findByRole('heading', { name: 'Автомобілі' }),
   ).toBeVisible()
-  // Recouped now reads against what was invested: the figure, the share, and a
-  // bar that carries the same number for anyone scanning the column.
-  expect(screen.getByText(/5\s000/)).toBeVisible()
-  expect(screen.getByText('42%')).toBeVisible()
-  const meter = screen.getByRole('progressbar', {
-    name: /Повернено від вкладеного/,
-  })
-  expect(meter).toHaveAttribute('aria-valuenow', '42')
-  expect(meter).toHaveAttribute('aria-valuetext', '42%')
+  // The card states what came back and how far that is in words and figures;
+  // the bar under them is decoration, so it carries no duplicate reading.
+  const card = within(
+    await screen.findByRole('list', { name: 'Список автомобілів' }),
+  ).getByRole('link', { name: /CAR-001/ })
+  expect(card).toHaveAttribute('href', '/app/demo/cars/car-1')
+  expect(card).toHaveTextContent(/5\s000/)
+  expect(card).toHaveTextContent('42%')
+  expect(card).toHaveTextContent('Запчастин 3')
+  expect(card).toHaveTextContent('Продано 1')
   expect(carsApi.list).toHaveBeenCalledWith(
     { search: 'BMW', status: 'active', page: 2, pageSize: 25 },
     expect.anything(),
@@ -945,8 +944,8 @@ it('reads a paid-off car as profit rather than a negative remainder', async () =
   )
 
   expect(await screen.findByText('Прибуток')).toBeVisible()
-  expect(screen.getByText(/1\s157\s\$/)).toBeVisible()
-  expect(screen.queryByText('Лишилось повернути')).not.toBeInTheDocument()
+  expect(screen.getAllByText(/1\s157/).length).toBeGreaterThan(0)
+  expect(screen.queryByText('Лишилось')).not.toBeInTheDocument()
   expect(
     screen.getByRole('progressbar', { name: /Окупність/ }),
   ).toHaveAttribute('aria-valuenow', '111')
@@ -1027,7 +1026,7 @@ it('opens the gallery viewer and pages through the shots', async () => {
 
   await user.click(
     await screen.findByRole('button', {
-      name: 'Передня частина — фото автомобіля CAR-001 — відкрити',
+      name: 'Передня частина — фото автомобіля CAR-001 — відкрити на весь екран',
     }),
   )
   const viewer = await screen.findByRole('dialog')

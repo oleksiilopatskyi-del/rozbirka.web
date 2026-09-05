@@ -1,5 +1,6 @@
 export { Button, type AppButtonProps } from './button'
 export { appButtonVariants } from './button-variants'
+export { Card } from './card'
 export { ConfirmDialog, type ConfirmDialogProps } from './confirm-dialog'
 export { DataTable, type DataColumn, type DataTableProps } from './data-table'
 export { Field, type FieldProps } from './field'
@@ -8,6 +9,7 @@ export { SearchInput, SelectInput, TextArea, TextInput } from './input'
 export { Notice, type NoticeTone } from './notice'
 export { PageBody, PageHeader } from './page-header'
 export { Pagination, type PaginationProps } from './pagination'
+export { PillGroup, type PillOption } from './pill-group'
 export { Panel, StatCard, StatStrip } from './panel'
 export { Skeleton, SkeletonRows } from './skeleton'
 export {
@@ -37,6 +39,7 @@ export { formatFileSize } from './format'
 export { FormDialog, Sheet, type FormDialogProps } from './form-dialog'
 export { Gallery, PhotoGrid, RecordCard, Thumbnail, type Photo } from './photo'
 export { Segmented, type SegmentedOption } from './segmented'
+export { SpecGrid, SpecNote, type Spec } from './spec-grid'
 export {
   PanelFooter,
   SectionPanel,

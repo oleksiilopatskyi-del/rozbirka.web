@@ -10,7 +10,9 @@ import { TextInput } from './input'
 import { Meter } from './meter'
 import { RecordIdentity } from './identity'
 import { Gallery, PhotoGrid, RecordCard } from './photo'
+import { PillGroup } from './pill-group'
 import { SectionPanel } from './section-panel'
+import { SpecGrid, SpecNote } from './spec-grid'
 import { Segmented } from './segmented'
 import { StepPanel, Stepper, type Step } from './stepper'
 import { ToastProvider } from './toast'
@@ -130,7 +132,9 @@ it('pages the viewer with on-screen controls, not only the keyboard', async () =
   render(<Gallery label="Фото деталі" photos={photos} />)
 
   await user.click(
-    screen.getByRole('button', { name: 'Бампер спереду — відкрити' }),
+    screen.getByRole('button', {
+      name: 'Бампер спереду — відкрити на весь екран',
+    }),
   )
   const viewer = screen.getByRole('dialog', { name: 'Фото деталі' })
   expect(within(viewer).getByText(/1 з 2/)).toBeVisible()
@@ -148,12 +152,23 @@ it('pages the viewer with on-screen controls, not only the keyboard', async () =
   expect(within(viewer).getByText(/1 з 2/)).toBeVisible()
 })
 
-it('leads with a cover photo and keeps the rest reachable', async () => {
+it('lets a thumbnail change the large frame before anything is opened', async () => {
   const user = userEvent.setup()
   render(<Gallery label="Фото деталі" photos={photos} />)
 
+  expect(screen.getByText('01 / 02')).toBeVisible()
+  // Picking a thumbnail is a look, not a commitment: the frame follows, and
+  // the viewer stays shut until the frame itself is clicked.
   await user.click(
-    screen.getByRole('button', { name: 'Фото деталі 2 — відкрити' }),
+    screen.getByRole('button', { name: 'Показати Фото деталі 2' }),
+  )
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.getByText('02 / 02')).toBeVisible()
+
+  await user.click(
+    screen.getByRole('button', {
+      name: 'Фото деталі 2 — відкрити на весь екран',
+    }),
   )
   const viewer = screen.getByRole('dialog', { name: 'Фото деталі' })
   expect(within(viewer).getByText(/2 з 2/)).toBeVisible()
@@ -177,6 +192,51 @@ it('says a record has no photos instead of rendering an empty strip', () => {
 
   expect(screen.getByText('Фото ще не додано')).toBeVisible()
   expect(screen.queryByRole('list')).not.toBeInTheDocument()
+})
+
+it('lays specs out as cells and keeps a note beside the value it explains', () => {
+  render(
+    <SpecGrid
+      specs={[
+        { label: 'OEM', value: '—' },
+        { label: 'Стан', value: 'Вживана' },
+        {
+          label: 'Сумісність',
+          value: 'Ford Focus',
+          note: <SpecNote>Сумісність недоступна для редагування</SpecNote>,
+          wide: true,
+        },
+      ]}
+    />,
+  )
+
+  const compat = screen.getByText('Сумісність')
+  expect(compat.parentElement).toHaveTextContent('Ford Focus')
+  expect(compat.parentElement).toHaveTextContent(
+    'Сумісність недоступна для редагування',
+  )
+  expect(screen.getAllByRole('term')).toHaveLength(3)
+})
+
+it('keeps a pill group one tab stop and announces the current choice', async () => {
+  const user = userEvent.setup()
+  const onChange = vi.fn()
+  render(
+    <PillGroup
+      label="Статус"
+      onChange={onChange}
+      options={[
+        { value: '', label: 'Усі' },
+        { value: 'active', label: 'Активні' },
+      ]}
+      value="active"
+    />,
+  )
+
+  const group = screen.getByRole('radiogroup', { name: 'Статус' })
+  expect(within(group).getByRole('radio', { name: 'Активні' })).toBeChecked()
+  await user.click(within(group).getByRole('radio', { name: 'Усі' }))
+  expect(onChange).toHaveBeenCalledWith('')
 })
 
 it('renders a record card with its identity, meta and status', () => {

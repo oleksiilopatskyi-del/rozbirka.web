@@ -87,6 +87,105 @@ export interface PartDetail {
     | null
 }
 
+/** Sort keys the search endpoint accepts. */
+export type PartSort = 'created_desc' | 'created_asc' | 'name_asc' | 'name_desc'
+export type PartCondition = 'good' | 'fair' | 'scrap' | 'new' | 'refurbished'
+export type PartOrigin = 'car' | 'batch' | 'free'
+
+/** Every dimension the facet endpoint can count. */
+export type PartFacetDimension =
+  | 'status'
+  | 'warehouse'
+  | 'zone'
+  | 'condition'
+  | 'equipmentType'
+  | 'make'
+  | 'model'
+  | 'generation'
+  | 'origin'
+  | 'quality'
+  | 'inventoryLock'
+  | 'discrepancy'
+
+export interface PartCompatibilityFilter {
+  equipmentTypeIds?: string[]
+  makeIds?: string[]
+  modelIds?: string[]
+  generationIds?: string[]
+  year?: number | null
+  catalogVerifiedOnly?: boolean
+}
+
+/**
+ * The whole filter of the parts screen in one object. Empty arrays mean "no
+ * restriction on this dimension" — the server reads a missing filter and an
+ * empty one the same way.
+ */
+export interface PartSearchRequest {
+  query?: string | null
+  statuses?: string[]
+  carIds?: string[]
+  warehouseIds?: string[]
+  zoneIds?: string[]
+  conditions?: PartCondition[]
+  originTypes?: PartOrigin[]
+  compatibility?: PartCompatibilityFilter
+  missingCompatibility?: boolean | null
+  missingPlacement?: boolean | null
+  missingOem?: boolean | null
+  inventoryLocked?: boolean | null
+  hasDiscrepancy?: boolean | null
+  sort?: PartSort
+  page?: number
+  pageSize?: number
+}
+
+export interface PartSearchItem {
+  id: string
+  name: string
+  oemCode: string | null
+  quantity: number
+  quantityAvailable: number
+  quantityReserved: number
+  unit: string
+  condition: PartCondition
+  sourceType: PartOrigin
+  status: string
+  createdAt: string
+  isInventoryLocked: boolean
+  hasDiscrepancy: boolean
+  thumbnailUrl: string | null
+  car: {
+    id: string
+    make: string
+    model: string
+    year: number
+    vin: string | null
+  } | null
+}
+
+/** One value of a filter with how many parts carry it under the current filter. */
+export interface PartFacetValue {
+  id: string
+  name: string
+  count: number
+}
+
+export interface PartFacets {
+  statuses: PartFacetValue[]
+  warehouses: PartFacetValue[]
+  zones: PartFacetValue[]
+  conditions: PartFacetValue[]
+  equipmentTypes: PartFacetValue[]
+  makes: PartFacetValue[]
+  models: PartFacetValue[]
+  generations: PartFacetValue[]
+  origins: PartFacetValue[]
+  qualityFlags: PartFacetValue[]
+  inventoryLocks: PartFacetValue[]
+  discrepancies: PartFacetValue[]
+}
+
 export interface PartsSummary {
   total: number
   available: number
@@ -158,6 +257,39 @@ export const partsApi = {
       ...(signal ? { signal } : {}),
     })
     return response.data
+  },
+  /**
+   * The filtered list. Unlike `list`, this one carries every dimension the
+   * screen filters by — condition, origin, placement, compatibility.
+   */
+  async search(
+    request: PartSearchRequest,
+    options: RequestOptions = {},
+  ): Promise<Page<PartSearchItem>> {
+    return (
+      await apiClient.post<Page<PartSearchItem>>(
+        '/parts/search',
+        request,
+        requestConfig(options),
+      )
+    ).data
+  },
+  /**
+   * How many parts sit behind each filter value, counted under the *rest* of
+   * the filter — so a count never promises a result the click cannot deliver.
+   */
+  async facets(
+    filter: PartSearchRequest,
+    requested: readonly PartFacetDimension[],
+    options: RequestOptions = {},
+  ): Promise<PartFacets> {
+    return (
+      await apiClient.post<PartFacets>(
+        '/parts/search/facets',
+        { filter, requested },
+        requestConfig(options),
+      )
+    ).data
   },
   async summary(options: RequestOptions = {}): Promise<PartsSummary> {
     return (

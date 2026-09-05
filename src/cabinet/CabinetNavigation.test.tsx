@@ -252,3 +252,28 @@ it('fills the mobile tab bar by declared priority, not registry order', async ()
   expect(within(dialog).getByRole('link', { name: 'Автомобілі' })).toBeVisible()
   expect(within(dialog).getByRole('link', { name: 'Клієнти' })).toBeVisible()
 })
+
+it('folds the desktop menu away and back from the seam between it and the page', async () => {
+  const user = userEvent.setup()
+  renderNavigation()
+
+  const toggle = screen.getByRole('button', { name: 'Сховати меню' })
+  expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  const menu = document.getElementById('cabinet-navigation')
+  expect(menu).not.toHaveAttribute('hidden')
+
+  await user.click(toggle)
+  // The control keeps its place and turns around, so the way back is where
+  // the menu was folded away.
+  const restore = screen.getByRole('button', { name: 'Показати меню' })
+  expect(restore).toHaveAttribute('aria-expanded', 'false')
+  expect(document.getElementById('cabinet-navigation')).toHaveAttribute(
+    'hidden',
+  )
+
+  await user.click(restore)
+  expect(screen.getByRole('button', { name: 'Сховати меню' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  )
+})
